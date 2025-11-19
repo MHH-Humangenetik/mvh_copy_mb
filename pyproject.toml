@@ -1,0 +1,20 @@
+[project]
+name = "mvh-copy-mb"
+version = "0.1.0"
+description = "Process MVH Meldebestaetigung CSV files and organize them based on metadata"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.3.1",
+    "python-dotenv>=1.2.1",
+    "requests>=2.32.5",
+    "tqdm>=4.67.1",
+    "zeep>=4.3.2",
+]
+
+[project.scripts]
+mvh_copy_mb = "mvh_copy_mb.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9.10,<0.10.0"]
+build-backend = "uv_build"
