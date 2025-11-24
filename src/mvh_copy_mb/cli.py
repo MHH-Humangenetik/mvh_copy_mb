@@ -164,8 +164,10 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         # Typ der Meldung: 0 = Erstmeldung
         # Ergebnis QC: 1 = bestanden
         prefix = ""
-        if ergebnis_qc != "1" or typ_der_meldung != "0":
-            prefix = "WARNING_"
+        if ergebnis_qc != "1":
+            prefix = "QC_FAILED_"
+        elif typ_der_meldung != "0":
+            prefix = "NO_INITIAL_"
 
         # Resolve Case ID from gPAS
         case_id = gpas_client.get_original_value(vorgangsnummer_str)
@@ -181,7 +183,7 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
             
         else:
             # Fallback: Prepend "NOTFOUND_" to the original filename and copy
-            new_filename = f"NOTFOUND_{source_file.name}"
+            new_filename = f"NOTFOUND_{prefix}{source_file.name}"
             target_path = target_dir / new_filename
             
             shutil.copy2(source_file, target_path)
@@ -222,7 +224,8 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient):
 @click.option('--gpas-verify-ssl', envvar='GPAS_VERIFY_SSL', type=bool, default=True, show_default=True, help='Verify SSL certificate')
 @click.option('--log-level', envvar='LOG_LEVEL', default='INFO', show_default=True, help='Logging level')
 @click.option('--log-file', envvar='LOG_FILE', default='mvh_copy_mb.log', show_default=True, help='Log file path')
-def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl, log_level, log_file):
+@click.option('--archive-dir', envvar='ARCHIVE_DIR', type=click.Path(file_okay=False), help='Directory to move processed files to')
+def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl, log_level, log_file, archive_dir):
     """
     Process MVH Meldebestaetigung CSV files and organize them based on metadata, resolving pseudonyms via gPAS.
     """
@@ -237,10 +240,25 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
     input_path = Path(input_dir)
     gpas_client = GpasClient(gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl)
 
+    if archive_dir:
+        try:
+            Path(archive_dir).mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Failed to create archive directory {archive_dir}: {e}")
+            raise click.ClickException(f"Failed to create archive directory {archive_dir}: {e}")
+
     csv_files = list(input_path.glob('*.csv'))
     for csv_file in tqdm(csv_files, desc="Processing CSV files", unit="file", ncols=80):
         logger.info(f"Processing file: {csv_file.name}")
         process_csv_file(csv_file, input_path, gpas_client)
+
+        if archive_dir:
+            try:
+                shutil.move(str(csv_file), archive_dir)
+                logger.info(f"Moved {csv_file.name} to {archive_dir}")
+            except Exception as e:
+                logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+                raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
 
 if __name__ == '__main__':
     main()
