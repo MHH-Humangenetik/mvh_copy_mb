@@ -36,4 +36,17 @@ build-backend = "uv_build"
 [tool.uv]
 dev-dependencies = [
     "httpx>=0.28.1",
+    "pytest-xdist>=3.8.0",
 ]
+
+[tool.pytest.ini_options]
+# Run tests in parallel using all available CPU cores
+addopts = [
+    "-n", "auto",
+    "--tb=short",
+    "--strict-markers",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
