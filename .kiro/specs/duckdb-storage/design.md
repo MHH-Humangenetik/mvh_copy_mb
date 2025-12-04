@@ -36,13 +36,13 @@ The system will follow a layered architecture:
                ▼
 ┌─────────────────────────────────────┐
 │  DuckDB File                        │
-│  (meldebestaettigungen.duckdb)      │
+│  (meldebestaetigungen.duckdb)      │
 └─────────────────────────────────────┘
 ```
 
 ### Database Location
 
-The database file `meldebestaettigungen.duckdb` will be stored in the input directory alongside the CSV files being processed. This co-location ensures:
+The database file `meldebestaetigungen.duckdb` will be stored in the input directory alongside the CSV files being processed. This co-location ensures:
 - Easy backup of both source data and processed results
 - Clear association between data and its processing history
 - Simplified deployment (no separate database server needed)
@@ -101,7 +101,7 @@ The existing `main()` function will be modified to:
 
 ### Database Schema
 
-**Table: `meldebestaettigungen`**
+**Table: `meldebestaetigungen`**
 
 | Column Name          | Data Type    | Constraints                    | Description                                      |
 |---------------------|--------------|--------------------------------|--------------------------------------------------|
@@ -140,7 +140,7 @@ The system will use DuckDB's `INSERT OR REPLACE` functionality:
 
 
 ### Property 1: Database file creation in correct location
-*For any* valid input directory path, when the database is initialized, the database file should exist at the path `{input_directory}/meldebestaettigungen.duckdb`
+*For any* valid input directory path, when the database is initialized, the database file should exist at the path `{input_directory}/meldebestaetigungen.duckdb`
 **Validates: Requirements 1.1, 1.4**
 
 ### Property 2: Schema persistence across sessions

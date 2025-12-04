@@ -101,12 +101,50 @@ async def index(request: Request):
     Raises:
         HTTPException: If database connection fails or other errors occur
     """
-    # TODO: Implement in task 5
     logger.info("Index page requested")
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request, "message": "Web frontend coming soon"}
-    )
+    
+    try:
+        # Get database path from environment or use default
+        db_path_str = os.getenv('DB_PATH', './data/meldebestaetigungen.duckdb')
+        db_path = Path(db_path_str)
+        
+        # Check if database exists
+        if not db_path.exists():
+            logger.warning(f"Database not found at {db_path}")
+            return templates.TemplateResponse(
+                "index.html",
+                {
+                    "request": request,
+                    "pairs": [],
+                    "error_message": f"Database not found at {db_path}. Please process some CSV files first."
+                }
+            )
+        
+        # Import WebDatabaseService here to avoid circular imports
+        from .web_database import WebDatabaseService
+        
+        # Query database for all records grouped by Case ID
+        web_db = WebDatabaseService(db_path)
+        pairs = web_db.get_all_records_grouped()
+        
+        logger.info(f"Retrieved {len(pairs)} record pairs from database")
+        
+        # Render template with pairs data
+        return templates.TemplateResponse(
+            "index.html",
+            {
+                "request": request,
+                "pairs": pairs,
+                "error_message": None if pairs else "No records found in database."
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error loading index page: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load records from database: {str(e)}"
+        )
 
 
 @app.get("/health")

@@ -40,14 +40,14 @@
   - Configure logging
   - _Requirements: 7.1, 7.2, 7.5, 10.1, 10.4_
 
-- [ ] 4. Create Pydantic models for API
+- [x] 4. Create Pydantic models for API
   - Create `DoneStatusUpdate` model for checkbox updates
   - Create `RecordResponse` model for individual records
   - Create `PairResponse` model for record pairs
   - Add validation and type hints
   - _Requirements: 7.4_
 
-- [ ] 5. Implement main page endpoint
+- [x] 5. Implement main page endpoint
   - Create GET `/` route that queries database for all records
   - Group records into pairs using WebDatabaseService
   - Sort pairs by priority group, Case ID, and data type
@@ -55,11 +55,11 @@
   - Handle empty database case
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 6.1, 6.2_
 
-- [ ] 5.1 Write property test for sorting order
+- [x] 5.1 Write property test for sorting order
   - **Property 2: Records are sorted by priority then Case ID then data type**
   - **Validates: Requirements 1.3, 8.1, 8.5**
 
-- [ ] 5.2 Write property test for database state matching display
+- [x] 5.2 Write property test for database state matching display
   - **Property 3: Displayed records match database state**
   - **Validates: Requirements 1.4, 6.1**
 

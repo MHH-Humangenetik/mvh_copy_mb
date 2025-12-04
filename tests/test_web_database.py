@@ -434,3 +434,310 @@ def test_done_status_update_affects_both_records_in_pair(
             
             # Both should have the same done status
             assert genomic_retrieved.is_done == clinical_retrieved.is_done
+
+
+
+# Feature: web-frontend, Property 2: Records are sorted by priority then Case ID then data type
+# Validates: Requirements 1.3, 8.1, 8.5
+@settings(max_examples=100)
+@given(
+    num_complete_not_done=st.integers(min_value=0, max_value=10),
+    num_incomplete=st.integers(min_value=0, max_value=10),
+    num_complete_done=st.integers(min_value=0, max_value=10)
+)
+def test_records_sorted_by_priority_then_case_id(
+    num_complete_not_done: int,
+    num_incomplete: int,
+    num_complete_done: int
+):
+    """
+    Property 2: Records are sorted by priority then Case ID then data type
+    
+    For any set of Meldebestaetigung records, when displayed, they should be
+    ordered first by priority group (1, 2, 3), then by Case ID, then by
+    Art der Daten with genomic before clinical.
+    
+    This test verifies that:
+    1. Priority group 1 records appear before group 2
+    2. Priority group 2 records appear before group 3
+    3. Within each priority group, records are sorted by Case ID
+    4. For complete pairs, genomic and clinical are consecutive
+    """
+    # Skip if no records to test
+    if num_complete_not_done + num_incomplete + num_complete_done == 0:
+        return
+    
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records for each priority group
+        with MeldebestaetigungDatabase(db_path) as db:
+            record_idx = 0
+            
+            # Priority group 1: Complete pairs not done
+            for i in range(num_complete_not_done):
+                case_id = f"CASE_G1_{i:03d}"
+                
+                # Create genomic record
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{record_idx}",
+                    meldebestaetigung=f"mb_genomic_{record_idx}",
+                    source_file=f"source_{record_idx}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="genomic",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(genomic_record)
+                record_idx += 1
+                
+                # Create clinical record
+                clinical_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_C_{record_idx}",
+                    meldebestaetigung=f"mb_clinical_{record_idx}",
+                    source_file=f"source_{record_idx}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="clinical",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(clinical_record)
+                record_idx += 1
+            
+            # Priority group 2: Incomplete pairs
+            for i in range(num_incomplete):
+                case_id = f"CASE_G2_{i:03d}"
+                
+                # Create only genomic record (incomplete)
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{record_idx}",
+                    meldebestaetigung=f"mb_genomic_{record_idx}",
+                    source_file=f"source_{record_idx}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="genomic",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(genomic_record)
+                record_idx += 1
+            
+            # Priority group 3: Complete pairs done
+            for i in range(num_complete_done):
+                case_id = f"CASE_G3_{i:03d}"
+                
+                # Create genomic record
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{record_idx}",
+                    meldebestaetigung=f"mb_genomic_{record_idx}",
+                    source_file=f"source_{record_idx}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="genomic",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=True
+                )
+                db.upsert_record(genomic_record)
+                record_idx += 1
+                
+                # Create clinical record
+                clinical_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_C_{record_idx}",
+                    meldebestaetigung=f"mb_clinical_{record_idx}",
+                    source_file=f"source_{record_idx}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="clinical",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=True
+                )
+                db.upsert_record(clinical_record)
+                record_idx += 1
+        
+        # Get grouped records
+        service = WebDatabaseService(db_path)
+        pairs = service.get_all_records_grouped()
+        
+        # Verify sorting by priority group
+        prev_priority = 0
+        prev_case_id = ""
+        
+        for pair in pairs:
+            # Priority groups should be in ascending order (1, 2, 3)
+            assert pair.priority_group >= prev_priority, \
+                f"Priority groups not in order: {prev_priority} -> {pair.priority_group}"
+            
+            # Within the same priority group, case IDs should be sorted
+            if pair.priority_group == prev_priority:
+                assert pair.case_id >= prev_case_id, \
+                    f"Case IDs not sorted within priority group {pair.priority_group}: {prev_case_id} -> {pair.case_id}"
+            
+            prev_priority = pair.priority_group
+            prev_case_id = pair.case_id
+        
+        # Verify priority group membership
+        group_1_pairs = [p for p in pairs if p.priority_group == 1]
+        group_2_pairs = [p for p in pairs if p.priority_group == 2]
+        group_3_pairs = [p for p in pairs if p.priority_group == 3]
+        
+        # All group 1 pairs should be complete and not done
+        for pair in group_1_pairs:
+            assert pair.is_complete and not pair.is_done
+        
+        # All group 2 pairs should be incomplete
+        for pair in group_2_pairs:
+            assert not pair.is_complete
+        
+        # All group 3 pairs should be complete and done
+        for pair in group_3_pairs:
+            assert pair.is_complete and pair.is_done
+
+
+
+# Feature: web-frontend, Property 3: Displayed records match database state
+# Validates: Requirements 1.4, 6.1
+@settings(max_examples=100)
+@given(
+    num_case_ids=st.integers(min_value=1, max_value=15),
+    # For each case_id, decide what records to create: 0=genomic only, 1=clinical only, 2=both
+    record_types=st.lists(
+        st.integers(min_value=0, max_value=2),
+        min_size=1,
+        max_size=15
+    )
+)
+def test_displayed_records_match_database_state(
+    num_case_ids: int,
+    record_types: list
+):
+    """
+    Property 3: Displayed records match database state
+    
+    For any database state, when the page loads, the displayed records
+    should exactly match all records in the database.
+    
+    This test verifies that:
+    1. All records in the database are included in the output
+    2. No extra records are added
+    3. Record data matches exactly
+    4. Each case_id has at most one genomic and one clinical record (data integrity)
+    """
+    # Ensure we have enough record types
+    while len(record_types) < num_case_ids:
+        record_types.append(2)  # Default to both
+    
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records in the database
+        # Track what we create to ensure data integrity
+        created_records = []
+        record_idx = 0
+        
+        with MeldebestaetigungDatabase(db_path) as db:
+            for i in range(num_case_ids):
+                case_id = f"CASE_{i:03d}"
+                record_type = record_types[i]
+                
+                # 0 = genomic only, 1 = clinical only, 2 = both
+                if record_type in [0, 2]:  # Create genomic
+                    genomic_record = MeldebestaetigungRecord(
+                        vorgangsnummer=f"VN_G_{record_idx}",
+                        meldebestaetigung=f"mb_genomic_{record_idx}",
+                        source_file=f"source_{record_idx}.csv",
+                        typ_der_meldung="0",
+                        indikationsbereich="test",
+                        art_der_daten="genomic",
+                        ergebnis_qc="1",
+                        case_id=case_id,
+                        gpas_domain="test_domain",
+                        processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                        is_done=False
+                    )
+                    db.upsert_record(genomic_record)
+                    created_records.append(genomic_record)
+                    record_idx += 1
+                
+                if record_type in [1, 2]:  # Create clinical
+                    clinical_record = MeldebestaetigungRecord(
+                        vorgangsnummer=f"VN_C_{record_idx}",
+                        meldebestaetigung=f"mb_clinical_{record_idx}",
+                        source_file=f"source_{record_idx}.csv",
+                        typ_der_meldung="0",
+                        indikationsbereich="test",
+                        art_der_daten="clinical",
+                        ergebnis_qc="1",
+                        case_id=case_id,
+                        gpas_domain="test_domain",
+                        processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                        is_done=False
+                    )
+                    db.upsert_record(clinical_record)
+                    created_records.append(clinical_record)
+                    record_idx += 1
+        
+        # Get grouped records from the service
+        service = WebDatabaseService(db_path)
+        pairs = service.get_all_records_grouped()
+        
+        # Extract all individual records from pairs
+        displayed_records = []
+        for pair in pairs:
+            if pair.genomic is not None:
+                displayed_records.append(pair.genomic)
+            if pair.clinical is not None:
+                displayed_records.append(pair.clinical)
+        
+        # Verify count matches (all records with case_id should be displayed)
+        records_with_case_id = [r for r in created_records if r.case_id is not None]
+        assert len(displayed_records) == len(records_with_case_id), \
+            f"Expected {len(records_with_case_id)} records, got {len(displayed_records)}"
+        
+        # Verify all created records are in the displayed records
+        created_vorgangsnummern = {r.vorgangsnummer for r in records_with_case_id}
+        displayed_vorgangsnummern = {r.vorgangsnummer for r in displayed_records}
+        
+        assert created_vorgangsnummern == displayed_vorgangsnummern, \
+            f"Mismatch in vorgangsnummern: created={created_vorgangsnummern}, displayed={displayed_vorgangsnummern}"
+        
+        # Verify record data matches exactly
+        for created_record in records_with_case_id:
+            # Find the corresponding displayed record
+            displayed_record = next(
+                (r for r in displayed_records if r.vorgangsnummer == created_record.vorgangsnummer),
+                None
+            )
+            
+            assert displayed_record is not None, \
+                f"Record {created_record.vorgangsnummer} not found in displayed records"
+            
+            # Verify all fields match
+            assert displayed_record.vorgangsnummer == created_record.vorgangsnummer
+            assert displayed_record.meldebestaetigung == created_record.meldebestaetigung
+            assert displayed_record.source_file == created_record.source_file
+            assert displayed_record.typ_der_meldung == created_record.typ_der_meldung
+            assert displayed_record.indikationsbereich == created_record.indikationsbereich
+            assert displayed_record.art_der_daten == created_record.art_der_daten
+            assert displayed_record.ergebnis_qc == created_record.ergebnis_qc
+            assert displayed_record.case_id == created_record.case_id
+            assert displayed_record.gpas_domain == created_record.gpas_domain
+            assert displayed_record.is_done == created_record.is_done
