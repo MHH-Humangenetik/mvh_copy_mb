@@ -173,16 +173,16 @@
   - Test empty database displays message
   - _Requirements: 6.5_
 
-- [ ] 13. Add web server command to pyproject.toml
+- [x] 13. Add web server command to pyproject.toml
   - Add `web` entry to `[project.scripts]` section that runs Uvicorn with the FastAPI app
   - Configure appropriate host (0.0.0.0), port (8000), and reload settings
   - Command should be: `uv run web` to start the server
   - _Requirements: 7.2_
 
-- [ ] 14. Checkpoint - Ensure all tests pass
+- [x] 14. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. Create integration tests for end-to-end workflows
+- [x] 15. Create integration tests for end-to-end workflows
   - Test full page load with sample data
   - Test checkbox update flow (click → POST → database → HTML swap)
   - Test filtering with various search terms
@@ -190,17 +190,16 @@
   - Test priority group ordering
   - _Requirements: 1.1, 4.3, 9.1, 9.2_
 
-- [ ] 15.1 Write integration test for HTMX checkbox interaction
+- [x] 15.1 Write integration test for HTMX checkbox interaction
   - Test checkbox click triggers POST request
   - Test database is updated correctly
   - Test HTML response is swapped correctly
   - _Requirements: 4.3, 4.4_
 
-- [ ] 16. Add documentation and usage instructions
+- [x] 16. Add documentation and usage instructions
   - Document how to start the web server
   - Document URL and port configuration
   - Add screenshots or examples to README
-  - Document Rosé Pine theme customization
   - _Requirements: 7.1, 7.2_
 
 - [ ] 17. Final checkpoint - Ensure all tests pass

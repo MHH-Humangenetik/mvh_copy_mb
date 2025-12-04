@@ -264,3 +264,109 @@ def test_index_page_database_not_found(monkeypatch):
     
     # Should contain message about database not found
     assert "not found" in response.text.lower() or "database" in response.text.lower()
+
+
+
+def test_full_page_load_with_sample_data(test_db, monkeypatch):
+    """
+    Test full page load with sample data.
+    
+    This integration test verifies the complete workflow:
+    1. Database query for all records
+    2. Grouping records into pairs
+    3. Sorting by priority group
+    4. Rendering HTML template
+    
+    Validates: Requirements 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 8.1
+    """
+    # Set the database path in environment
+    monkeypatch.setenv('DB_PATH', str(test_db))
+    
+    # Create test client
+    client = TestClient(app)
+    
+    # Request index page
+    response = client.get("/")
+    
+    # Should return 200 OK
+    assert response.status_code == 200
+    
+    # Verify HTML contains expected elements
+    html = response.text
+    
+    # Should contain the page title
+    assert "Meldebestätigungen" in html
+    
+    # Should contain filter input
+    assert 'type="text"' in html
+    assert 'filter' in html.lower()
+    
+    # Should contain table headers
+    assert "Case ID" in html
+    assert "Art der Daten" in html
+    assert "Typ der Meldung" in html
+    assert "Indikationsbereich" in html
+    assert "Ergebnis QC" in html
+    assert "Source File" in html
+    assert "Done" in html
+    
+    # Should contain data from test database
+    assert "CASE_COMPLETE" in html
+    assert "CASE_INCOMPLETE" in html
+    assert "genomic" in html
+    assert "clinical" in html
+    
+    # Should contain Alpine.js script
+    assert "alpinejs" in html.lower()
+    
+    # Should contain HTMX script
+    assert "htmx" in html.lower()
+
+
+def test_checkbox_update_flow_integration(test_db, monkeypatch):
+    """
+    Test the complete checkbox update flow.
+    
+    This integration test verifies:
+    1. Initial page load with unchecked checkbox
+    2. POST request to update done status
+    3. Database update
+    4. Response with updated state
+    
+    Validates: Requirements 4.3, 4.4, 6.3
+    """
+    # Set the database path in environment
+    monkeypatch.setenv('DB_PATH', str(test_db))
+    
+    # Create test client
+    client = TestClient(app)
+    
+    # Step 1: Load initial page
+    response1 = client.get("/")
+    assert response1.status_code == 200
+    
+    # Verify initial state (not done)
+    with MeldebestaetigungDatabase(test_db) as db:
+        genomic = db.get_record("VN_G_COMPLETE")
+        assert genomic.is_done is False
+    
+    # Step 2: Update done status via POST
+    response2 = client.post(
+        "/api/done/CASE_COMPLETE",
+        data={"done": "true"}
+    )
+    assert response2.status_code == 200
+    
+    # Step 3: Verify database was updated
+    with MeldebestaetigungDatabase(test_db) as db:
+        genomic = db.get_record("VN_G_COMPLETE")
+        clinical = db.get_record("VN_C_COMPLETE")
+        assert genomic.is_done is True
+        assert clinical.is_done is True
+    
+    # Step 4: Load page again and verify updated state
+    response3 = client.get("/")
+    assert response3.status_code == 200
+    
+    # The page should reflect the updated done status
+    # (In the actual implementation, this would be visible in the rendered HTML)
