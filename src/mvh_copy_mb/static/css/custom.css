@@ -120,6 +120,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Table container */
 .table-container {
     overflow-x: auto;
+    width: 100%;
 }
 
 /* Table styling */
@@ -127,14 +128,19 @@ table {
     background-color: var(--panel);
     border: 1px solid var(--border);
     width: 100%;
+    table-layout: fixed;
+    font-size: 0.85rem;
 }
 
 th {
     background-color: var(--overlay);
     color: var(--text);
-    padding: 1rem;
+    padding: 0.6rem 0.4rem;
     text-align: left;
     border-bottom: 2px solid var(--border);
+    font-size: 0.8rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
 th.sortable {
@@ -147,10 +153,25 @@ th.sortable:hover {
 }
 
 td {
-    padding: 0.8rem 1rem;
+    padding: 0.5rem 0.4rem;
     border-bottom: 1px solid var(--border);
     color: var(--text);
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    max-width: 0;
 }
+
+/* Column widths */
+th:nth-child(1), td:nth-child(1) { width: 12%; } /* Case ID */
+th:nth-child(2), td:nth-child(2) { width: 12%; } /* Vorgangsnummer */
+th:nth-child(3), td:nth-child(3) { width: 7%; }  /* Art der Daten */
+th:nth-child(4), td:nth-child(4) { width: 10%; } /* Typ der Meldung */
+th:nth-child(5), td:nth-child(5) { width: 12%; } /* Indikationsbereich */
+th:nth-child(6), td:nth-child(6) { width: 10%; } /* Ergebnis QC */
+th:nth-child(7), td:nth-child(7) { width: 20%; } /* Source File */
+th:nth-child(8), td:nth-child(8) { width: 6%; }  /* Complete */
+th:nth-child(9), td:nth-child(9) { width: 6%; }  /* Valid */
+th:nth-child(10), td:nth-child(10) { width: 5%; } /* Done */
 
 /* Pair grouping */
 .pair-row.genomic {
@@ -287,10 +308,14 @@ button:hover {
     }
     
     table {
-        font-size: 0.9rem;
+        font-size: 0.75rem;
     }
     
     th, td {
-        padding: 0.5rem;
+        padding: 0.3rem 0.2rem;
+    }
+    
+    th {
+        font-size: 0.7rem;
     }
 }
