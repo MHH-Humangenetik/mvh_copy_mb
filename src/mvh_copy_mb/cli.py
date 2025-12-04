@@ -305,6 +305,10 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
 
             if archive_dir:
                 try:
+                    dest_path = Path(archive_dir) / csv_file.name
+                    # Remove destination if it exists to allow overwrite
+                    if dest_path.exists():
+                        dest_path.unlink()
                     shutil.move(str(csv_file), archive_dir)
                     logger.info(f"Moved {csv_file.name} to {archive_dir}")
                 except Exception as e:
