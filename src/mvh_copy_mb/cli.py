@@ -262,7 +262,8 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, d
 @click.option('--log-level', envvar='LOG_LEVEL', default='INFO', show_default=True, help='Logging level')
 @click.option('--log-file', envvar='LOG_FILE', default='mvh_copy_mb.log', show_default=True, help='Log file path')
 @click.option('--archive-dir', envvar='ARCHIVE_DIR', type=click.Path(file_okay=False), help='Directory to move processed files to')
-def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl, log_level, log_file, archive_dir):
+@click.option('--db-path', envvar='DB_PATH', type=click.Path(), help='Path to DuckDB database file')
+def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl, log_level, log_file, archive_dir, db_path):
     """
     Process MVH Meldebestaetigung CSV files and organize them based on metadata, resolving pseudonyms via gPAS.
     """
@@ -284,8 +285,15 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
             logger.error(f"Failed to create archive directory {archive_dir}: {e}")
             raise click.ClickException(f"Failed to create archive directory {archive_dir}: {e}")
 
-    # Initialize database in the input directory
-    db_path = input_path / "meldebestaetigungen.duckdb"
+    # Initialize database path
+    if db_path:
+        db_path = Path(db_path)
+    else:
+        # Default to input directory if not specified
+        db_path = input_path / "meldebestaetigungen.duckdb"
+    
+    # Create parent directory if it doesn't exist
+    db_path.parent.mkdir(parents=True, exist_ok=True)
     
     csv_files = list(input_path.glob('*.csv'))
     
