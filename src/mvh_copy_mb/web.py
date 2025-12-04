@@ -147,6 +147,101 @@ async def index(request: Request):
         )
 
 
+@app.post("/api/done/{case_id}")
+async def update_done_status(case_id: str, request: Request):
+    """
+    Update the done status for a record pair.
+    
+    Args:
+        case_id: The Case ID of the pair to update
+        request: FastAPI request object containing the form data
+        
+    Returns:
+        HTML response with updated pair rows for HTMX swap
+        
+    Raises:
+        HTTPException: If Case ID doesn't exist, pair is incomplete, or update fails
+    """
+    logger.info(f"Done status update requested for Case ID: {case_id}")
+    
+    try:
+        # Get database path from environment or use default
+        db_path_str = os.getenv('DB_PATH', './data/meldebestaetigungen.duckdb')
+        db_path = Path(db_path_str)
+        
+        # Check if database exists
+        if not db_path.exists():
+            logger.error(f"Database not found at {db_path}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Database not found at {db_path}"
+            )
+        
+        # Parse form data to get the new done status
+        form_data = await request.form()
+        done_str = form_data.get('done', 'false')
+        done = done_str.lower() in ('true', '1', 'yes', 'on')
+        
+        logger.info(f"Updating Case ID {case_id} to done={done}")
+        
+        # Import WebDatabaseService
+        from .web_database import WebDatabaseService
+        
+        # Update the done status
+        web_db = WebDatabaseService(db_path)
+        
+        try:
+            result = web_db.update_pair_done_status(case_id, done)
+            
+            if not result:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to update done status"
+                )
+            
+            # Get the updated pair for rendering
+            pair = web_db.get_pair_by_case_id(case_id)
+            
+            if pair is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Case ID {case_id} not found after update"
+                )
+            
+            # TODO: Render the updated pair rows when template is created (task 8)
+            # For now, return JSON response
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                content={
+                    "success": True,
+                    "case_id": case_id,
+                    "is_done": done
+                }
+            )
+            
+        except ValueError as e:
+            # Handle validation errors (incomplete pair, non-existent case_id)
+            error_msg = str(e)
+            logger.warning(f"Validation error updating Case ID {case_id}: {error_msg}")
+            
+            if "no records found" in error_msg.lower():
+                raise HTTPException(status_code=404, detail=error_msg)
+            elif "incomplete" in error_msg.lower():
+                raise HTTPException(status_code=400, detail=error_msg)
+            else:
+                raise HTTPException(status_code=400, detail=error_msg)
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        logger.error(f"Error updating done status for Case ID {case_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update done status: {str(e)}"
+        )
+
+
 @app.get("/health")
 async def health_check():
     """

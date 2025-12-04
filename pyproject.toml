@@ -31,3 +31,8 @@ dev = [
 [build-system]
 requires = ["uv_build>=0.9.10,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.uv]
+dev-dependencies = [
+    "httpx>=0.28.1",
+]
