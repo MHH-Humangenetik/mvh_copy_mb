@@ -63,7 +63,7 @@
   - **Property 3: Displayed records match database state**
   - **Validates: Requirements 1.4, 6.1**
 
-- [ ] 6. Implement done status update endpoint
+- [x] 6. Implement done status update endpoint
   - Create POST `/api/done/{case_id}` route
   - Validate Case ID exists and pair is complete
   - Update done status for both records in pair
@@ -71,7 +71,7 @@
   - Handle errors (invalid Case ID, incomplete pair, database errors)
   - _Requirements: 4.2, 4.3, 6.3_
 
-- [ ] 6.1 Write unit tests for done status endpoint
+- [x] 6.1 Write unit tests for done status endpoint
   - Test successful update for complete pair
   - Test rejection for incomplete pair
   - Test 404 for non-existent Case ID
