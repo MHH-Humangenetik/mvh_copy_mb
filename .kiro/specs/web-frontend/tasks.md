@@ -32,7 +32,7 @@
   - **Property 9: Done status update affects both records in pair**
   - **Validates: Requirements 4.3**
 
-- [ ] 3. Set up FastAPI application structure
+- [x] 3. Set up FastAPI application structure
   - Create `web.py` with FastAPI app initialization
   - Configure Jinja2 templates directory
   - Set up static files serving for CSS and JS
