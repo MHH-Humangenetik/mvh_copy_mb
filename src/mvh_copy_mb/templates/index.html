@@ -21,9 +21,14 @@
     <div class="container" x-data="tableData()">
         <h1>Meldebestätigungen Viewer</h1>
         
+        <!-- Loading indicator -->
+        <div id="loading" class="htmx-indicator">
+            <p>Loading...</p>
+        </div>
+        
         {% if error_message %}
         <div class="error-message">
-            <p>{{ error_message }}</p>
+            <p><strong>Error:</strong> {{ error_message }}</p>
         </div>
         {% else %}
         

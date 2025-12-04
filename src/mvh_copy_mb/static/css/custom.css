@@ -259,14 +259,25 @@ button:hover {
 /* Loading indicator */
 .htmx-indicator {
     display: none;
+    color: var(--info);
+    font-weight: bold;
+    padding: 0.5rem;
 }
 
 .htmx-request .htmx-indicator {
-    display: inline;
+    display: inline-block;
 }
 
 .htmx-request.htmx-indicator {
-    display: inline;
+    display: inline-block;
+}
+
+#loading {
+    text-align: center;
+    padding: 1rem;
+    background-color: var(--code-bg);
+    border-radius: 4px;
+    margin-bottom: 1rem;
 }
 
 /* Responsive design */
