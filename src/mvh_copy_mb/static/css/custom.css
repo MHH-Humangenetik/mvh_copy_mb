@@ -226,18 +226,15 @@ th:nth-child(10), td:nth-child(10) { width: 5%; } /* Done */
 
 /* Priority group styling */
 .priority-group-1 {
-    background-color: var(--warn);
-    opacity: 0.2;
+    background-color: color-mix(in srgb, var(--warn) 15%, transparent);
 }
 
 .priority-group-2 {
-    background-color: var(--error);
-    opacity: 0.15;
+    background-color: color-mix(in srgb, var(--error) 10%, transparent);
 }
 
 .priority-group-3 {
-    background-color: var(--ok);
-    opacity: 0.15;
+    background-color: color-mix(in srgb, var(--ok) 10%, transparent);
 }
 
 /* Done checkbox */
