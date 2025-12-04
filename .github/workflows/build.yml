@@ -32,6 +32,9 @@ jobs:
     name: Build and Push Docker Image
     needs: test
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
@@ -67,7 +70,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          target: ${{ matrix.target }}
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
