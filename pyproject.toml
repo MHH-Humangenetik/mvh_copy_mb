@@ -7,14 +7,19 @@ requires-python = ">=3.11"
 dependencies = [
     "click>=8.3.1",
     "duckdb>=0.9.0",
+    "fastapi>=0.123.5",
+    "jinja2>=3.1.6",
     "python-dotenv>=1.2.1",
+    "python-multipart>=0.0.20",
     "requests>=2.32.5",
     "tqdm>=4.67.1",
+    "uvicorn>=0.38.0",
     "zeep>=4.3.2",
 ]
 
 [project.scripts]
 mvh_copy_mb = "mvh_copy_mb.cli:main"
+web = "mvh_copy_mb.web:run_server"
 
 [project.optional-dependencies]
 dev = [
