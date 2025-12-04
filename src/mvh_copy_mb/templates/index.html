@@ -87,7 +87,7 @@
                 <tbody>
                     <template x-for="pair in filteredAndSorted" :key="pair.case_id">
                         <template x-if="pair.genomic || pair.clinical">
-                            <template>
+                            <>
                                 <!-- Genomic row -->
                                 <tr x-show="pair.genomic" 
                                     class="pair-row genomic"
@@ -149,7 +149,7 @@
                                             hx-indicator="#loading">
                                     </td>
                                 </tr>
-                            </template>
+                            </>
                         </template>
                     </template>
                 </tbody>
