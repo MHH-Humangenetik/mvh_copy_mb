@@ -123,38 +123,34 @@
                             class="pair-row clinical"
                             :class="'priority-group-' + pair.priority_group"
                             :data-case-id="pair.case_id">
-                            <template x-if="!pair.genomic">
-                                <td :rowspan="1" class="case-id-cell" x-text="pair.case_id"></td>
-                            </template>
+                            <!-- Case ID column: only show if no genomic row exists -->
+                            <td x-show="!pair.genomic" :rowspan="1" class="case-id-cell" x-text="pair.case_id"></td>
                             <td x-text="pair.clinical ? pair.clinical.vorgangsnummer : ''"></td>
                             <td>clinical</td>
                             <td x-text="pair.clinical ? pair.clinical.typ_der_meldung : ''"></td>
                             <td x-text="pair.clinical ? pair.clinical.indikationsbereich : ''"></td>
                             <td x-text="pair.clinical ? pair.clinical.ergebnis_qc : ''"></td>
                             <td x-text="pair.clinical ? pair.clinical.source_file : ''"></td>
-                            <template x-if="!pair.genomic">
-                                <td :rowspan="1">
-                                    <span class="complete-indicator" :class="pair.is_complete ? 'yes' : 'no'"></span>
-                                </td>
-                            </template>
-                            <template x-if="!pair.genomic">
-                                <td :rowspan="1">
-                                    <span class="valid-indicator" :class="pair.is_valid ? 'yes' : 'no'"></span>
-                                </td>
-                            </template>
-                            <template x-if="!pair.genomic">
-                                <td :rowspan="1" class="done-cell">
-                                    <input 
-                                        x-show="pair.is_complete"
-                                        type="checkbox" 
-                                        :checked="pair.is_done"
-                                        :hx-post="'/api/done/' + pair.case_id"
-                                        :hx-vals="JSON.stringify({done: !pair.is_done})"
-                                        hx-target="closest tr"
-                                        hx-swap="outerHTML"
-                                        hx-indicator="#loading">
-                                </td>
-                            </template>
+                            <!-- Complete indicator: only show if no genomic row exists -->
+                            <td x-show="!pair.genomic" :rowspan="1">
+                                <span class="complete-indicator" :class="pair.is_complete ? 'yes' : 'no'"></span>
+                            </td>
+                            <!-- Valid indicator: only show if no genomic row exists -->
+                            <td x-show="!pair.genomic" :rowspan="1">
+                                <span class="valid-indicator" :class="pair.is_valid ? 'yes' : 'no'"></span>
+                            </td>
+                            <!-- Done checkbox: only show if no genomic row exists -->
+                            <td x-show="!pair.genomic" :rowspan="1" class="done-cell">
+                                <input 
+                                    x-show="pair.is_complete"
+                                    type="checkbox" 
+                                    :checked="pair.is_done"
+                                    :hx-post="'/api/done/' + pair.case_id"
+                                    :hx-vals="JSON.stringify({done: !pair.is_done})"
+                                    hx-target="closest tr"
+                                    hx-swap="outerHTML"
+                                    hx-indicator="#loading">
+                            </td>
                         </tr>
                     </template>
                 </tbody>
