@@ -1,0 +1,285 @@
+/* Rosé Pine Theme for Meldebestätigungen Viewer */
+
+/* Rosé Pine Palette variables (Dawn + Moon) */
+:root {
+    /* Dawn (light mode) */
+    --rp-dawn-base: #faf4ed;
+    --rp-dawn-surface: #fffaf3;
+    --rp-dawn-overlay: #f2e9e1;
+    --rp-dawn-muted: #9893a5;
+    --rp-dawn-subtle: #797593;
+    --rp-dawn-text: #575279;
+    --rp-dawn-love: #b4637a;
+    --rp-dawn-gold: #ea9d34;
+    --rp-dawn-rose: #d7827e;
+    --rp-dawn-pine: #286983;
+    --rp-dawn-foam: #56949f;
+    --rp-dawn-iris: #907aa9;
+    --rp-dawn-highlight-low: #f4ede8;
+    --rp-dawn-highlight-med: #dfdad9;
+    --rp-dawn-highlight-high: #cecacd;
+    
+    /* Moon (dark mode) */
+    --rp-moon-base: #232136;
+    --rp-moon-surface: #2a273f;
+    --rp-moon-overlay: #393552;
+    --rp-moon-muted: #6e6a86;
+    --rp-moon-subtle: #908caa;
+    --rp-moon-text: #e0def4;
+    --rp-moon-love: #eb6f92;
+    --rp-moon-gold: #f6c177;
+    --rp-moon-rose: #ea9a97;
+    --rp-moon-pine: #3e8fb0;
+    --rp-moon-foam: #9ccfd8;
+    --rp-moon-iris: #c4a7e7;
+    --rp-moon-highlight-low: #2a283e;
+    --rp-moon-highlight-med: #44415a;
+    --rp-moon-highlight-high: #56526e;
+    
+    /* App theme tokens (light defaults = Dawn) */
+    color-scheme: light;
+    --bg: var(--rp-dawn-base);
+    --text: var(--rp-dawn-text);
+    --panel: var(--rp-dawn-surface);
+    --overlay: var(--rp-dawn-overlay);
+    --muted: var(--rp-dawn-muted);
+    --subtle: var(--rp-dawn-subtle);
+    --link: var(--rp-dawn-iris);
+    --border: var(--rp-dawn-highlight-high);
+    --accent: var(--rp-dawn-iris);
+    --error: var(--rp-dawn-love);
+    --warn: var(--rp-dawn-gold);
+    --ok: var(--rp-dawn-pine);
+    --info: var(--rp-dawn-foam);
+    --code-bg: var(--rp-dawn-highlight-low);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+        --bg: var(--rp-moon-base);
+        --text: var(--rp-moon-text);
+        --panel: var(--rp-moon-surface);
+        --overlay: var(--rp-moon-overlay);
+        --muted: var(--rp-moon-muted);
+        --subtle: var(--rp-moon-subtle);
+        --link: var(--rp-moon-iris);
+        --border: var(--rp-moon-highlight-high);
+        --accent: var(--rp-moon-iris);
+        --error: var(--rp-moon-love);
+        --warn: var(--rp-moon-gold);
+        --ok: var(--rp-moon-pine);
+        --info: var(--rp-moon-foam);
+        --code-bg: var(--rp-moon-highlight-low);
+    }
+}
+
+/* Base styles */
+body {
+    background-color: var(--bg);
+    color: var(--text);
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--text);
+}
+
+/* Container */
+.container {
+    max-width: 1400px;
+    padding: 2rem;
+}
+
+/* Error message */
+.error-message {
+    background-color: var(--error);
+    color: var(--bg);
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 2rem;
+}
+
+/* Filter container */
+.filter-container {
+    margin-bottom: 2rem;
+}
+
+.filter-input {
+    background-color: var(--panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    width: 100%;
+    max-width: 500px;
+}
+
+.filter-input:focus {
+    border-color: var(--accent);
+    outline: none;
+}
+
+/* Table container */
+.table-container {
+    overflow-x: auto;
+}
+
+/* Table styling */
+table {
+    background-color: var(--panel);
+    border: 1px solid var(--border);
+    width: 100%;
+}
+
+th {
+    background-color: var(--overlay);
+    color: var(--text);
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 2px solid var(--border);
+}
+
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+th.sortable:hover {
+    background-color: var(--border);
+}
+
+td {
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+
+/* Pair grouping */
+.pair-row.genomic {
+    border-top: 2px solid var(--accent);
+}
+
+.pair-row.clinical {
+    border-bottom: 2px solid var(--accent);
+}
+
+.pair-row.genomic + .pair-row.clinical {
+    background-color: var(--code-bg);
+}
+
+.case-id-cell {
+    font-weight: bold;
+    vertical-align: middle;
+    background-color: var(--overlay);
+}
+
+/* Complete pair indicator */
+.complete-indicator {
+    color: var(--info);
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.complete-indicator.yes::before {
+    content: "✓";
+}
+
+.complete-indicator.no::before {
+    content: "—";
+    color: var(--muted);
+}
+
+/* Valid pair indicator */
+.valid-indicator {
+    color: var(--ok);
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.valid-indicator.yes::before {
+    content: "✓✓";
+}
+
+.valid-indicator.no::before {
+    content: "—";
+    color: var(--muted);
+}
+
+/* Priority group styling */
+.priority-group-1 {
+    background-color: var(--warn);
+    opacity: 0.2;
+}
+
+.priority-group-2 {
+    background-color: var(--error);
+    opacity: 0.15;
+}
+
+.priority-group-3 {
+    background-color: var(--ok);
+    opacity: 0.15;
+}
+
+/* Done checkbox */
+.done-cell {
+    text-align: center;
+    vertical-align: middle;
+}
+
+input[type="checkbox"] {
+    cursor: pointer;
+    width: 20px;
+    height: 20px;
+}
+
+input[type="checkbox"]:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Links and buttons */
+a {
+    color: var(--link);
+}
+
+a:hover {
+    color: var(--accent);
+}
+
+button {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--bg);
+}
+
+button:hover {
+    background-color: var(--link);
+    border-color: var(--link);
+}
+
+/* Loading indicator */
+.htmx-indicator {
+    display: none;
+}
+
+.htmx-request .htmx-indicator {
+    display: inline;
+}
+
+.htmx-request.htmx-indicator {
+    display: inline;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 1rem;
+    }
+    
+    table {
+        font-size: 0.9rem;
+    }
+    
+    th, td {
+        padding: 0.5rem;
+    }
+}

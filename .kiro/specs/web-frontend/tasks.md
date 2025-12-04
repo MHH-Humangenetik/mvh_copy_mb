@@ -78,7 +78,7 @@
   - Test database error handling
   - _Requirements: 4.2, 4.3, 6.3_
 
-- [ ] 7. Create HTML templates with Rosé Pine styling
+- [x] 7. Create HTML templates with Rosé Pine styling
   - Create `templates/index.html` with base layout
   - Add Rosé Pine CSS variables and theme styles
   - Include HTMX and Alpine.js from CDN

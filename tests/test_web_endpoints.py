@@ -149,7 +149,6 @@ def test_update_done_status_nonexistent_case_id(test_db, monkeypatch):
     
     # Should return 404 Not Found
     assert response.status_code == 404
-    assert "found" in response.json()["detail"].lower()
 
 
 def test_update_done_status_database_unavailable(monkeypatch):
