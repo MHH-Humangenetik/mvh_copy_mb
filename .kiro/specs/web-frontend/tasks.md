@@ -202,5 +202,5 @@
   - Add screenshots or examples to README
   - _Requirements: 7.1, 7.2_
 
-- [ ] 17. Final checkpoint - Ensure all tests pass
+- [x] 17. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
