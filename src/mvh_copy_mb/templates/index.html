@@ -4,11 +4,173 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Meldebestätigungen Viewer</title>
+    
+    <!-- Milligram CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/milligram@1.4.1/dist/milligram.min.css">
+    
+    <!-- Custom Rosé Pine CSS -->
+    <link rel="stylesheet" href="/static/css/custom.css">
+    
+    <!-- HTMX -->
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    
+    <!-- Alpine.js -->
+    <script src="https://unpkg.com/alpinejs@3.13.3" defer></script>
 </head>
 <body>
-    <div class="container">
+    <div class="container" x-data="tableData()">
         <h1>Meldebestätigungen Viewer</h1>
-        <p>{{ message }}</p>
+        
+        {% if error_message %}
+        <div class="error-message">
+            <p>{{ error_message }}</p>
+        </div>
+        {% else %}
+        
+        <!-- Filter input -->
+        <div class="filter-container">
+            <label for="filter">Filter:</label>
+            <input 
+                type="text" 
+                id="filter" 
+                x-model="filter" 
+                placeholder="Search across all columns..."
+                class="filter-input">
+        </div>
+        
+        <!-- Table -->
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th @click="sortBy('case_id')" class="sortable">
+                            Case ID
+                            <span x-show="sortColumn === 'case_id'">
+                                <span x-show="sortDirection === 'asc'">▲</span>
+                                <span x-show="sortDirection === 'desc'">▼</span>
+                            </span>
+                        </th>
+                        <th>Vorgangsnummer</th>
+                        <th>Art der Daten</th>
+                        <th @click="sortBy('typ_der_meldung')" class="sortable">
+                            Typ der Meldung
+                            <span x-show="sortColumn === 'typ_der_meldung'">
+                                <span x-show="sortDirection === 'asc'">▲</span>
+                                <span x-show="sortDirection === 'desc'">▼</span>
+                            </span>
+                        </th>
+                        <th @click="sortBy('indikationsbereich')" class="sortable">
+                            Indikationsbereich
+                            <span x-show="sortColumn === 'indikationsbereich'">
+                                <span x-show="sortDirection === 'asc'">▲</span>
+                                <span x-show="sortDirection === 'desc'">▼</span>
+                            </span>
+                        </th>
+                        <th>Ergebnis QC</th>
+                        <th @click="sortBy('source_file')" class="sortable">
+                            Source File
+                            <span x-show="sortColumn === 'source_file'">
+                                <span x-show="sortDirection === 'asc'">▲</span>
+                                <span x-show="sortDirection === 'desc'">▼</span>
+                            </span>
+                        </th>
+                        <th>Complete</th>
+                        <th>Valid</th>
+                        <th>Done</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="pair in filteredAndSorted" :key="pair.case_id">
+                        <template x-if="pair.genomic || pair.clinical">
+                            <!-- Pair rows will be rendered here by Alpine.js -->
+                            <tr>
+                                <td colspan="10">
+                                    <div x-html="renderPair(pair)"></div>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        {% endif %}
     </div>
+    
+    <script>
+        function tableData() {
+            return {
+                pairs: {{ pairs | tojson | safe }},
+                filter: '',
+                sortColumn: 'priority_group',
+                sortDirection: 'asc',
+                
+                get filteredAndSorted() {
+                    let filtered = this.filter === '' 
+                        ? this.pairs 
+                        : this.pairs.filter(pair => {
+                            // Search across all columns
+                            const searchStr = this.filter.toLowerCase();
+                            return (
+                                (pair.case_id && pair.case_id.toLowerCase().includes(searchStr)) ||
+                                (pair.genomic && (
+                                    pair.genomic.vorgangsnummer.toLowerCase().includes(searchStr) ||
+                                    pair.genomic.typ_der_meldung.toLowerCase().includes(searchStr) ||
+                                    pair.genomic.indikationsbereich.toLowerCase().includes(searchStr) ||
+                                    pair.genomic.ergebnis_qc.toLowerCase().includes(searchStr) ||
+                                    pair.genomic.source_file.toLowerCase().includes(searchStr)
+                                )) ||
+                                (pair.clinical && (
+                                    pair.clinical.vorgangsnummer.toLowerCase().includes(searchStr) ||
+                                    pair.clinical.typ_der_meldung.toLowerCase().includes(searchStr) ||
+                                    pair.clinical.indikationsbereich.toLowerCase().includes(searchStr) ||
+                                    pair.clinical.ergebnis_qc.toLowerCase().includes(searchStr) ||
+                                    pair.clinical.source_file.toLowerCase().includes(searchStr)
+                                ))
+                            );
+                        });
+                    
+                    return filtered.sort((a, b) => {
+                        // Primary sort: priority_group (always ascending)
+                        if (a.priority_group !== b.priority_group) {
+                            return a.priority_group - b.priority_group;
+                        }
+                        
+                        // Secondary sort: selected column
+                        let aVal = this.getColumnValue(a, this.sortColumn);
+                        let bVal = this.getColumnValue(b, this.sortColumn);
+                        
+                        if (this.sortDirection === 'asc') {
+                            return aVal > bVal ? 1 : -1;
+                        } else {
+                            return aVal < bVal ? 1 : -1;
+                        }
+                    });
+                },
+                
+                getColumnValue(pair, column) {
+                    if (column === 'case_id') return pair.case_id || '';
+                    // For other columns, use genomic record if available, otherwise clinical
+                    const record = pair.genomic || pair.clinical;
+                    if (!record) return '';
+                    return record[column] || '';
+                },
+                
+                sortBy(column) {
+                    if (this.sortColumn === column) {
+                        this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        this.sortColumn = column;
+                        this.sortDirection = 'asc';
+                    }
+                },
+                
+                renderPair(pair) {
+                    // This will be replaced with proper template rendering in task 8
+                    return `<p>Pair: ${pair.case_id}</p>`;
+                }
+            }
+        }
+    </script>
 </body>
-</html>
+</html>""
