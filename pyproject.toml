@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "click>=8.3.1",
+    "duckdb>=0.9.0",
     "python-dotenv>=1.2.1",
     "requests>=2.32.5",
     "tqdm>=4.67.1",
@@ -14,6 +15,13 @@ dependencies = [
 
 [project.scripts]
 mvh_copy_mb = "mvh_copy_mb.cli:main"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "hypothesis>=6.90.0",
+    "pytest-cov>=4.1.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.9.10,<0.10.0"]

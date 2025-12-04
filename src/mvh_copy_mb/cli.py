@@ -10,7 +10,10 @@ from zeep import Client
 from zeep.transports import Transport
 from requests import Session
 from requests.auth import HTTPBasicAuth
+from datetime import datetime
 from dotenv import load_dotenv
+
+from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
 # Load environment variables
 load_dotenv()
@@ -129,7 +132,7 @@ def parse_meldebestaetigung(mb_string: str) -> dict:
         logger.error(f"Error parsing Meldebestaetigung '{mb_string}': {e}")
         return {}
 
-def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasClient):
+def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None):
     try:
         # Extract Vorgangsnummer directly
         vorgangsnummer = row.get('Vorgangsnummer')
@@ -171,6 +174,40 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
 
         # Resolve Case ID from gPAS
         case_id = gpas_client.get_original_value(vorgangsnummer_str)
+        gpas_domain = None
+        
+        # Determine which domain resolved the pseudonym (if any)
+        if case_id:
+            # Try to determine which domain resolved it
+            for domain in gpas_client.domains:
+                try:
+                    response = gpas_client.client.service.getValueFor(psn=vorgangsnummer_str, domainName=domain)
+                    if response:
+                        gpas_domain = domain
+                        break
+                except Exception:
+                    continue
+        
+        # Store record in database if database is available
+        if db:
+            try:
+                record = MeldebestaetigungRecord(
+                    vorgangsnummer=vorgangsnummer_str,
+                    meldebestaetigung=meldebestaetigung,
+                    source_file=source_file.name,
+                    typ_der_meldung=typ_der_meldung,
+                    indikationsbereich=indikationsbereich_str,
+                    art_der_daten=art_der_daten_str,
+                    ergebnis_qc=ergebnis_qc,
+                    case_id=case_id,
+                    gpas_domain=gpas_domain,
+                    processed_at=datetime.now()
+                )
+                db.upsert_record(record)
+                logger.debug(f"Stored record in database for vorgangsnummer: {vorgangsnummer_str}")
+            except Exception as e:
+                logger.error(f"Failed to store record in database for vorgangsnummer {vorgangsnummer_str}: {e}")
+                # Continue processing even if database storage fails
         
         if case_id:
             # Requirement: "Files should be named by their case id then."
@@ -192,7 +229,7 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
     except Exception as e:
         logger.error(f"Error processing row: {e}")
 
-def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient):
+def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None):
     try:
         # Detect delimiter - assuming ';' for German CSVs usually, but let's try to be robust
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -209,7 +246,7 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient):
             reader = csv.DictReader(f, dialect=dialect)
             
             for row in reader:
-                process_row(row, file_path, root_dir, gpas_client)
+                process_row(row, file_path, root_dir, gpas_client, db)
                 
     except Exception as e:
         logger.error(f"Failed to process file {file_path}: {e}")
@@ -247,18 +284,24 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
             logger.error(f"Failed to create archive directory {archive_dir}: {e}")
             raise click.ClickException(f"Failed to create archive directory {archive_dir}: {e}")
 
+    # Initialize database in the input directory
+    db_path = input_path / "meldebestaettigungen.duckdb"
+    
     csv_files = list(input_path.glob('*.csv'))
-    for csv_file in tqdm(csv_files, desc="Processing CSV files", unit="file", ncols=80):
-        logger.info(f"Processing file: {csv_file.name}")
-        process_csv_file(csv_file, input_path, gpas_client)
+    
+    # Use context manager for automatic database cleanup
+    with MeldebestaetigungDatabase(db_path) as db:
+        for csv_file in tqdm(csv_files, desc="Processing CSV files", unit="file", ncols=80):
+            logger.info(f"Processing file: {csv_file.name}")
+            process_csv_file(csv_file, input_path, gpas_client, db)
 
-        if archive_dir:
-            try:
-                shutil.move(str(csv_file), archive_dir)
-                logger.info(f"Moved {csv_file.name} to {archive_dir}")
-            except Exception as e:
-                logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
-                raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+            if archive_dir:
+                try:
+                    shutil.move(str(csv_file), archive_dir)
+                    logger.info(f"Moved {csv_file.name} to {archive_dir}")
+                except Exception as e:
+                    logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+                    raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
 
 if __name__ == '__main__':
     main()
