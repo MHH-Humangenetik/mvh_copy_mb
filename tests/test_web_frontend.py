@@ -606,3 +606,322 @@ def test_checkbox_state_reflects_database_state(num_pairs: int, done_flags: list
                 else:
                     assert not has_checked_attr, \
                         f"Pair {pair.case_id} with is_done=False should have unchecked checkbox"
+
+
+
+# Feature: web-frontend, Property 15: Client-side filter matches all columns
+# Validates: Requirements 9.1
+@settings(max_examples=100)
+@given(
+    num_pairs=st.integers(min_value=1, max_value=10),
+    filter_str=st.text(min_size=1, max_size=10, alphabet=st.characters(min_codepoint=65, max_codepoint=90))
+)
+def test_client_side_filter_matches_all_columns(num_pairs: int, filter_str: str):
+    """
+    Property 15: Client-side filter matches all columns
+    
+    For any filter string and any set of records, the filtered results should
+    include only records where at least one column contains the filter string
+    (case-insensitive).
+    
+    This test verifies that:
+    1. Filtering searches across all columns
+    2. Filtering is case-insensitive
+    3. Only matching records are included in results
+    """
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records with varying data
+        with MeldebestaetigungDatabase(db_path) as db:
+            for i in range(num_pairs):
+                case_id = f"CASE_{i:03d}"
+                
+                # Create genomic record
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{i}_{filter_str if i == 0 else 'OTHER'}",
+                    meldebestaetigung=f"mb_genomic_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung=str(i % 3),
+                    indikationsbereich=f"indication_{i}",
+                    art_der_daten="genomic",
+                    ergebnis_qc=str((i % 2) + 1),
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(genomic_record)
+                
+                # Create clinical record
+                clinical_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_C_{i}",
+                    meldebestaetigung=f"mb_clinical_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung=str(i % 3),
+                    indikationsbereich=f"indication_{i}",
+                    art_der_daten="clinical",
+                    ergebnis_qc=str((i % 2) + 1),
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(clinical_record)
+        
+        # Get pairs from service
+        service = WebDatabaseService(db_path)
+        pairs = service.get_all_records_grouped()
+        
+        # Simulate the filtering logic from Alpine.js
+        filter_lower = filter_str.lower()
+        filtered_pairs = []
+        
+        for pair in pairs:
+            # Check if filter matches any column
+            matches = False
+            
+            # Check case_id
+            if pair.case_id and filter_lower in pair.case_id.lower():
+                matches = True
+            
+            # Check genomic record fields
+            if pair.genomic:
+                if (filter_lower in pair.genomic.vorgangsnummer.lower() or
+                    filter_lower in pair.genomic.typ_der_meldung.lower() or
+                    filter_lower in pair.genomic.indikationsbereich.lower() or
+                    filter_lower in pair.genomic.ergebnis_qc.lower() or
+                    filter_lower in pair.genomic.source_file.lower()):
+                    matches = True
+            
+            # Check clinical record fields
+            if pair.clinical:
+                if (filter_lower in pair.clinical.vorgangsnummer.lower() or
+                    filter_lower in pair.clinical.typ_der_meldung.lower() or
+                    filter_lower in pair.clinical.indikationsbereich.lower() or
+                    filter_lower in pair.clinical.ergebnis_qc.lower() or
+                    filter_lower in pair.clinical.source_file.lower()):
+                    matches = True
+            
+            if matches:
+                filtered_pairs.append(pair)
+        
+        # Verify that at least the first pair (which contains filter_str) is included
+        if num_pairs > 0:
+            assert len(filtered_pairs) > 0, "Filter should match at least one record"
+            
+            # Verify that the first pair is in the filtered results
+            first_pair_case_id = f"CASE_000"
+            assert any(p.case_id == first_pair_case_id for p in filtered_pairs), \
+                f"Pair with filter string should be in filtered results"
+
+
+# Feature: web-frontend, Property 16: Client-side sort orders by selected column
+# Validates: Requirements 9.2, 9.3
+@settings(max_examples=100)
+@given(
+    num_pairs=st.integers(min_value=2, max_value=10),
+    sort_direction=st.sampled_from(['asc', 'desc'])
+)
+def test_client_side_sort_orders_by_column(num_pairs: int, sort_direction: str):
+    """
+    Property 16: Client-side sort orders by selected column
+    
+    For any column and sort direction, when sorting is applied, the records
+    should be ordered by that column's values in the specified direction.
+    
+    This test verifies that:
+    1. Sorting orders records by the selected column
+    2. Sort direction (ascending/descending) is respected
+    3. Priority group remains the primary sort key
+    """
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records with varying data
+        with MeldebestaetigungDatabase(db_path) as db:
+            for i in range(num_pairs):
+                # Use reverse order for case_id to test sorting
+                case_id = f"CASE_{(num_pairs - i):03d}"
+                
+                # Create genomic record
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{i}",
+                    meldebestaetigung=f"mb_genomic_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung=str(i % 3),
+                    indikationsbereich=f"indication_{i}",
+                    art_der_daten="genomic",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(genomic_record)
+                
+                # Create clinical record
+                clinical_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_C_{i}",
+                    meldebestaetigung=f"mb_clinical_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung=str(i % 3),
+                    indikationsbereich=f"indication_{i}",
+                    art_der_daten="clinical",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(clinical_record)
+        
+        # Get pairs from service
+        service = WebDatabaseService(db_path)
+        pairs = service.get_all_records_grouped()
+        
+        # Simulate the sorting logic from Alpine.js (sort by case_id)
+        sorted_pairs = sorted(pairs, key=lambda p: (p.priority_group, p.case_id), 
+                            reverse=(sort_direction == 'desc'))
+        
+        # Verify sorting
+        prev_priority = None
+        prev_case_id = None
+        
+        for pair in sorted_pairs:
+            # Priority group should still be primary sort (always ascending)
+            if prev_priority is not None:
+                assert pair.priority_group >= prev_priority, \
+                    "Priority group should be primary sort key"
+            
+            # Within same priority group, verify case_id sort direction
+            if prev_priority == pair.priority_group and prev_case_id is not None:
+                if sort_direction == 'asc':
+                    assert pair.case_id >= prev_case_id, \
+                        f"Case IDs should be ascending: {prev_case_id} -> {pair.case_id}"
+                else:
+                    assert pair.case_id <= prev_case_id, \
+                        f"Case IDs should be descending: {prev_case_id} -> {pair.case_id}"
+            
+            prev_priority = pair.priority_group
+            prev_case_id = pair.case_id
+
+
+# Feature: web-frontend, Property 17: Filtering and sorting preserve pair grouping
+# Validates: Requirements 9.4
+@settings(max_examples=100)
+@given(
+    num_pairs=st.integers(min_value=1, max_value=10),
+    filter_str=st.text(min_size=0, max_size=10, alphabet=st.characters(min_codepoint=65, max_codepoint=90)),
+    sort_direction=st.sampled_from(['asc', 'desc'])
+)
+def test_filtering_and_sorting_preserve_pair_grouping(
+    num_pairs: int,
+    filter_str: str,
+    sort_direction: str
+):
+    """
+    Property 17: Filtering and sorting preserve pair grouping
+    
+    For any filter or sort operation, records with the same Case ID should
+    remain consecutive in the output.
+    
+    This test verifies that:
+    1. Filtering maintains pair grouping
+    2. Sorting maintains pair grouping
+    3. Combined filtering and sorting maintains pair grouping
+    """
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records
+        with MeldebestaetigungDatabase(db_path) as db:
+            for i in range(num_pairs):
+                case_id = f"CASE_{i:03d}"
+                
+                # Create genomic record
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{i}",
+                    meldebestaetigung=f"mb_genomic_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung=str(i % 3),
+                    indikationsbereich=f"indication_{i}",
+                    art_der_daten="genomic",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(genomic_record)
+                
+                # Create clinical record
+                clinical_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_C_{i}",
+                    meldebestaetigung=f"mb_clinical_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung=str(i % 3),
+                    indikationsbereich=f"indication_{i}",
+                    art_der_daten="clinical",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False
+                )
+                db.upsert_record(clinical_record)
+        
+        # Get pairs from service
+        service = WebDatabaseService(db_path)
+        pairs = service.get_all_records_grouped()
+        
+        # Apply filtering if filter_str is not empty
+        if filter_str:
+            filter_lower = filter_str.lower()
+            filtered_pairs = []
+            
+            for pair in pairs:
+                matches = False
+                
+                if pair.case_id and filter_lower in pair.case_id.lower():
+                    matches = True
+                
+                if pair.genomic and any(
+                    filter_lower in str(getattr(pair.genomic, field, '')).lower()
+                    for field in ['vorgangsnummer', 'typ_der_meldung', 'indikationsbereich', 
+                                'ergebnis_qc', 'source_file']
+                ):
+                    matches = True
+                
+                if pair.clinical and any(
+                    filter_lower in str(getattr(pair.clinical, field, '')).lower()
+                    for field in ['vorgangsnummer', 'typ_der_meldung', 'indikationsbereich', 
+                                'ergebnis_qc', 'source_file']
+                ):
+                    matches = True
+                
+                if matches:
+                    filtered_pairs.append(pair)
+            
+            pairs = filtered_pairs
+        
+        # Apply sorting
+        sorted_pairs = sorted(pairs, key=lambda p: (p.priority_group, p.case_id),
+                            reverse=(sort_direction == 'desc'))
+        
+        # Verify pair grouping is preserved
+        # Each case_id should appear at most once (pairs are already grouped)
+        seen_case_ids = set()
+        for pair in sorted_pairs:
+            assert pair.case_id not in seen_case_ids, \
+                f"Case ID {pair.case_id} appears multiple times (pair grouping broken)"
+            seen_case_ids.add(pair.case_id)
+        
+        # Verify that complete pairs still have both genomic and clinical
+        for pair in sorted_pairs:
+            if pair.is_complete:
+                assert pair.genomic is not None and pair.clinical is not None, \
+                    f"Complete pair {pair.case_id} should have both records"

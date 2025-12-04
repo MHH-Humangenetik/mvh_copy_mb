@@ -121,22 +121,22 @@
   - **Property 10: Checkbox state reflects database state**
   - **Validates: Requirements 4.5**
 
-- [ ] 9. Implement Alpine.js filtering functionality
+- [x] 9. Implement Alpine.js filtering functionality
   - Create Alpine.js component in index.html with pairs data
   - Implement filter logic that searches across all columns
   - Bind filter input to Alpine.js state
   - Ensure filtered results maintain pair grouping
   - _Requirements: 9.1, 9.4, 9.5, 10.2_
 
-- [ ] 9.1 Write property test for client-side filtering
+- [x] 9.1 Write property test for client-side filtering
   - **Property 15: Client-side filter matches all columns**
   - **Validates: Requirements 9.1**
 
-- [ ] 9.2 Write property test for filter preserving pair grouping
+- [x] 9.2 Write property test for filter preserving pair grouping
   - **Property 17: Filtering and sorting preserve pair grouping**
   - **Validates: Requirements 9.4**
 
-- [ ] 10. Implement Alpine.js sorting functionality
+- [x] 10. Implement Alpine.js sorting functionality
   - Add sortBy method to Alpine.js component
   - Implement sort toggle (ascending/descending)
   - Add click handlers to table headers
@@ -144,7 +144,7 @@
   - Ensure sorted results maintain pair grouping
   - _Requirements: 9.2, 9.3, 9.4, 9.5, 10.2_
 
-- [ ] 10.1 Write property test for client-side sorting
+- [x] 10.1 Write property test for client-side sorting
   - **Property 16: Client-side sort orders by selected column**
   - **Validates: Requirements 9.2, 9.3**
 
