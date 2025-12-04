@@ -7,14 +7,20 @@ marking records as done.
 """
 
 import logging
+import os
 from pathlib import Path
 from typing import Optional
 
+import click
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
@@ -118,19 +124,60 @@ async def health_check():
     }
 
 
-def run_server():
+@click.command()
+@click.option(
+    '--host',
+    envvar='WEB_HOST',
+    default='0.0.0.0',
+    show_default=True,
+    help='Host to bind the web server to'
+)
+@click.option(
+    '--port',
+    envvar='WEB_PORT',
+    type=int,
+    default=8000,
+    show_default=True,
+    help='Port to bind the web server to'
+)
+@click.option(
+    '--reload',
+    envvar='WEB_RELOAD',
+    is_flag=True,
+    default=False,
+    help='Enable auto-reload for development'
+)
+@click.option(
+    '--log-level',
+    envvar='WEB_LOG_LEVEL',
+    default='info',
+    show_default=True,
+    type=click.Choice(['critical', 'error', 'warning', 'info', 'debug'], case_sensitive=False),
+    help='Logging level for the web server'
+)
+def run_server(host: str, port: int, reload: bool, log_level: str):
     """
     Entry point for running the web server via CLI.
     
     This function is called when running `uv run web` command.
     It starts the Uvicorn server with appropriate configuration.
+    
+    Configuration can be provided via command-line options or environment variables:
+    - WEB_HOST: Host to bind to (default: 0.0.0.0)
+    - WEB_PORT: Port to bind to (default: 8000)
+    - WEB_RELOAD: Enable auto-reload (default: false)
+    - WEB_LOG_LEVEL: Logging level (default: info)
     """
     import uvicorn
     
+    logger.info(f"Starting web server on {host}:{port}")
+    logger.info(f"Reload mode: {reload}")
+    logger.info(f"Log level: {log_level}")
+    
     uvicorn.run(
         "mvh_copy_mb.web:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True,
-        log_level="info"
+        host=host,
+        port=port,
+        reload=reload,
+        log_level=log_level.lower()
     )
