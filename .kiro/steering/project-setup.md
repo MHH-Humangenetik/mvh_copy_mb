@@ -16,6 +16,10 @@ Always use:
 
 Never use `pip`, `poetry`, or other package managers directly.
 
+## Testing
+
+Always run tests before commiting. Use `uv run pytest` for running tests.
+
 ## Git
 
 For each spec create a separate branch. The branch name should be the spec name.
