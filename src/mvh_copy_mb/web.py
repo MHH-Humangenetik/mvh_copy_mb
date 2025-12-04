@@ -128,26 +128,13 @@ async def index(request: Request):
         logger.info(f"Retrieved {len(pairs)} record pairs from database")
         
         # Convert pairs to dictionaries for JSON serialization
+        from dataclasses import asdict
         pairs_dict = []
         for pair in pairs:
             pair_dict = {
                 'case_id': pair.case_id,
-                'genomic': {
-                    'vorgangsnummer': pair.genomic.vorgangsnummer,
-                    'typ_der_meldung': pair.genomic.typ_der_meldung,
-                    'indikationsbereich': pair.genomic.indikationsbereich,
-                    'ergebnis_qc': pair.genomic.ergebnis_qc,
-                    'source_file': pair.genomic.source_file,
-                    'is_done': pair.genomic.is_done
-                } if pair.genomic else None,
-                'clinical': {
-                    'vorgangsnummer': pair.clinical.vorgangsnummer,
-                    'typ_der_meldung': pair.clinical.typ_der_meldung,
-                    'indikationsbereich': pair.clinical.indikationsbereich,
-                    'ergebnis_qc': pair.clinical.ergebnis_qc,
-                    'source_file': pair.clinical.source_file,
-                    'is_done': pair.clinical.is_done
-                } if pair.clinical else None,
+                'genomic': asdict(pair.genomic) if pair.genomic else None,
+                'clinical': asdict(pair.clinical) if pair.clinical else None,
                 'is_complete': pair.is_complete,
                 'is_valid': pair.is_valid,
                 'is_done': pair.is_done,
