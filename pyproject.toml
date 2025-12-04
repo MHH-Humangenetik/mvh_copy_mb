@@ -21,23 +21,19 @@ dependencies = [
 mvh_copy_mb = "mvh_copy_mb.cli:main"
 web = "mvh_copy_mb.web:run_server"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "pytest>=7.4.0",
     "hypothesis>=6.90.0",
     "pytest-cov>=4.1.0",
     "beautifulsoup4>=4.14.3",
+    "httpx>=0.28.1",
+    "pytest-xdist>=3.8.0",
 ]
 
 [build-system]
 requires = ["uv_build>=0.9.10,<0.10.0"]
 build-backend = "uv_build"
-
-[tool.uv]
-dev-dependencies = [
-    "httpx>=0.28.1",
-    "pytest-xdist>=3.8.0",
-]
 
 [tool.pytest.ini_options]
 # Run tests in parallel using all available CPU cores

@@ -10,8 +10,9 @@ This project uses **uv** for all Python package management and command execution
 
 Always use:
 - `uv run <command>` for running Python scripts and CLI commands
-- `uv sync` for syncing dependencies from `pyproject.toml`
+- `uv sync` for syncing dependencies from `pyproject.toml` (with `--dev` for dev dependencies)
 - `uv add <package>` for adding new dependencies to the project
+- `uv add --dev <package>` for adding new dev dependencies to the project
 
 Never use `pip`, `poetry`, or other package managers directly.
 
