@@ -10,6 +10,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Optional
+from contextlib import asynccontextmanager
 
 import click
 from dotenv import load_dotenv
@@ -29,11 +30,46 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI application
+# Determine base directory (src/mvh_copy_mb/)
+BASE_DIR = Path(__file__).resolve().parent
+
+# Configure Jinja2 templates
+# Templates will be in src/mvh_copy_mb/templates/
+templates_dir = BASE_DIR / "templates"
+templates_dir.mkdir(exist_ok=True)
+templates = Jinja2Templates(directory=str(templates_dir))
+
+# Configure static files directory
+# Static files will be in src/mvh_copy_mb/static/
+static_dir = BASE_DIR / "static"
+static_dir.mkdir(exist_ok=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan event handler.
+    
+    Handles startup and shutdown events for the FastAPI application.
+    """
+    # Startup
+    logger.info("Starting Meldebestätigungen Viewer application")
+    logger.info(f"FastAPI version: {app.version}")
+    logger.info(f"Templates directory: {templates_dir}")
+    logger.info(f"Static files directory: {static_dir}")
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down Meldebestätigungen Viewer application")
+
+
+# Initialize FastAPI application with lifespan handler
 app = FastAPI(
     title="Meldebestätigungen Viewer",
     description="Web interface for reviewing and managing Meldebestätigungen",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Configure CORS middleware
@@ -45,46 +81,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Determine base directory (src/mvh_copy_mb/)
-BASE_DIR = Path(__file__).resolve().parent
-
-# Configure Jinja2 templates
-# Templates will be in src/mvh_copy_mb/templates/
-templates_dir = BASE_DIR / "templates"
-templates_dir.mkdir(exist_ok=True)
-templates = Jinja2Templates(directory=str(templates_dir))
-
-# Configure static files serving
-# Static files will be in src/mvh_copy_mb/static/
-static_dir = BASE_DIR / "static"
-static_dir.mkdir(exist_ok=True)
+# Mount static files
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-logger.info(f"Templates directory: {templates_dir}")
-logger.info(f"Static files directory: {static_dir}")
-
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Application startup event handler.
-    
-    Logs application startup and verifies configuration.
-    """
-    logger.info("Starting Meldebestätigungen Viewer application")
-    logger.info(f"FastAPI version: {app.version}")
-    logger.info(f"Templates: {templates_dir}")
-    logger.info(f"Static files: {static_dir}")
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Application shutdown event handler.
-    
-    Logs application shutdown and performs cleanup if needed.
-    """
-    logger.info("Shutting down Meldebestätigungen Viewer application")
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -112,9 +110,9 @@ async def index(request: Request):
         if not db_path.exists():
             logger.warning(f"Database not found at {db_path}")
             return templates.TemplateResponse(
-                "index.html",
-                {
-                    "request": request,
+                request=request,
+                name="index.html",
+                context={
                     "pairs": [],
                     "error_message": f"Database not found at {db_path}. Please process some CSV files first."
                 }
@@ -159,9 +157,9 @@ async def index(request: Request):
         
         # Render template with pairs data
         return templates.TemplateResponse(
-            "index.html",
-            {
-                "request": request,
+            request=request,
+            name="index.html",
+            context={
                 "pairs": pairs_dict,
                 "error_message": None if pairs else "No records found in database."
             }
