@@ -82,12 +82,69 @@
                 <tbody>
                     <template x-for="pair in filteredAndSorted" :key="pair.case_id">
                         <template x-if="pair.genomic || pair.clinical">
-                            <!-- Pair rows will be rendered here by Alpine.js -->
-                            <tr>
-                                <td colspan="10">
-                                    <div x-html="renderPair(pair)"></div>
-                                </td>
-                            </tr>
+                            <template>
+                                <!-- Genomic row -->
+                                <tr x-show="pair.genomic" 
+                                    class="pair-row genomic"
+                                    :class="'priority-group-' + pair.priority_group"
+                                    :data-case-id="pair.case_id">
+                                    <td :rowspan="pair.is_complete ? 2 : 1" class="case-id-cell" x-text="pair.case_id"></td>
+                                    <td x-text="pair.genomic ? pair.genomic.vorgangsnummer : ''"></td>
+                                    <td>genomic</td>
+                                    <td x-text="pair.genomic ? pair.genomic.typ_der_meldung : ''"></td>
+                                    <td x-text="pair.genomic ? pair.genomic.indikationsbereich : ''"></td>
+                                    <td x-text="pair.genomic ? pair.genomic.ergebnis_qc : ''"></td>
+                                    <td x-text="pair.genomic ? pair.genomic.source_file : ''"></td>
+                                    <td :rowspan="pair.is_complete ? 2 : 1">
+                                        <span class="complete-indicator" :class="pair.is_complete ? 'yes' : 'no'"></span>
+                                    </td>
+                                    <td :rowspan="pair.is_complete ? 2 : 1">
+                                        <span class="valid-indicator" :class="pair.is_valid ? 'yes' : 'no'"></span>
+                                    </td>
+                                    <td :rowspan="pair.is_complete ? 2 : 1" class="done-cell">
+                                        <input 
+                                            x-show="pair.is_complete"
+                                            type="checkbox" 
+                                            :checked="pair.is_done"
+                                            :hx-post="'/api/done/' + pair.case_id"
+                                            :hx-vals="JSON.stringify({done: !pair.is_done})"
+                                            hx-target="closest tr"
+                                            hx-swap="outerHTML"
+                                            hx-indicator="#loading">
+                                    </td>
+                                </tr>
+                                
+                                <!-- Clinical row -->
+                                <tr x-show="pair.clinical" 
+                                    class="pair-row clinical"
+                                    :class="'priority-group-' + pair.priority_group"
+                                    :data-case-id="pair.case_id">
+                                    <td x-show="!pair.genomic" :rowspan="1" class="case-id-cell" x-text="pair.case_id"></td>
+                                    <td x-text="pair.clinical ? pair.clinical.vorgangsnummer : ''"></td>
+                                    <td>clinical</td>
+                                    <td x-text="pair.clinical ? pair.clinical.typ_der_meldung : ''"></td>
+                                    <td x-text="pair.clinical ? pair.clinical.indikationsbereich : ''"></td>
+                                    <td x-text="pair.clinical ? pair.clinical.ergebnis_qc : ''"></td>
+                                    <td x-text="pair.clinical ? pair.clinical.source_file : ''"></td>
+                                    <td x-show="!pair.genomic" :rowspan="1">
+                                        <span class="complete-indicator" :class="pair.is_complete ? 'yes' : 'no'"></span>
+                                    </td>
+                                    <td x-show="!pair.genomic" :rowspan="1">
+                                        <span class="valid-indicator" :class="pair.is_valid ? 'yes' : 'no'"></span>
+                                    </td>
+                                    <td x-show="!pair.genomic" :rowspan="1" class="done-cell">
+                                        <input 
+                                            x-show="pair.is_complete"
+                                            type="checkbox" 
+                                            :checked="pair.is_done"
+                                            :hx-post="'/api/done/' + pair.case_id"
+                                            :hx-vals="JSON.stringify({done: !pair.is_done})"
+                                            hx-target="closest tr"
+                                            hx-swap="outerHTML"
+                                            hx-indicator="#loading">
+                                    </td>
+                                </tr>
+                            </template>
                         </template>
                     </template>
                 </tbody>
@@ -163,11 +220,6 @@
                         this.sortColumn = column;
                         this.sortDirection = 'asc';
                     }
-                },
-                
-                renderPair(pair) {
-                    // This will be replaced with proper template rendering in task 8
-                    return `<p>Pair: ${pair.case_id}</p>`;
                 }
             }
         }

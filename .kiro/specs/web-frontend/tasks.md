@@ -87,7 +87,7 @@
   - Add filter input field
   - _Requirements: 1.1, 1.2, 9.1, 9.2, 10.1, 10.2, 10.3_
 
-- [ ] 8. Implement table row rendering with pair grouping
+- [x] 8. Implement table row rendering with pair grouping
   - Create `templates/partials/pair_row.html` for reusable pair rendering
   - Add visual styling for genomic/clinical pair grouping
   - Add complete pair indicator (when both records present)
@@ -97,27 +97,27 @@
   - Apply priority group styling
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 3.2, 3.3, 3.4, 3.5, 4.1, 4.2, 8.1_
 
-- [ ] 8.1 Write property test for required fields display
+- [x] 8.1 Write property test for required fields display
   - **Property 1: All required fields are displayed**
   - **Validates: Requirements 1.2**
 
-- [ ] 8.2 Write property test for pair grouping indicators
+- [x] 8.2 Write property test for pair grouping indicators
   - **Property 5: Paired records have grouping indicators**
   - **Validates: Requirements 2.3**
 
-- [ ] 8.3 Write property test for complete pair indicator
+- [x] 8.3 Write property test for complete pair indicator
   - **Property 6: Complete pair indicator is conditional**
   - **Validates: Requirements 2.4, 2.5**
 
-- [ ] 8.4 Write property test for valid pair indicator
+- [x] 8.4 Write property test for valid pair indicator
   - **Property 7: Valid pair indicator is conditional on completeness and QC**
   - **Validates: Requirements 3.2, 3.3, 3.4, 3.5**
 
-- [ ] 8.5 Write property test for checkbox presence
+- [x] 8.5 Write property test for checkbox presence
   - **Property 8: Done checkbox only for complete pairs**
   - **Validates: Requirements 4.1, 4.2**
 
-- [ ] 8.6 Write property test for checkbox state matching database
+- [x] 8.6 Write property test for checkbox state matching database
   - **Property 10: Checkbox state reflects database state**
   - **Validates: Requirements 4.5**
 

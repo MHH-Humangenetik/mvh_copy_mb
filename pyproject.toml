@@ -5,6 +5,7 @@ description = "Process MVH Meldebestaetigung CSV files and organize them based o
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "beautifulsoup4>=4.14.3",
     "click>=8.3.1",
     "duckdb>=0.9.0",
     "fastapi>=0.123.5",
