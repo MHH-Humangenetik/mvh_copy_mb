@@ -148,7 +148,7 @@
   - **Property 16: Client-side sort orders by selected column**
   - **Validates: Requirements 9.2, 9.3**
 
-- [ ] 11. Create custom CSS file with Rosé Pine theme
+- [x] 11. Create custom CSS file with Rosé Pine theme
   - Create `static/css/custom.css` with Rosé Pine variables
   - Add dark mode support via prefers-color-scheme
   - Style pair grouping (borders, backgrounds)
@@ -158,7 +158,7 @@
   - Style form inputs and buttons
   - _Requirements: 10.3_
 
-- [ ] 12. Add error handling and user feedback
+- [x] 12. Add error handling and user feedback
   - Add error page template for database connection failures
   - Add error messages for failed checkbox updates
   - Add loading indicators for HTMX requests
@@ -166,7 +166,7 @@
   - Log all errors with appropriate detail
   - _Requirements: 6.5, 7.5_
 
-- [ ] 12.1 Write unit tests for error scenarios
+- [x] 12.1 Write unit tests for error scenarios
   - Test database unavailable error page
   - Test invalid Case ID returns 404
   - Test incomplete pair update returns 400

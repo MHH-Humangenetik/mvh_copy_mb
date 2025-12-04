@@ -211,3 +211,56 @@ def test_update_done_status_toggle(test_db, monkeypatch):
         clinical = db.get_record("VN_C_COMPLETE")
         assert genomic.is_done is False
         assert clinical.is_done is False
+
+
+
+def test_index_page_empty_database(monkeypatch):
+    """
+    Test that empty database displays appropriate message.
+    
+    Validates: Requirements 6.5
+    """
+    # Create an empty database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "empty.duckdb"
+        
+        # Create empty database
+        with MeldebestaetigungDatabase(db_path) as db:
+            pass  # Just create the schema, no records
+        
+        # Set the database path in environment
+        monkeypatch.setenv('DB_PATH', str(db_path))
+        
+        # Create test client
+        client = TestClient(app)
+        
+        # Request index page
+        response = client.get("/")
+        
+        # Should return 200 OK
+        assert response.status_code == 200
+        
+        # Should contain message about no records
+        assert "No records found" in response.text or "no data" in response.text.lower()
+
+
+def test_index_page_database_not_found(monkeypatch):
+    """
+    Test that missing database displays appropriate error message.
+    
+    Validates: Requirements 6.5
+    """
+    # Set a non-existent database path
+    monkeypatch.setenv('DB_PATH', '/nonexistent/path/to/database.duckdb')
+    
+    # Create test client
+    client = TestClient(app)
+    
+    # Request index page
+    response = client.get("/")
+    
+    # Should return 200 OK (with error message in template)
+    assert response.status_code == 200
+    
+    # Should contain message about database not found
+    assert "not found" in response.text.lower() or "database" in response.text.lower()
