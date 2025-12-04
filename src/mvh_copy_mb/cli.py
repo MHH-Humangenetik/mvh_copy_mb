@@ -285,7 +285,7 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
             raise click.ClickException(f"Failed to create archive directory {archive_dir}: {e}")
 
     # Initialize database in the input directory
-    db_path = input_path / "meldebestaettigungen.duckdb"
+    db_path = input_path / "meldebestaetigungen.duckdb"
     
     csv_files = list(input_path.glob('*.csv'))
     

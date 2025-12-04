@@ -40,7 +40,7 @@ The system follows a three-tier architecture:
                ▼
 ┌─────────────────────────────────────────────┐
 │         DuckDB Database                     │
-│  (meldebestaettigungen.duckdb)              │
+│  (meldebestaetigungen.duckdb)              │
 └─────────────────────────────────────────────┘
 ```
 

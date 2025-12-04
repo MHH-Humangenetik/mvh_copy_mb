@@ -24,7 +24,7 @@ def test_database_file_creation_in_correct_location(dir_name: str):
     Property 1: Database file creation in correct location
     
     For any valid input directory path, when the database is initialized,
-    the database file should exist at the path {input_directory}/meldebestaettigungen.duckdb
+    the database file should exist at the path {input_directory}/meldebestaetigungen.duckdb
     
     This test verifies that:
     1. The database file is created in the specified directory
@@ -39,7 +39,7 @@ def test_database_file_creation_in_correct_location(dir_name: str):
         input_dir.mkdir(parents=True, exist_ok=True)
         
         # Expected database path
-        expected_db_path = input_dir / "meldebestaettigungen.duckdb"
+        expected_db_path = input_dir / "meldebestaetigungen.duckdb"
         
         # Verify file doesn't exist before initialization
         assert not expected_db_path.exists()

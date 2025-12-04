@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This feature adds persistent database storage using DuckDB to track all processed Meldebestätigungen and their resolved information from gPAS. The database will be stored as `meldebestaettigungen.duckdb` in the input directory and will maintain a record of all processed entries, including successful gPAS resolutions and failures.
+This feature adds persistent database storage using DuckDB to track all processed Meldebestätigungen and their resolved information from gPAS. The database will be stored as `meldebestaetigungen.duckdb` in the input directory and will maintain a record of all processed entries, including successful gPAS resolutions and failures.
 
 ## Glossary
 
@@ -22,7 +22,7 @@ This feature adds persistent database storage using DuckDB to track all processe
 
 #### Acceptance Criteria
 
-1. WHEN the system starts processing THEN the system SHALL create or open a DuckDB database file named `meldebestaettigungen.duckdb` in the input directory
+1. WHEN the system starts processing THEN the system SHALL create or open a DuckDB database file named `meldebestaetigungen.duckdb` in the input directory
 2. WHEN the database file does not exist THEN the system SHALL create a new database with the required schema
 3. WHEN the database file exists THEN the system SHALL open the existing database and reuse the schema
 4. THE system SHALL store the database file in the input directory specified by the user
