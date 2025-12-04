@@ -115,7 +115,7 @@ def test_all_required_fields_are_displayed(num_pairs: int, record_types: list):
                         source_file=f"source_{i}.csv",
                         typ_der_meldung=str(i % 3),
                         indikationsbereich=f"indication_{i}",
-                        art_der_daten="genomic",
+                        art_der_daten="G",
                         ergebnis_qc=str((i % 2) + 1),
                         case_id=case_id,
                         gpas_domain="test_domain",
@@ -131,7 +131,7 @@ def test_all_required_fields_are_displayed(num_pairs: int, record_types: list):
                         source_file=f"source_{i}.csv",
                         typ_der_meldung=str(i % 3),
                         indikationsbereich=f"indication_{i}",
-                        art_der_daten="clinical",
+                        art_der_daten="C",
                         ergebnis_qc=str((i % 2) + 1),
                         case_id=case_id,
                         gpas_domain="test_domain",
@@ -208,7 +208,7 @@ def test_paired_records_have_grouping_indicators(num_complete_pairs: int):
                     source_file=f"source_{i}.csv",
                     typ_der_meldung="0",
                     indikationsbereich="test",
-                    art_der_daten="genomic",
+                    art_der_daten="G",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -224,7 +224,7 @@ def test_paired_records_have_grouping_indicators(num_complete_pairs: int):
                     source_file=f"source_{i}.csv",
                     typ_der_meldung="0",
                     indikationsbereich="test",
-                    art_der_daten="clinical",
+                    art_der_daten="C",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -299,7 +299,7 @@ def test_complete_pair_indicator_is_conditional(num_complete: int, num_incomplet
                 case_id = f"COMPLETE_{i:03d}"
                 
                 # Create both genomic and clinical
-                for art_der_daten in ["genomic", "clinical"]:
+                for art_der_daten in ["G", "C"]:
                     record = MeldebestaetigungRecord(
                         vorgangsnummer=f"VN_{art_der_daten[0].upper()}_{i}",
                         meldebestaetigung=f"mb_{art_der_daten}_{i}",
@@ -325,7 +325,7 @@ def test_complete_pair_indicator_is_conditional(num_complete: int, num_incomplet
                     source_file=f"source_{i}.csv",
                     typ_der_meldung="0",
                     indikationsbereich="test",
-                    art_der_daten="genomic",
+                    art_der_daten="G",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -389,7 +389,7 @@ def test_valid_pair_indicator_conditional_on_qc(num_valid: int, num_invalid: int
             for i in range(num_valid):
                 case_id = f"VALID_{i:03d}"
                 
-                for art_der_daten in ["genomic", "clinical"]:
+                for art_der_daten in ["G", "C"]:
                     record = MeldebestaetigungRecord(
                         vorgangsnummer=f"VN_{art_der_daten[0].upper()}_{i}",
                         meldebestaetigung=f"mb_{art_der_daten}_{i}",
@@ -409,7 +409,7 @@ def test_valid_pair_indicator_conditional_on_qc(num_valid: int, num_invalid: int
             for i in range(num_invalid):
                 case_id = f"INVALID_{i:03d}"
                 
-                for art_der_daten in ["genomic", "clinical"]:
+                for art_der_daten in ["G", "C"]:
                     record = MeldebestaetigungRecord(
                         vorgangsnummer=f"VN_{art_der_daten[0].upper()}_{i}",
                         meldebestaetigung=f"mb_{art_der_daten}_{i}",
@@ -476,7 +476,7 @@ def test_done_checkbox_only_for_complete_pairs(num_complete: int, num_incomplete
             for i in range(num_complete):
                 case_id = f"COMPLETE_{i:03d}"
                 
-                for art_der_daten in ["genomic", "clinical"]:
+                for art_der_daten in ["G", "C"]:
                     record = MeldebestaetigungRecord(
                         vorgangsnummer=f"VN_{art_der_daten[0].upper()}_{i}",
                         meldebestaetigung=f"mb_{art_der_daten}_{i}",
@@ -502,7 +502,7 @@ def test_done_checkbox_only_for_complete_pairs(num_complete: int, num_incomplete
                     source_file=f"source_{i}.csv",
                     typ_der_meldung="0",
                     indikationsbereich="test",
-                    art_der_daten="genomic",
+                    art_der_daten="G",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -565,7 +565,7 @@ def test_checkbox_state_reflects_database_state(num_pairs: int, done_flags: list
                 case_id = f"CASE_{i:03d}"
                 is_done = done_flags[i]
                 
-                for art_der_daten in ["genomic", "clinical"]:
+                for art_der_daten in ["G", "C"]:
                     record = MeldebestaetigungRecord(
                         vorgangsnummer=f"VN_{art_der_daten[0].upper()}_{i}",
                         meldebestaetigung=f"mb_{art_der_daten}_{i}",
@@ -645,7 +645,7 @@ def test_client_side_filter_matches_all_columns(num_pairs: int, filter_str: str)
                     source_file=f"source_{i}.csv",
                     typ_der_meldung=str(i % 3),
                     indikationsbereich=f"indication_{i}",
-                    art_der_daten="genomic",
+                    art_der_daten="G",
                     ergebnis_qc=str((i % 2) + 1),
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -661,7 +661,7 @@ def test_client_side_filter_matches_all_columns(num_pairs: int, filter_str: str)
                     source_file=f"source_{i}.csv",
                     typ_der_meldung=str(i % 3),
                     indikationsbereich=f"indication_{i}",
-                    art_der_daten="clinical",
+                    art_der_daten="C",
                     ergebnis_qc=str((i % 2) + 1),
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -753,7 +753,7 @@ def test_client_side_sort_orders_by_column(num_pairs: int, sort_direction: str):
                     source_file=f"source_{i}.csv",
                     typ_der_meldung=str(i % 3),
                     indikationsbereich=f"indication_{i}",
-                    art_der_daten="genomic",
+                    art_der_daten="G",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -769,7 +769,7 @@ def test_client_side_sort_orders_by_column(num_pairs: int, sort_direction: str):
                     source_file=f"source_{i}.csv",
                     typ_der_meldung=str(i % 3),
                     indikationsbereich=f"indication_{i}",
-                    art_der_daten="clinical",
+                    art_der_daten="C",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -849,7 +849,7 @@ def test_filtering_and_sorting_preserve_pair_grouping(
                     source_file=f"source_{i}.csv",
                     typ_der_meldung=str(i % 3),
                     indikationsbereich=f"indication_{i}",
-                    art_der_daten="genomic",
+                    art_der_daten="G",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",
@@ -865,7 +865,7 @@ def test_filtering_and_sorting_preserve_pair_grouping(
                     source_file=f"source_{i}.csv",
                     typ_der_meldung=str(i % 3),
                     indikationsbereich=f"indication_{i}",
-                    art_der_daten="clinical",
+                    art_der_daten="C",
                     ergebnis_qc="1",
                     case_id=case_id,
                     gpas_domain="test_domain",

@@ -131,10 +131,23 @@ async def index(request: Request):
         from dataclasses import asdict
         pairs_dict = []
         for pair in pairs:
+            # Convert records to dicts and handle datetime serialization
+            genomic_dict = None
+            if pair.genomic:
+                genomic_dict = asdict(pair.genomic)
+                if genomic_dict.get('processed_at'):
+                    genomic_dict['processed_at'] = genomic_dict['processed_at'].isoformat()
+            
+            clinical_dict = None
+            if pair.clinical:
+                clinical_dict = asdict(pair.clinical)
+                if clinical_dict.get('processed_at'):
+                    clinical_dict['processed_at'] = clinical_dict['processed_at'].isoformat()
+            
             pair_dict = {
                 'case_id': pair.case_id,
-                'genomic': asdict(pair.genomic) if pair.genomic else None,
-                'clinical': asdict(pair.clinical) if pair.clinical else None,
+                'genomic': genomic_dict,
+                'clinical': clinical_dict,
                 'is_complete': pair.is_complete,
                 'is_valid': pair.is_valid,
                 'is_done': pair.is_done,
