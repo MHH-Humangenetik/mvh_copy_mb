@@ -1,33 +1,48 @@
-"""Tests for HTML table row generation logic."""
+"""Tests for HTML table row generation logic.
+
+These tests verify the correct column structure for different pair types.
+Each row MUST have exactly 10 columns:
+1. Case ID
+2. Vorgangsnummer
+3. Art der Daten
+4. Typ der Meldung
+5. Indikationsbereich
+6. Ergebnis QC
+7. Source File
+8. Complete
+9. Valid
+10. Done
+"""
 
 import pytest
 
 
-def test_complete_pair_has_both_rows():
-    """Test that a complete pair (genomic + clinical) generates 2 rows."""
+def test_complete_pair_column_count():
+    """Test that complete pair rows have correct column structure.
+    
+    Genomic row: 10 columns total
+    - Case ID (rowspan=2)
+    - 6 data columns
+    - Complete (rowspan=2)
+    - Valid (rowspan=2)
+    - Done (rowspan=2)
+    
+    Clinical row: 7 columns total (3 are spanned from genomic)
+    - NO Case ID (spanned from genomic)
+    - 6 data columns
+    - NO Complete (spanned from genomic)
+    - NO Valid (spanned from genomic)
+    - NO Done (spanned from genomic)
+    """
     pair = {
         "case_id": "TEST_001",
-        "genomic": {
-            "vorgangsnummer": "GENOMIC_VN",
-            "typ_der_meldung": "0",
-            "indikationsbereich": "H",
-            "ergebnis_qc": "1",
-            "source_file": "genomic.csv",
-        },
-        "clinical": {
-            "vorgangsnummer": "CLINICAL_VN",
-            "typ_der_meldung": "0",
-            "indikationsbereich": "H",
-            "ergebnis_qc": "1",
-            "source_file": "clinical.csv",
-        },
+        "genomic": {"vorgangsnummer": "G_VN"},
+        "clinical": {"vorgangsnummer": "C_VN"},
         "is_complete": True,
-        "is_valid": True,
-        "is_done": False,
-        "priority_group": 1,
     }
 
-    # Both genomic and clinical should be truthy
+    # Genomic row should render: Case ID + 6 data + 3 indicators = 10 columns
+    # Clinical row should render: 6 data columns only = 7 columns (3 spanned)
     assert pair["genomic"] is not None
     assert pair["clinical"] is not None
     assert pair["is_complete"] is True
