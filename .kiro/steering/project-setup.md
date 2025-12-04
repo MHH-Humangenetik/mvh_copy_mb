@@ -20,3 +20,7 @@ Never use `pip`, `poetry`, or other package managers directly.
 For each spec create a separate branch. The branch name should be the spec name.
 
 When you finish a task, make a commit. Use conventional commits. Keep the commit message short. Only more than one sentence when absolutely necessary. Check if you are on the correct branch.
+
+## Settings
+
+Setting for all runnable scripts should be definable by a .env file or via command line parameter.
