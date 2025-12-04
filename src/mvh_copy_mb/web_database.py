@@ -110,10 +110,10 @@ class WebDatabaseService:
                 if record.case_id not in records_by_case_id:
                     records_by_case_id[record.case_id] = {'genomic': None, 'clinical': None}
                 
-                # Assign to genomic or clinical based on art_der_daten
-                if record.art_der_daten.lower() == 'genomic':
+                # Assign to genomic or clinical based on art_der_daten (G/C)
+                if record.art_der_daten.lower() == 'g':
                     records_by_case_id[record.case_id]['genomic'] = record
-                elif record.art_der_daten.lower() == 'clinical':
+                elif record.art_der_daten.lower() == 'c':
                     records_by_case_id[record.case_id]['clinical'] = record
             
             # Create RecordPair objects
@@ -239,8 +239,8 @@ class WebDatabaseService:
                 records.append(record)
             
             # Check if pair is complete (both genomic and clinical)
-            has_genomic = any(r.art_der_daten.lower() == 'genomic' for r in records)
-            has_clinical = any(r.art_der_daten.lower() == 'clinical' for r in records)
+            has_genomic = any(r.art_der_daten.lower() == 'g' for r in records)
+            has_clinical = any(r.art_der_daten.lower() == 'c' for r in records)
             
             if not (has_genomic and has_clinical):
                 raise ValueError(f"Incomplete pair for Case ID: {case_id}")
@@ -309,9 +309,10 @@ class WebDatabaseService:
                     is_done=row[10]
                 )
                 
-                if record.art_der_daten.lower() == 'genomic':
+                # Handle single-letter codes (G/C)
+                if record.art_der_daten.lower() == 'g':
                     genomic = record
-                elif record.art_der_daten.lower() == 'clinical':
+                elif record.art_der_daten.lower() == 'c':
                     clinical = record
             
             # Determine completeness
