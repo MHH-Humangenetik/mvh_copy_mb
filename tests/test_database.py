@@ -21,7 +21,7 @@ from mvh_copy_mb.database import MeldebestaetigungDatabase
 @given(st.text(min_size=1, max_size=50))
 def test_database_file_creation_in_correct_location(dir_name: str):
     """
-    Property 1: Database file creation in correct location
+    Database file creation in correct location
     
     For any valid input directory path, when the database is initialized,
     the database file should exist at the path {input_directory}/meldebestaetigungen.duckdb
@@ -63,7 +63,7 @@ def test_database_file_creation_in_correct_location(dir_name: str):
 @given(st.text(min_size=1, max_size=50))
 def test_schema_persistence_across_sessions(db_name: str):
     """
-    Property 2: Schema persistence across sessions
+    Schema persistence across sessions
     
     For any database that has been created and closed, when reopened,
     the schema should still exist and be queryable.
@@ -140,7 +140,7 @@ def test_schema_persistence_across_sessions(db_name: str):
 @given(st.text(min_size=1, max_size=50))
 def test_database_connection_cleanup(db_name: str):
     """
-    Property 8: Database connection cleanup
+    Database connection cleanup
     
     For any database instance, when closed (either explicitly or via context manager exit),
     subsequent operations should fail or require reopening the connection.
@@ -218,7 +218,7 @@ def test_complete_record_storage(
     processed_at
 ):
     """
-    Property 3: Complete record storage
+    Complete record storage
     
     For any valid Meldebestaetigung record with all required fields,
     when stored in the database, retrieving the record should return
@@ -301,7 +301,7 @@ def test_successful_gpas_resolution_storage(
     processed_at
 ):
     """
-    Property 4: Successful gPAS resolution storage
+    Successful gPAS resolution storage
     
     For any Meldebestaetigung where gPAS successfully resolves the Vorgangsnummer,
     when stored in the database, both the Case ID and the resolving domain name
@@ -376,7 +376,7 @@ def test_failed_gpas_resolution_storage(
     processed_at
 ):
     """
-    Property 5: Failed gPAS resolution storage
+    Failed gPAS resolution storage
     
     For any Meldebestaetigung where gPAS fails to resolve the Vorgangsnummer,
     when stored in the database, both the Case ID and domain name fields
@@ -466,7 +466,7 @@ def test_upsert_prevents_duplicates(
     processed_at2
 ):
     """
-    Property 6: Upsert prevents duplicates
+    Upsert prevents duplicates
     
     For any Meldebestaetigung record with a given Vorgangsnummer,
     when inserted multiple times (even from different source files),
@@ -738,7 +738,7 @@ def test_get_record_with_null_fields():
 # Validates: Requirements 1.5
 def test_error_resilience_with_logging(caplog):
     """
-    Property 9: Error resilience
+    Error resilience
     
     For any database operation that raises an exception, the system should
     log the error and continue processing subsequent records without terminating.
@@ -848,7 +848,7 @@ def test_done_status_changes_persist_to_database(
     updated_done: bool
 ):
     """
-    Property 11: Done status changes persist to database
+    Done status changes persist to database
     
     For any done status update operation, when querying the database after the update,
     the is_done field should reflect the new value.
