@@ -219,7 +219,7 @@ td:nth-child(10) {
 }
 
 .complete-indicator.yes::before {
-    content: "✅✅";
+    content: "✅";
 }
 
 .complete-indicator.no::before {
@@ -235,7 +235,7 @@ td:nth-child(10) {
 }
 
 .valid-indicator.yes::before {
-    content: "✅✅";
+    content: "✅";
 }
 
 .valid-indicator.no::before {
