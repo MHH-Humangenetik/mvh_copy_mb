@@ -1,25 +1,7 @@
-/* Rosé Pine Theme for Meldebestätigungen Viewer */
+/* Rosé Pine Moon Theme for Meldebestätigungen Viewer */
 
-/* Rosé Pine Palette variables (Dawn + Moon) */
+/* Rosé Pine Moon (dark mode) palette */
 :root {
-    /* Dawn (light mode) */
-    --rp-dawn-base: #faf4ed;
-    --rp-dawn-surface: #fffaf3;
-    --rp-dawn-overlay: #f2e9e1;
-    --rp-dawn-muted: #9893a5;
-    --rp-dawn-subtle: #797593;
-    --rp-dawn-text: #575279;
-    --rp-dawn-love: #b4637a;
-    --rp-dawn-gold: #ea9d34;
-    --rp-dawn-rose: #d7827e;
-    --rp-dawn-pine: #286983;
-    --rp-dawn-foam: #56949f;
-    --rp-dawn-iris: #907aa9;
-    --rp-dawn-highlight-low: #f4ede8;
-    --rp-dawn-highlight-med: #dfdad9;
-    --rp-dawn-highlight-high: #cecacd;
-
-    /* Moon (dark mode) */
     --rp-moon-base: #232136;
     --rp-moon-surface: #2a273f;
     --rp-moon-overlay: #393552;
@@ -36,42 +18,22 @@
     --rp-moon-highlight-med: #44415a;
     --rp-moon-highlight-high: #56526e;
 
-    /* App theme tokens (light defaults = Dawn) */
-    color-scheme: light;
-    --bg: var(--rp-dawn-base);
-    --text: var(--rp-dawn-text);
-    --panel: var(--rp-dawn-surface);
-    --overlay: var(--rp-dawn-overlay);
-    --muted: var(--rp-dawn-muted);
-    --subtle: var(--rp-dawn-subtle);
-    --link: var(--rp-dawn-iris);
-    --border: var(--rp-dawn-highlight-high);
-    --accent: var(--rp-dawn-iris);
-    --error: var(--rp-dawn-love);
-    --warn: var(--rp-dawn-gold);
-    --ok: var(--rp-dawn-pine);
-    --info: var(--rp-dawn-foam);
-    --code-bg: var(--rp-dawn-highlight-low);
-}
-
-@media (prefers-color-scheme: dark) {
-    :root {
-        color-scheme: dark;
-        --bg: var(--rp-moon-base);
-        --text: var(--rp-moon-text);
-        --panel: var(--rp-moon-surface);
-        --overlay: var(--rp-moon-overlay);
-        --muted: var(--rp-moon-muted);
-        --subtle: var(--rp-moon-subtle);
-        --link: var(--rp-moon-iris);
-        --border: var(--rp-moon-highlight-high);
-        --accent: var(--rp-moon-iris);
-        --error: var(--rp-moon-love);
-        --warn: var(--rp-moon-gold);
-        --ok: var(--rp-moon-pine);
-        --info: var(--rp-moon-foam);
-        --code-bg: var(--rp-moon-highlight-low);
-    }
+    /* App theme tokens (always dark) */
+    color-scheme: dark;
+    --bg: var(--rp-moon-base);
+    --text: var(--rp-moon-text);
+    --panel: var(--rp-moon-surface);
+    --overlay: var(--rp-moon-overlay);
+    --muted: var(--rp-moon-muted);
+    --subtle: var(--rp-moon-subtle);
+    --link: var(--rp-moon-iris);
+    --border: var(--rp-moon-highlight-high);
+    --accent: var(--rp-moon-iris);
+    --error: var(--rp-moon-love);
+    --warn: var(--rp-moon-gold);
+    --ok: var(--rp-moon-pine);
+    --info: var(--rp-moon-foam);
+    --code-bg: var(--rp-moon-highlight-low);
 }
 
 /* Base styles */
