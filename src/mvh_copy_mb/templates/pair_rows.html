@@ -1,0 +1,84 @@
+{% if pair.genomic and pair.clinical %}
+<!-- Complete pair: genomic row -->
+<tr class="pair-row genomic priority-group-{{ pair.priority_group }}"
+    data-case-id="{{ pair.case_id }}"
+    id="pair-genomic-{{ pair.case_id }}">
+    <td rowspan="2" class="case-id-cell">{{ pair.case_id }}</td>
+    <td>{{ pair.genomic.vorgangsnummer }}</td>
+    <td>genomic</td>
+    <td>{{ pair.genomic.typ_der_meldung }}</td>
+    <td>{{ pair.genomic.indikationsbereich }}</td>
+    <td>{{ pair.genomic.ergebnis_qc }}</td>
+    <td>{{ pair.genomic.source_file }}</td>
+    <td rowspan="2">
+        <span class="complete-indicator {{ 'yes' if pair.is_complete else 'no' }}"></span>
+    </td>
+    <td rowspan="2">
+        <span class="valid-indicator {{ 'yes' if pair.is_valid else 'no' }}"></span>
+    </td>
+    <td rowspan="2" class="done-cell">
+        <input 
+            type="checkbox" 
+            {{ 'checked' if pair.is_done else '' }}
+            hx-post="/api/done/{{ pair.case_id }}"
+            hx-vals='{"done": {{ "false" if pair.is_done else "true" }}}'
+            hx-target="#pair-genomic-{{ pair.case_id }}"
+            hx-swap="outerHTML"
+            hx-indicator="#loading">
+    </td>
+</tr>
+<!-- Complete pair: clinical row -->
+<tr class="pair-row clinical priority-group-{{ pair.priority_group }}"
+    data-case-id="{{ pair.case_id }}"
+    id="pair-clinical-{{ pair.case_id }}"
+    hx-swap-oob="outerHTML:#pair-clinical-{{ pair.case_id }}">
+    <td>{{ pair.clinical.vorgangsnummer }}</td>
+    <td>clinical</td>
+    <td>{{ pair.clinical.typ_der_meldung }}</td>
+    <td>{{ pair.clinical.indikationsbereich }}</td>
+    <td>{{ pair.clinical.ergebnis_qc }}</td>
+    <td>{{ pair.clinical.source_file }}</td>
+</tr>
+{% elif pair.genomic %}
+<!-- Genomic only pair -->
+<tr class="pair-row genomic priority-group-{{ pair.priority_group }}"
+    data-case-id="{{ pair.case_id }}">
+    <td class="case-id-cell">{{ pair.case_id }}</td>
+    <td>{{ pair.genomic.vorgangsnummer }}</td>
+    <td>genomic</td>
+    <td>{{ pair.genomic.typ_der_meldung }}</td>
+    <td>{{ pair.genomic.indikationsbereich }}</td>
+    <td>{{ pair.genomic.ergebnis_qc }}</td>
+    <td>{{ pair.genomic.source_file }}</td>
+    <td>
+        <span class="complete-indicator {{ 'yes' if pair.is_complete else 'no' }}"></span>
+    </td>
+    <td>
+        <span class="valid-indicator {{ 'yes' if pair.is_valid else 'no' }}"></span>
+    </td>
+    <td class="done-cell">
+        <span>—</span>
+    </td>
+</tr>
+{% elif pair.clinical %}
+<!-- Clinical only pair -->
+<tr class="pair-row clinical priority-group-{{ pair.priority_group }}"
+    data-case-id="{{ pair.case_id }}">
+    <td class="case-id-cell">{{ pair.case_id }}</td>
+    <td>{{ pair.clinical.vorgangsnummer }}</td>
+    <td>clinical</td>
+    <td>{{ pair.clinical.typ_der_meldung }}</td>
+    <td>{{ pair.clinical.indikationsbereich }}</td>
+    <td>{{ pair.clinical.ergebnis_qc }}</td>
+    <td>{{ pair.clinical.source_file }}</td>
+    <td>
+        <span class="complete-indicator {{ 'yes' if pair.is_complete else 'no' }}"></span>
+    </td>
+    <td>
+        <span class="valid-indicator {{ 'yes' if pair.is_valid else 'no' }}"></span>
+    </td>
+    <td class="done-cell">
+        <span>—</span>
+    </td>
+</tr>
+{% endif %}
