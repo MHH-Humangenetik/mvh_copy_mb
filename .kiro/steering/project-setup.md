@@ -29,3 +29,7 @@ When you finish a task, make a commit. Use conventional commits. Keep the commit
 ## Settings
 
 Setting for all runnable scripts should be definable by a .env file or via command line parameter.
+
+## Documentation
+
+Do not crete Markdown summaries while debugging. Only append to README.md if new funtionality is introduced.
