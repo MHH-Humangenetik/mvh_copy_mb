@@ -200,11 +200,11 @@ th:nth-child(10), td:nth-child(10) { width: 5%; } /* Done */
 }
 
 .complete-indicator.yes::before {
-    content: "✓";
+    content: "✅✅";
 }
 
 .complete-indicator.no::before {
-    content: "—";
+    content: "❌";
     color: var(--muted);
 }
 
@@ -216,25 +216,25 @@ th:nth-child(10), td:nth-child(10) { width: 5%; } /* Done */
 }
 
 .valid-indicator.yes::before {
-    content: "✓✓";
+    content: "✅✅";
 }
 
 .valid-indicator.no::before {
-    content: "—";
+    content: "❌";
     color: var(--muted);
 }
 
 /* Priority group styling */
 .priority-group-1 {
-    background-color: color-mix(in srgb, var(--warn) 15%, transparent);
+    background-color: var(--warn);
 }
 
 .priority-group-2 {
-    background-color: color-mix(in srgb, var(--error) 10%, transparent);
+    background-color: var(--error);
 }
 
 .priority-group-3 {
-    background-color: color-mix(in srgb, var(--ok) 10%, transparent);
+    background-color: var(--ok);
 }
 
 /* Done checkbox */
