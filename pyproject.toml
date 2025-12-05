@@ -43,6 +43,7 @@ addopts = [
     "-n", "auto",
     "--tb=short",
     "--strict-markers",
+    "--dist=loadgroup",
 ]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

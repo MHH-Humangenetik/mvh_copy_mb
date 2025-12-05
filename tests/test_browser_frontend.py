@@ -25,8 +25,8 @@ from playwright.sync_api import Page, expect
 
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
-# Mark all tests in this module as browser tests
-pytestmark = pytest.mark.browser
+# Mark all tests in this module as browser tests and group them to run serially
+pytestmark = [pytest.mark.browser, pytest.mark.xdist_group(name="browser_serial")]
 
 # Test configuration constants
 TEST_SERVER_HOST = "127.0.0.1"

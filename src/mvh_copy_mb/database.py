@@ -183,6 +183,7 @@ class MeldebestaetigungDatabase:
                     record.is_done,
                 ]
             )
+            self.conn.commit()
             logger.debug(f"Successfully upserted record for vorgangsnummer: {record.vorgangsnummer}")
         except Exception as e:
             logger.error(
