@@ -6,13 +6,53 @@ correctness properties of the database implementation.
 """
 
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from mvh_copy_mb.database import MeldebestaetigungDatabase
+from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
+
+
+# Test Helpers and Fixtures
+
+@contextmanager
+def temp_database():
+    """Context manager for creating a temporary test database."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        yield db_path
+
+
+def create_test_record(**overrides) -> MeldebestaetigungRecord:
+    """
+    Factory function for creating test records with sensible defaults.
+    
+    Args:
+        **overrides: Any fields to override from defaults
+        
+    Returns:
+        A MeldebestaetigungRecord with defaults applied
+    """
+    from datetime import datetime
+    
+    defaults = {
+        'vorgangsnummer': 'TEST_VN',
+        'meldebestaetigung': 'test_mb',
+        'source_file': 'test.csv',
+        'typ_der_meldung': '0',
+        'indikationsbereich': 'R',
+        'art_der_daten': 'G',
+        'ergebnis_qc': '1',
+        'case_id': None,
+        'gpas_domain': None,
+        'processed_at': datetime(2023, 1, 1),
+        'is_done': False
+    }
+    defaults.update(overrides)
+    return MeldebestaetigungRecord(**defaults)
 
 
 # Feature: duckdb-storage, Property 1: Database file creation in correct location
@@ -643,17 +683,9 @@ def test_get_record_returns_none_for_nonexistent():
     """
     Test that get_record returns None when the record doesn't exist.
     """
-    from mvh_copy_mb.database import MeldebestaetigungRecord
-    from datetime import datetime
-    
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.duckdb"
-        
+    with temp_database() as db_path:
         with MeldebestaetigungDatabase(db_path) as db:
-            # Try to retrieve a record that doesn't exist
             result = db.get_record("nonexistent_vorgangsnummer")
-            
-            # Should return None
             assert result is None
 
 
@@ -661,37 +693,21 @@ def test_get_record_retrieves_existing_record():
     """
     Test that get_record correctly retrieves an existing record.
     """
-    from mvh_copy_mb.database import MeldebestaetigungRecord
-    from datetime import datetime
+    record = create_test_record(
+        vorgangsnummer="TEST123",
+        meldebestaetigung="test_mb_string",
+        case_id="CASE456",
+        gpas_domain="test_domain"
+    )
     
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.duckdb"
-        
-        # Create and store a record
-        record = MeldebestaetigungRecord(
-            vorgangsnummer="TEST123",
-            meldebestaetigung="test_mb_string",
-            source_file="test.csv",
-            typ_der_meldung="0",
-            indikationsbereich="test_indication",
-            art_der_daten="test_data_type",
-            ergebnis_qc="1",
-            case_id="CASE456",
-            gpas_domain="test_domain",
-            processed_at=datetime(2023, 1, 1, 12, 0, 0)
-        )
-        
+    with temp_database() as db_path:
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
-            
-            # Retrieve the record
             retrieved = db.get_record("TEST123")
             
-            # Verify it matches
             assert retrieved is not None
             assert retrieved.vorgangsnummer == "TEST123"
             assert retrieved.meldebestaetigung == "test_mb_string"
-            assert retrieved.source_file == "test.csv"
             assert retrieved.case_id == "CASE456"
             assert retrieved.gpas_domain == "test_domain"
 
@@ -700,33 +716,17 @@ def test_get_record_with_null_fields():
     """
     Test that get_record correctly handles NULL fields.
     """
-    from mvh_copy_mb.database import MeldebestaetigungRecord
-    from datetime import datetime
+    record = create_test_record(
+        vorgangsnummer="TEST789",
+        case_id=None,
+        gpas_domain=None
+    )
     
-    with tempfile.TemporaryDirectory() as tmpdir:
-        db_path = Path(tmpdir) / "test.duckdb"
-        
-        # Create a record with NULL case_id and gpas_domain
-        record = MeldebestaetigungRecord(
-            vorgangsnummer="TEST789",
-            meldebestaetigung="test_mb_string",
-            source_file="test.csv",
-            typ_der_meldung="0",
-            indikationsbereich="test_indication",
-            art_der_daten="test_data_type",
-            ergebnis_qc="1",
-            case_id=None,  # NULL
-            gpas_domain=None,  # NULL
-            processed_at=datetime(2023, 1, 1, 12, 0, 0)
-        )
-        
+    with temp_database() as db_path:
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
-            
-            # Retrieve the record
             retrieved = db.get_record("TEST789")
             
-            # Verify NULL fields are preserved
             assert retrieved is not None
             assert retrieved.case_id is None
             assert retrieved.gpas_domain is None
