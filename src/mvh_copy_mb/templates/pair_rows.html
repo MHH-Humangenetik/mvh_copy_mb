@@ -4,7 +4,14 @@
     data-case-id="{{ pair.case_id }}"
     id="pair-genomic-{{ pair.case_id }}">
     <td rowspan="2" class="case-id-cell">{{ pair.case_id }}</td>
-    <td>{{ pair.genomic.vorgangsnummer }}</td>
+    <td>
+        <span>{{ pair.genomic.vorgangsnummer }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.genomic.vorgangsnummer }}')" title="Copy to clipboard">📋</button>
+    </td>
+    <td>
+        <span class="ibe-string">{{ pair.genomic.meldebestaetigung }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.genomic.meldebestaetigung }}')" title="Copy to clipboard">📋</button>
+    </td>
     <td>genomic</td>
     <td>{{ pair.genomic.typ_der_meldung }}</td>
     <td>{{ pair.genomic.indikationsbereich }}</td>
@@ -32,7 +39,14 @@
     data-case-id="{{ pair.case_id }}"
     id="pair-clinical-{{ pair.case_id }}"
     hx-swap-oob="outerHTML:#pair-clinical-{{ pair.case_id }}">
-    <td>{{ pair.clinical.vorgangsnummer }}</td>
+    <td>
+        <span>{{ pair.clinical.vorgangsnummer }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.clinical.vorgangsnummer }}')" title="Copy to clipboard">📋</button>
+    </td>
+    <td>
+        <span class="ibe-string">{{ pair.clinical.meldebestaetigung }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.clinical.meldebestaetigung }}')" title="Copy to clipboard">📋</button>
+    </td>
     <td>clinical</td>
     <td>{{ pair.clinical.typ_der_meldung }}</td>
     <td>{{ pair.clinical.indikationsbereich }}</td>
@@ -44,7 +58,14 @@
 <tr class="pair-row genomic priority-group-{{ pair.priority_group }}"
     data-case-id="{{ pair.case_id }}">
     <td class="case-id-cell">{{ pair.case_id }}</td>
-    <td>{{ pair.genomic.vorgangsnummer }}</td>
+    <td>
+        <span>{{ pair.genomic.vorgangsnummer }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.genomic.vorgangsnummer }}')" title="Copy to clipboard">📋</button>
+    </td>
+    <td>
+        <span class="ibe-string">{{ pair.genomic.meldebestaetigung }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.genomic.meldebestaetigung }}')" title="Copy to clipboard">📋</button>
+    </td>
     <td>genomic</td>
     <td>{{ pair.genomic.typ_der_meldung }}</td>
     <td>{{ pair.genomic.indikationsbereich }}</td>
@@ -65,7 +86,14 @@
 <tr class="pair-row clinical priority-group-{{ pair.priority_group }}"
     data-case-id="{{ pair.case_id }}">
     <td class="case-id-cell">{{ pair.case_id }}</td>
-    <td>{{ pair.clinical.vorgangsnummer }}</td>
+    <td>
+        <span>{{ pair.clinical.vorgangsnummer }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.clinical.vorgangsnummer }}')" title="Copy to clipboard">📋</button>
+    </td>
+    <td>
+        <span class="ibe-string">{{ pair.clinical.meldebestaetigung }}</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('{{ pair.clinical.meldebestaetigung }}')" title="Copy to clipboard">📋</button>
+    </td>
     <td>clinical</td>
     <td>{{ pair.clinical.typ_der_meldung }}</td>
     <td>{{ pair.clinical.indikationsbereich }}</td>

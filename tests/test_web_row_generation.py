@@ -1,17 +1,18 @@
 """Tests for HTML table row generation logic.
 
 These tests verify the correct column structure for different pair types.
-Each row MUST have exactly 10 columns:
+Each row MUST have exactly 11 columns:
 1. Case ID
 2. Vorgangsnummer
-3. Art der Daten
-4. Typ der Meldung
-5. Indikationsbereich
-6. Ergebnis QC
-7. Source File
-8. Complete
-9. Valid
-10. Done
+3. IBE String (Meldebestaetigung)
+4. Art der Daten
+5. Typ der Meldung
+6. Indikationsbereich
+7. Ergebnis QC
+8. Source File
+9. Complete
+10. Valid
+11. Done
 """
 
 import tempfile
@@ -39,6 +40,7 @@ def render_pair_to_html(pair) -> str:
         <tr class="pair-row genomic priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             <td rowspan="2" class="case-id-cell">{pair.case_id}</td>
             <td>{pair.genomic.vorgangsnummer}</td>
+            <td>{pair.genomic.meldebestaetigung}</td>
             <td>genomic</td>
             <td>{pair.genomic.typ_der_meldung}</td>
             <td>{pair.genomic.indikationsbereich}</td>
@@ -55,6 +57,7 @@ def render_pair_to_html(pair) -> str:
         clinical_row = f"""
         <tr class="pair-row clinical priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             <td>{pair.clinical.vorgangsnummer}</td>
+            <td>{pair.clinical.meldebestaetigung}</td>
             <td>clinical</td>
             <td>{pair.clinical.typ_der_meldung}</td>
             <td>{pair.clinical.indikationsbereich}</td>
@@ -70,6 +73,7 @@ def render_pair_to_html(pair) -> str:
         <tr class="pair-row genomic priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             <td class="case-id-cell">{pair.case_id}</td>
             <td>{pair.genomic.vorgangsnummer}</td>
+            <td>{pair.genomic.meldebestaetigung}</td>
             <td>genomic</td>
             <td>{pair.genomic.typ_der_meldung}</td>
             <td>{pair.genomic.indikationsbereich}</td>
@@ -88,6 +92,7 @@ def render_pair_to_html(pair) -> str:
         <tr class="pair-row clinical priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             <td class="case-id-cell">{pair.case_id}</td>
             <td>{pair.clinical.vorgangsnummer}</td>
+            <td>{pair.clinical.meldebestaetigung}</td>
             <td>clinical</td>
             <td>{pair.clinical.typ_der_meldung}</td>
             <td>{pair.clinical.indikationsbereich}</td>
@@ -106,16 +111,16 @@ def render_pair_to_html(pair) -> str:
 def test_complete_pair_column_count():
     """Test that complete pair rows have correct column structure.
     
-    Genomic row: 10 columns total
+    Genomic row: 11 columns total
     - Case ID (rowspan=2)
-    - 6 data columns
+    - 7 data columns (Vorgangsnummer, IBE String, Art der Daten, Typ, Indikation, QC, Source)
     - Complete (rowspan=2)
     - Valid (rowspan=2)
     - Done (rowspan=2)
     
-    Clinical row: 6 columns total (4 are spanned from genomic)
+    Clinical row: 7 columns total (4 are spanned from genomic)
     - NO Case ID (spanned from genomic)
-    - 6 data columns
+    - 7 data columns
     - NO Complete (spanned from genomic)
     - NO Valid (spanned from genomic)
     - NO Done (spanned from genomic)
@@ -152,25 +157,25 @@ def test_complete_pair_column_count():
         rows = soup.find_all('tr')
         assert len(rows) == 2, "Complete pair should have 2 rows"
         
-        # Genomic row: 10 columns
+        # Genomic row: 11 columns
         genomic_row = rows[0]
         genomic_cols = genomic_row.find_all('td')
-        assert len(genomic_cols) == 10, f"Genomic row should have 10 columns, got {len(genomic_cols)}"
+        assert len(genomic_cols) == 11, f"Genomic row should have 11 columns, got {len(genomic_cols)}"
         
-        # Clinical row: 6 columns (4 spanned from genomic)
+        # Clinical row: 7 columns (4 spanned from genomic)
         clinical_row = rows[1]
         clinical_cols = clinical_row.find_all('td')
-        assert len(clinical_cols) == 6, f"Clinical row should have 6 columns, got {len(clinical_cols)}"
+        assert len(clinical_cols) == 7, f"Clinical row should have 7 columns, got {len(clinical_cols)}"
         
         # Verify rowspan attributes on genomic row
         assert genomic_cols[0].get('rowspan') == '2', "Case ID should have rowspan=2"
-        assert genomic_cols[7].get('rowspan') == '2', "Complete indicator should have rowspan=2"
-        assert genomic_cols[8].get('rowspan') == '2', "Valid indicator should have rowspan=2"
-        assert genomic_cols[9].get('rowspan') == '2', "Done cell should have rowspan=2"
+        assert genomic_cols[8].get('rowspan') == '2', "Complete indicator should have rowspan=2"
+        assert genomic_cols[9].get('rowspan') == '2', "Valid indicator should have rowspan=2"
+        assert genomic_cols[10].get('rowspan') == '2', "Done cell should have rowspan=2"
 
 
 def test_genomic_only_pair_has_one_row():
-    """Test that a genomic-only pair generates 1 row with 10 columns and Case ID visible."""
+    """Test that a genomic-only pair generates 1 row with 11 columns and Case ID visible."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
         
@@ -201,9 +206,9 @@ def test_genomic_only_pair_has_one_row():
         rows = soup.find_all('tr')
         assert len(rows) == 1, "Genomic-only pair should have 1 row"
         
-        # Should have 10 columns
+        # Should have 11 columns
         cols = rows[0].find_all('td')
-        assert len(cols) == 10, f"Genomic-only row should have 10 columns, got {len(cols)}"
+        assert len(cols) == 11, f"Genomic-only row should have 11 columns, got {len(cols)}"
         
         # Case ID should be visible (no rowspan)
         case_id_cell = cols[0]
@@ -213,7 +218,7 @@ def test_genomic_only_pair_has_one_row():
 
 
 def test_clinical_only_pair_has_one_row():
-    """Test that a clinical-only pair generates 1 row with 10 columns and Case ID visible."""
+    """Test that a clinical-only pair generates 1 row with 11 columns and Case ID visible."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
         
@@ -244,9 +249,9 @@ def test_clinical_only_pair_has_one_row():
         rows = soup.find_all('tr')
         assert len(rows) == 1, "Clinical-only pair should have 1 row"
         
-        # Should have 10 columns
+        # Should have 11 columns
         cols = rows[0].find_all('td')
-        assert len(cols) == 10, f"Clinical-only row should have 10 columns, got {len(cols)}"
+        assert len(cols) == 11, f"Clinical-only row should have 11 columns, got {len(cols)}"
         
         # Case ID should be visible
         case_id_cell = cols[0]
@@ -294,6 +299,8 @@ def test_complete_pair_case_id_rowspan():
         clinical_cols = rows[1].find_all('td')
         # First column should be vorgangsnummer, not case_id
         assert "VN_C" in clinical_cols[0].text
+        # Second column should be meldebestaetigung
+        assert "mb_" in clinical_cols[1].text
 
 
 def test_incomplete_pair_no_checkbox():
@@ -400,7 +407,7 @@ def test_indicator_columns_have_rowspan():
         rows = soup.find_all('tr')
         genomic_cols = rows[0].find_all('td')
         
-        # Columns 7, 8, 9 (Complete, Valid, Done) should have rowspan=2
-        assert genomic_cols[7].get('rowspan') == '2', "Complete indicator should have rowspan=2"
-        assert genomic_cols[8].get('rowspan') == '2', "Valid indicator should have rowspan=2"
-        assert genomic_cols[9].get('rowspan') == '2', "Done cell should have rowspan=2"
+        # Columns 8, 9, 10 (Complete, Valid, Done) should have rowspan=2
+        assert genomic_cols[8].get('rowspan') == '2', "Complete indicator should have rowspan=2"
+        assert genomic_cols[9].get('rowspan') == '2', "Valid indicator should have rowspan=2"
+        assert genomic_cols[10].get('rowspan') == '2', "Done cell should have rowspan=2"

@@ -56,6 +56,7 @@
                             </span>
                         </th>
                         <th>Vorgangsnummer</th>
+                        <th>IBE String</th>
                         <th>Art der Daten</th>
                         <th @click="sortBy('typ_der_meldung')" class="sortable">
                             Typ der Meldung
@@ -92,7 +93,14 @@
                             :data-case-id="pair.case_id"
                             :id="'pair-genomic-' + pair.case_id">
                             <td rowspan="2" class="case-id-cell" x-text="pair.case_id"></td>
-                            <td x-text="pair.genomic.vorgangsnummer"></td>
+                            <td>
+                                <span x-text="pair.genomic.vorgangsnummer"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.genomic.vorgangsnummer)" title="Copy to clipboard">📋</button>
+                            </td>
+                            <td>
+                                <span x-text="pair.genomic.meldebestaetigung" class="ibe-string"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.genomic.meldebestaetigung)" title="Copy to clipboard">📋</button>
+                            </td>
                             <td>genomic</td>
                             <td x-text="pair.genomic.typ_der_meldung"></td>
                             <td x-text="pair.genomic.indikationsbereich"></td>
@@ -122,7 +130,14 @@
                             :class="'priority-group-' + pair.priority_group"
                             :data-case-id="pair.case_id"
                             :id="'pair-clinical-' + pair.case_id">
-                            <td x-text="pair.clinical.vorgangsnummer"></td>
+                            <td>
+                                <span x-text="pair.clinical.vorgangsnummer"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.clinical.vorgangsnummer)" title="Copy to clipboard">📋</button>
+                            </td>
+                            <td>
+                                <span x-text="pair.clinical.meldebestaetigung" class="ibe-string"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.clinical.meldebestaetigung)" title="Copy to clipboard">📋</button>
+                            </td>
                             <td>clinical</td>
                             <td x-text="pair.clinical.typ_der_meldung"></td>
                             <td x-text="pair.clinical.indikationsbereich"></td>
@@ -136,7 +151,14 @@
                             :class="'priority-group-' + pair.priority_group"
                             :data-case-id="pair.case_id">
                             <td class="case-id-cell" x-text="pair.case_id"></td>
-                            <td x-text="pair.genomic.vorgangsnummer"></td>
+                            <td>
+                                <span x-text="pair.genomic.vorgangsnummer"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.genomic.vorgangsnummer)" title="Copy to clipboard">📋</button>
+                            </td>
+                            <td>
+                                <span x-text="pair.genomic.meldebestaetigung" class="ibe-string"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.genomic.meldebestaetigung)" title="Copy to clipboard">📋</button>
+                            </td>
                             <td>genomic</td>
                             <td x-text="pair.genomic.typ_der_meldung"></td>
                             <td x-text="pair.genomic.indikationsbereich"></td>
@@ -159,7 +181,14 @@
                             :class="'priority-group-' + pair.priority_group"
                             :data-case-id="pair.case_id">
                             <td class="case-id-cell" x-text="pair.case_id"></td>
-                            <td x-text="pair.clinical.vorgangsnummer"></td>
+                            <td>
+                                <span x-text="pair.clinical.vorgangsnummer"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.clinical.vorgangsnummer)" title="Copy to clipboard">📋</button>
+                            </td>
+                            <td>
+                                <span x-text="pair.clinical.meldebestaetigung" class="ibe-string"></span>
+                                <button class="copy-btn" @click="copyToClipboard(pair.clinical.meldebestaetigung)" title="Copy to clipboard">📋</button>
+                            </td>
                             <td>clinical</td>
                             <td x-text="pair.clinical.typ_der_meldung"></td>
                             <td x-text="pair.clinical.indikationsbereich"></td>
@@ -196,6 +225,15 @@
                 sortColumn: 'priority_group',
                 sortDirection: 'asc',
                 
+                copyToClipboard(text) {
+                    navigator.clipboard.writeText(text).then(() => {
+                        // Optional: Show a brief success message
+                        console.log('Copied to clipboard:', text);
+                    }).catch(err => {
+                        console.error('Failed to copy:', err);
+                    });
+                },
+                
                 get filteredAndSorted() {
                     let filtered = this.filter === '' 
                         ? this.pairs 
@@ -206,6 +244,7 @@
                                 (pair.case_id && pair.case_id.toLowerCase().includes(searchStr)) ||
                                 (pair.genomic && (
                                     pair.genomic.vorgangsnummer.toLowerCase().includes(searchStr) ||
+                                    pair.genomic.meldebestaetigung.toLowerCase().includes(searchStr) ||
                                     pair.genomic.typ_der_meldung.toLowerCase().includes(searchStr) ||
                                     pair.genomic.indikationsbereich.toLowerCase().includes(searchStr) ||
                                     pair.genomic.ergebnis_qc.toLowerCase().includes(searchStr) ||
@@ -213,6 +252,7 @@
                                 )) ||
                                 (pair.clinical && (
                                     pair.clinical.vorgangsnummer.toLowerCase().includes(searchStr) ||
+                                    pair.clinical.meldebestaetigung.toLowerCase().includes(searchStr) ||
                                     pair.clinical.typ_der_meldung.toLowerCase().includes(searchStr) ||
                                     pair.clinical.indikationsbereich.toLowerCase().includes(searchStr) ||
                                     pair.clinical.ergebnis_qc.toLowerCase().includes(searchStr) ||

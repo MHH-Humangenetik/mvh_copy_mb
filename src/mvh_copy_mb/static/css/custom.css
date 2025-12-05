@@ -130,44 +130,10 @@ td {
     max-width: 0;
 }
 
-/* Priority group colors - must come after td to override */
-td.priority-group-1,
-td.scheme-love {
-    background-color: hsl(var(--rp-moon-love) / .1);
-    color: var(--rp-moon-love);
-}
-
-td.priority-group-2,
-td.scheme-gold {
-    background-color: hsl(var(--rp-moon-gold) / .1);
-    color: var(--rp-moon-gold);
-}
-
-td.scheme-rose {
-    background-color: hsl(var(--rp-moon-rose) / .1);
-    color: var(--rp-moon-rose);
-}
-
-td.priority-group-3,
-td.scheme-pine {
-    background-color: hsl(var(--rp-moon-pine) / .1);
-    color: var(--rp-moon-pine);
-}
-
-td.scheme-foam {
-    background-color: hsl(var(--rp-moon-foam) / .1);
-    color: var(--rp-moon-foam);
-}
-
-td.scheme-iris {
-    background-color: hsl(var(--rp-moon-iris) / .1);
-    color: var(--rp-moon-iris);
-}
-
 /* Column widths */
 th:nth-child(1),
 td:nth-child(1) {
-    width: 12%;
+    width: 10%;
 }
 
 /* Case ID */
@@ -179,52 +145,90 @@ td:nth-child(2) {
 /* Vorgangsnummer */
 th:nth-child(3),
 td:nth-child(3) {
+    width: 15%;
+    font-size: 0.85rem;
+}
+
+/* IBE String */
+th:nth-child(4),
+td:nth-child(4) {
     width: 7%;
 }
 
 /* Art der Daten */
-th:nth-child(4),
-td:nth-child(4) {
-    width: 10%;
+th:nth-child(5),
+td:nth-child(5) {
+    width: 9%;
 }
 
 /* Typ der Meldung */
-th:nth-child(5),
-td:nth-child(5) {
-    width: 12%;
-}
-
-/* Indikationsbereich */
 th:nth-child(6),
 td:nth-child(6) {
     width: 10%;
 }
 
-/* Ergebnis QC */
+/* Indikationsbereich */
 th:nth-child(7),
 td:nth-child(7) {
-    width: 20%;
+    width: 8%;
+}
+
+/* Ergebnis QC */
+th:nth-child(8),
+td:nth-child(8) {
+    width: 15%;
 }
 
 /* Source File */
-th:nth-child(8),
-td:nth-child(8) {
-    width: 6%;
+th:nth-child(9),
+td:nth-child(9) {
+    width: 5%;
 }
 
 /* Complete */
-th:nth-child(9),
-td:nth-child(9) {
-    width: 6%;
-}
-
-/* Valid */
 th:nth-child(10),
 td:nth-child(10) {
     width: 5%;
 }
 
-/* Done */
+/* Valid */
+th:nth-child(11),
+td:nth-child(11) {
+    width: 4%;
+}
+
+.priority-group-1,
+.scheme-love {
+    background-color: hsl(var(--rp-moon-love) / .1);
+    color: var(--rp-moon-love);
+}
+
+.priority-group-2,
+.scheme-gold {
+    background-color: hsl(var(--rp-moon-gold) / .1);
+    color: var(--rp-moon-gold);
+}
+
+.scheme-rose {
+    background-color: hsl(var(--rp-moon-rose) / .1);
+    color: var(--rp-moon-rose);
+}
+
+.priority-group-3,
+.scheme-pine {
+    background-color: hsl(var(--rp-moon-pine) / .1);
+    color: var(--rp-moon-pine);
+}
+
+.scheme-foam {
+    background-color: hsl(var(--rp-moon-foam) / .1);
+    color: var(--rp-moon-foam);
+}
+
+.scheme-iris {
+    background-color: hsl(var(--rp-moon-iris) / .1);
+    color: var(--rp-moon-iris);
+}
 
 /* Pair grouping */
 .pair-row.genomic {
@@ -356,4 +360,29 @@ button:hover {
     th {
         font-size: 0.7rem;
     }
+}
+
+/* Copy button styling */
+.copy-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9em;
+    padding: 0.2rem 0.4rem;
+    margin-left: 0.3rem;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+    vertical-align: middle;
+}
+
+.copy-btn:hover {
+    opacity: 1;
+    background: none;
+}
+
+/* IBE String styling */
+.ibe-string {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    word-break: break-all;
 }

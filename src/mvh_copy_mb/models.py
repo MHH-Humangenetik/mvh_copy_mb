@@ -30,6 +30,7 @@ class RecordResponse(BaseModel):
     
     Attributes:
         vorgangsnummer: Pseudonymized identifier
+        meldebestaetigung: IBE string (full content from second CSV column)
         case_id: Resolved case ID from gPAS (None if not found)
         art_der_daten: Type of data (genomic/clinical)
         typ_der_meldung: Type of report
@@ -40,6 +41,7 @@ class RecordResponse(BaseModel):
         is_done: Whether the record has been reviewed
     """
     vorgangsnummer: str
+    meldebestaetigung: str
     case_id: Optional[str]
     art_der_daten: str
     typ_der_meldung: str
