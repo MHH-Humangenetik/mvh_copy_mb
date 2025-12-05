@@ -76,8 +76,7 @@
 
 /* Base styles */
 body {
-    font-family: Avenir, Montserrat, Corbel, "URW Gothic", source-sans-pro,
-        sans-serif;
+    font-family: Bahnschrift, 'DIN Alternate', 'Franklin Gothic Medium', 'Nimbus Sans Narrow', sans-serif-condensed, sans-serif;
     margin-top: 2rem;
     background-color: var(--bg);
     color: var(--text);
