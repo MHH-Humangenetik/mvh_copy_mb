@@ -31,6 +31,7 @@ def render_pair_to_html(pair) -> str:
         <tr class="pair-row genomic priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             <td rowspan="{'2' if pair.is_complete else '1'}" class="case-id-cell">{pair.case_id}</td>
             <td>{pair.genomic.vorgangsnummer}</td>
+            <td>{pair.genomic.meldebestaetigung}</td>
             <td>genomic</td>
             <td>{pair.genomic.typ_der_meldung}</td>
             <td>{pair.genomic.indikationsbereich}</td>
@@ -55,6 +56,7 @@ def render_pair_to_html(pair) -> str:
         <tr class="pair-row clinical priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             {'<td rowspan="1" class="case-id-cell">' + pair.case_id + '</td>' if not pair.genomic else ''}
             <td>{pair.clinical.vorgangsnummer}</td>
+            <td>{pair.clinical.meldebestaetigung}</td>
             <td>clinical</td>
             <td>{pair.clinical.typ_der_meldung}</td>
             <td>{pair.clinical.indikationsbereich}</td>
