@@ -234,15 +234,10 @@ async def update_done_status(case_id: str, request: Request):
                     detail=f"Case ID {case_id} not found after update"
                 )
             
-            # TODO: Render the updated pair rows when template is created (task 8)
-            # For now, return JSON response
-            from fastapi.responses import JSONResponse
-            return JSONResponse(
-                content={
-                    "success": True,
-                    "case_id": case_id,
-                    "is_done": done
-                }
+            # Render the updated pair rows for HTMX swap
+            return templates.TemplateResponse(
+                "pair_rows.html",
+                {"request": request, "pair": pair}
             )
             
         except ValueError as e:

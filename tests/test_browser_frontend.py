@@ -340,7 +340,7 @@ def test_complete_pairs_have_checkbox(app_page: Page):
     
     # Checkbox should have HTMX attributes
     expect(checkbox).to_have_attribute('hx-post', '/api/done/CASE_COMPLETE')
-    expect(checkbox).to_have_attribute('hx-target', 'closest tr')
+    expect(checkbox).to_have_attribute('hx-target', '#pair-genomic-CASE_COMPLETE')
     expect(checkbox).to_have_attribute('hx-swap', 'outerHTML')
 
 

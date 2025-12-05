@@ -86,10 +86,11 @@
                 </thead>
                 <tbody>
                     <!-- Complete pairs: genomic row -->
-                    <template x-for="pair in filteredAndSorted.filter(p => p.genomic && p.clinical)" :key="pair.case_id + '-g'">
+                    <template x-for="pair in filteredAndSorted.filter(p => p.genomic && p.clinical && !htmxManagedPairs.has(p.case_id))" :key="pair.case_id + '-g'">
                         <tr class="pair-row genomic"
                             :class="'priority-group-' + pair.priority_group"
-                            :data-case-id="pair.case_id">
+                            :data-case-id="pair.case_id"
+                            :id="'pair-genomic-' + pair.case_id">
                             <td rowspan="2" class="case-id-cell" x-text="pair.case_id"></td>
                             <td x-text="pair.genomic.vorgangsnummer"></td>
                             <td>genomic</td>
@@ -109,17 +110,18 @@
                                     :checked="pair.is_done"
                                     :hx-post="'/api/done/' + pair.case_id"
                                     :hx-vals="JSON.stringify({done: !pair.is_done})"
-                                    hx-target="closest tr"
+                                    :hx-target="'#pair-genomic-' + pair.case_id"
                                     hx-swap="outerHTML"
                                     hx-indicator="#loading">
                             </td>
                         </tr>
                     </template>
                     <!-- Complete pairs: clinical row -->
-                    <template x-for="pair in filteredAndSorted.filter(p => p.genomic && p.clinical)" :key="pair.case_id + '-c'">
+                    <template x-for="pair in filteredAndSorted.filter(p => p.genomic && p.clinical && !htmxManagedPairs.has(p.case_id))" :key="pair.case_id + '-c'">
                         <tr class="pair-row clinical"
                             :class="'priority-group-' + pair.priority_group"
-                            :data-case-id="pair.case_id">
+                            :data-case-id="pair.case_id"
+                            :id="'pair-clinical-' + pair.case_id">
                             <td x-text="pair.clinical.vorgangsnummer"></td>
                             <td>clinical</td>
                             <td x-text="pair.clinical.typ_der_meldung"></td>
@@ -252,9 +254,61 @@
                         this.sortColumn = column;
                         this.sortDirection = 'asc';
                     }
+                },
+                
+                htmxManagedPairs: new Set(),
+                
+                updatePairDoneStatus(caseId, isDone) {
+                    // Mark this pair as managed by HTMX
+                    this.htmxManagedPairs.add(caseId);
+                    // Update the pair's done status in Alpine.js data
+                    const pair = this.pairs.find(p => p.case_id === caseId);
+                    if (pair) {
+                        pair.is_done = isDone;
+                        // Update priority group: 1 for complete not done, 3 for complete done
+                        pair.priority_group = isDone ? 3 : 1;
+                    }
+                },
+                
+                isHtmxManaged(caseId) {
+                    return this.htmxManagedPairs.has(caseId);
                 }
             }
         }
+        
+        // Listen for HTMX beforeSwap event to remove Alpine.js rendered rows
+        document.body.addEventListener('htmx:beforeSwap', function(event) {
+            // Check if this was a done status update
+            if (event.detail.target && event.detail.target.id && event.detail.target.id.startsWith('pair-genomic-')) {
+                const caseId = event.detail.target.id.replace('pair-genomic-', '');
+                // Find and remove the Alpine.js rendered clinical row
+                const clinicalRows = document.querySelectorAll(`tr.clinical[data-case-id="${caseId}"]`);
+                clinicalRows.forEach(row => {
+                    // Only remove if it doesn't have an ID (Alpine.js rendered)
+                    if (!row.id) {
+                        row.remove();
+                    }
+                });
+            }
+        });
+        
+        // Listen for HTMX afterSwap event to update Alpine.js data
+        document.body.addEventListener('htmx:afterSwap', function(event) {
+            // Check if this was a done status update
+            if (event.detail.target && event.detail.target.id && event.detail.target.id.startsWith('pair-genomic-')) {
+                const caseId = event.detail.target.id.replace('pair-genomic-', '');
+                // Extract the new done status from the swapped content
+                const checkbox = event.detail.target.querySelector('input[type="checkbox"]');
+                if (checkbox) {
+                    const isDone = checkbox.checked;
+                    // Get Alpine.js component and update data
+                    const alpineComponent = Alpine.$data(document.querySelector('[x-data]'));
+                    if (alpineComponent && alpineComponent.updatePairDoneStatus) {
+                        alpineComponent.updatePairDoneStatus(caseId, isDone);
+                    }
+                }
+            }
+        });
     </script>
 </body>
 </html>
