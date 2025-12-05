@@ -18,7 +18,7 @@
     --rp-dawn-highlight-low: #f4ede8;
     --rp-dawn-highlight-med: #dfdad9;
     --rp-dawn-highlight-high: #cecacd;
-    
+
     /* Moon (dark mode) */
     --rp-moon-base: #232136;
     --rp-moon-surface: #2a273f;
@@ -35,7 +35,7 @@
     --rp-moon-highlight-low: #2a283e;
     --rp-moon-highlight-med: #44415a;
     --rp-moon-highlight-high: #56526e;
-    
+
     /* App theme tokens (light defaults = Dawn) */
     color-scheme: light;
     --bg: var(--rp-dawn-base);
@@ -76,11 +76,19 @@
 
 /* Base styles */
 body {
+    font-family: Avenir, Montserrat, Corbel, "URW Gothic", source-sans-pro,
+        sans-serif;
+    margin-top: 2rem;
     background-color: var(--bg);
     color: var(--text);
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
     color: var(--text);
 }
 
@@ -162,16 +170,66 @@ td {
 }
 
 /* Column widths */
-th:nth-child(1), td:nth-child(1) { width: 12%; } /* Case ID */
-th:nth-child(2), td:nth-child(2) { width: 12%; } /* Vorgangsnummer */
-th:nth-child(3), td:nth-child(3) { width: 7%; }  /* Art der Daten */
-th:nth-child(4), td:nth-child(4) { width: 10%; } /* Typ der Meldung */
-th:nth-child(5), td:nth-child(5) { width: 12%; } /* Indikationsbereich */
-th:nth-child(6), td:nth-child(6) { width: 10%; } /* Ergebnis QC */
-th:nth-child(7), td:nth-child(7) { width: 20%; } /* Source File */
-th:nth-child(8), td:nth-child(8) { width: 6%; }  /* Complete */
-th:nth-child(9), td:nth-child(9) { width: 6%; }  /* Valid */
-th:nth-child(10), td:nth-child(10) { width: 5%; } /* Done */
+th:nth-child(1),
+td:nth-child(1) {
+    width: 12%;
+}
+
+/* Case ID */
+th:nth-child(2),
+td:nth-child(2) {
+    width: 12%;
+}
+
+/* Vorgangsnummer */
+th:nth-child(3),
+td:nth-child(3) {
+    width: 7%;
+}
+
+/* Art der Daten */
+th:nth-child(4),
+td:nth-child(4) {
+    width: 10%;
+}
+
+/* Typ der Meldung */
+th:nth-child(5),
+td:nth-child(5) {
+    width: 12%;
+}
+
+/* Indikationsbereich */
+th:nth-child(6),
+td:nth-child(6) {
+    width: 10%;
+}
+
+/* Ergebnis QC */
+th:nth-child(7),
+td:nth-child(7) {
+    width: 20%;
+}
+
+/* Source File */
+th:nth-child(8),
+td:nth-child(8) {
+    width: 6%;
+}
+
+/* Complete */
+th:nth-child(9),
+td:nth-child(9) {
+    width: 6%;
+}
+
+/* Valid */
+th:nth-child(10),
+td:nth-child(10) {
+    width: 5%;
+}
+
+/* Done */
 
 /* Pair grouping */
 .pair-row.genomic {
@@ -182,7 +240,7 @@ th:nth-child(10), td:nth-child(10) { width: 5%; } /* Done */
     border-bottom: 2px solid var(--accent);
 }
 
-.pair-row.genomic + .pair-row.clinical {
+.pair-row.genomic+.pair-row.clinical {
     background-color: var(--code-bg);
 }
 
@@ -303,15 +361,16 @@ button:hover {
     .container {
         padding: 1rem;
     }
-    
+
     table {
         font-size: 0.75rem;
     }
-    
-    th, td {
+
+    th,
+    td {
         padding: 0.3rem 0.2rem;
     }
-    
+
     th {
         font-size: 0.7rem;
     }
