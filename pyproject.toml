@@ -49,7 +49,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
-    "browser: marks tests as browser tests (deselect with '-m \"not browser\"')",
+    "browser: marks tests as browser-based tests using Playwright (deselect with '-m \"not browser\"')",
 ]
 
 [tool.uv]
