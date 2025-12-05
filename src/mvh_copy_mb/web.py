@@ -110,9 +110,9 @@ async def index(request: Request):
         if not db_path.exists():
             logger.warning(f"Database not found at {db_path}")
             return templates.TemplateResponse(
-                request=request,
-                name="index.html",
-                context={
+                request,
+                "index.html",
+                {
                     "pairs": [],
                     "error_message": f"Database not found at {db_path}. Please process some CSV files first."
                 }
@@ -157,9 +157,9 @@ async def index(request: Request):
         
         # Render template with pairs data
         return templates.TemplateResponse(
-            request=request,
-            name="index.html",
-            context={
+            request,
+            "index.html",
+            {
                 "pairs": pairs_dict,
                 "error_message": None if pairs else "No records found in database."
             }
@@ -236,8 +236,9 @@ async def update_done_status(case_id: str, request: Request):
             
             # Render the updated pair rows for HTMX swap
             return templates.TemplateResponse(
+                request,
                 "pair_rows.html",
-                {"request": request, "pair": pair}
+                {"pair": pair}
             )
             
         except ValueError as e:
