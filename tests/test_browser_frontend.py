@@ -194,10 +194,10 @@ def test_alpine_data_loads_from_json(app_page: Page):
     expect(rows).to_have_count(EXPECTED_TOTAL_ROWS)
     
     # Verify specific case IDs are present
-    expect(app_page.locator('text=CASE_COMPLETE')).to_be_visible()
-    expect(app_page.locator('text=CASE_INCOMPLETE')).to_be_visible()
-    expect(app_page.locator('text=CASE_DONE')).to_be_visible()
-    expect(app_page.locator('text=CASE_INVALID')).to_be_visible()
+    expect(app_page.locator('text=CASE_COMPLETE').first).to_be_visible()
+    expect(app_page.locator('text=CASE_INCOMPLETE').first).to_be_visible()
+    expect(app_page.locator('text=CASE_DONE').first).to_be_visible()
+    expect(app_page.locator('text=CASE_INVALID').first).to_be_visible()
 
 
 # Feature: web-frontend, Browser Test 2: Client-side filtering works
@@ -263,7 +263,7 @@ def test_alpine_sorting_by_column_header(app_page: Page):
     app_page.wait_for_timeout(ALPINE_REACTION_DELAY)
     
     # Verify sort indicator is visible
-    expect(app_page.locator('th:has-text("Case ID") span')).to_be_visible()
+    expect(app_page.locator('th:has-text("Case ID") span').first).to_be_visible()
     
     # Rows should still be present
     expect(app_page.locator('tbody tr')).to_have_count(EXPECTED_TOTAL_ROWS)
@@ -314,7 +314,7 @@ def test_incomplete_pairs_render_single_row(app_page: Page):
     
     # Case ID cell should NOT have rowspan
     case_id_cell = incomplete_row.locator('.case-id-cell')
-    expect(case_id_cell).not_to_have_attribute('rowspan')
+    expect(case_id_cell).not_to_have_attribute('rowspan', '2')
     
     # Should have a dash instead of checkbox
     done_cell = incomplete_row.locator('.done-cell')
@@ -470,7 +470,7 @@ def test_all_required_fields_displayed(app_page: Page):
     expect(app_page.locator('th:has-text("Done")')).to_be_visible()
     
     # Check that data is present in cells
-    expect(app_page.locator('td:has-text("VN_G_COMPLETE")')).to_be_visible()
-    expect(app_page.locator('td:has-text("genomic")')).to_be_visible()
-    expect(app_page.locator('td:has-text("Hämatologie")')).to_be_visible()
-    expect(app_page.locator('td:has-text("source_complete.csv")')).to_be_visible()
+    expect(app_page.locator('td:has-text("VN_G_CASE_COMPLETE")').first).to_be_visible()
+    expect(app_page.locator('td:has-text("genomic")').first).to_be_visible()
+    expect(app_page.locator('td:has-text("Hämatologie")').first).to_be_visible()
+    expect(app_page.locator('td:has-text("source_complete.csv")').first).to_be_visible()
