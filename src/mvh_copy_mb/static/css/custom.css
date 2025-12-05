@@ -36,6 +36,39 @@
     --code-bg: var(--rp-moon-highlight-low);
 }
 
+.priority-group-1,
+.scheme-love {
+    background-color: hsl(var(--rp-moon-love) / .1);
+    color: var(--rp-moon-love);
+}
+
+.priority-group-2,
+.scheme-gold {
+    background-color: hsl(var(--rp-moon-gold) / .1);
+    color: var(--rp-moon-gold);
+}
+
+.scheme-rose {
+    background-color: hsl(var(--rp-moon-rose) / .1);
+    color: var(--rp-moon-rose);
+}
+
+.priority-group-3,
+.scheme-pine {
+    background-color: hsl(var(--rp-moon-pine) / .1);
+    color: var(--rp-moon-pine);
+}
+
+.scheme-foam {
+    background-color: hsl(var(--rp-moon-foam) / .1);
+    color: var(--rp-moon-foam);
+}
+
+.scheme-iris {
+    background-color: hsl(var(--rp-moon-iris) / .1);
+    color: var(--rp-moon-iris);
+}
+
 /* Base styles */
 body {
     font-family: Bahnschrift, 'DIN Alternate', 'Franklin Gothic Medium', 'Nimbus Sans Narrow', sans-serif-condensed, sans-serif;
@@ -241,19 +274,6 @@ td:nth-child(10) {
 .valid-indicator.no::before {
     content: "❌";
     color: var(--muted);
-}
-
-/* Priority group styling */
-.priority-group-1 {
-    background-color: var(--warn);
-}
-
-.priority-group-2 {
-    background-color: var(--error);
-}
-
-.priority-group-3 {
-    background-color: var(--ok);
 }
 
 /* Done checkbox */
