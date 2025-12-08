@@ -249,17 +249,24 @@
         
         function tableData() {
             const pairsData = JSON.parse(document.getElementById('pairs-data').textContent);
+            
+            // Pre-calculate initial sort positions before returning the component
+            const initialSortPositions = new Map();
+            pairsData.forEach((pair, index) => {
+                initialSortPositions.set(pair.case_id, index);
+            });
+            
             return {
                 pairs: pairsData,
                 filter: '',
                 sortColumn: 'priority_group',
                 sortDirection: 'asc',
-                
-
+                interactedPairs: new Set(), // Track pairs that have been toggled
+                initialSortPositions: initialSortPositions, // Store initial sort position for each pair
                 
                 get filteredAndSorted() {
                     let filtered = this.filter === '' 
-                        ? this.pairs 
+                        ? [...this.pairs]  // Create a copy to avoid mutating original
                         : this.pairs.filter(pair => {
                             // Search across all columns
                             const searchStr = this.filter.toLowerCase();
@@ -285,7 +292,18 @@
                         });
                     
                     return filtered.sort((a, b) => {
-                        // Primary sort: priority_group (always ascending)
+                        // If either pair has been interacted with, use initial sort position
+                        const aInteracted = this.interactedPairs.has(a.case_id);
+                        const bInteracted = this.interactedPairs.has(b.case_id);
+                        
+                        if (aInteracted || bInteracted) {
+                            // Use initial positions to maintain order
+                            const aPos = this.initialSortPositions.get(a.case_id) ?? 999999;
+                            const bPos = this.initialSortPositions.get(b.case_id) ?? 999999;
+                            return aPos - bPos;
+                        }
+                        
+                        // Neither interacted: use normal priority group sorting
                         if (a.priority_group !== b.priority_group) {
                             return a.priority_group - b.priority_group;
                         }
@@ -324,6 +342,8 @@
                 updatePairDoneStatus(caseId, isDone) {
                     // Mark this pair as managed by HTMX
                     this.htmxManagedPairs.add(caseId);
+                    // Mark this pair as interacted with (so it won't move on re-sort)
+                    this.interactedPairs.add(caseId);
                     // Update the pair's done status in Alpine.js data
                     const pair = this.pairs.find(p => p.case_id === caseId);
                     if (pair) {
