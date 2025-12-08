@@ -217,6 +217,36 @@
     </script>
     
     <script>
+        // Global copy function for onclick handlers (used by HTMX-swapped content)
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    console.log('Copied to clipboard:', text);
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    fallbackCopy(text);
+                });
+            } else {
+                fallbackCopy(text);
+            }
+        }
+        
+        function fallbackCopy(text) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                console.log('Copied to clipboard (fallback):', text);
+            } catch (err) {
+                console.error('Fallback copy failed:', err);
+            }
+            document.body.removeChild(textArea);
+        }
+        
         function tableData() {
             const pairsData = JSON.parse(document.getElementById('pairs-data').textContent);
             return {
@@ -225,14 +255,7 @@
                 sortColumn: 'priority_group',
                 sortDirection: 'asc',
                 
-                copyToClipboard(text) {
-                    navigator.clipboard.writeText(text).then(() => {
-                        // Optional: Show a brief success message
-                        console.log('Copied to clipboard:', text);
-                    }).catch(err => {
-                        console.error('Failed to copy:', err);
-                    });
-                },
+
                 
                 get filteredAndSorted() {
                     let filtered = this.filter === '' 
