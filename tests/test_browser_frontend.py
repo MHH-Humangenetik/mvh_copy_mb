@@ -457,6 +457,9 @@ def test_all_required_fields_displayed(app_page: Page):
     - Case ID, Vorgangsnummer, Art der Daten, Typ der Meldung,
       Indikationsbereich, Ergebnis QC, Source File
     """
+    # Wait for table rows to be rendered by Alpine.js
+    app_page.wait_for_selector('tbody tr', state='visible')
+    
     # Check table headers
     expect(app_page.locator('th:has-text("Case ID")')).to_be_visible()
     expect(app_page.locator('th:has-text("Vorgangsnummer")')).to_be_visible()
@@ -470,7 +473,9 @@ def test_all_required_fields_displayed(app_page: Page):
     expect(app_page.locator('th:has-text("Done")')).to_be_visible()
     
     # Check that data is present in cells
-    expect(app_page.locator('td:has-text("VN_G_CASE_COMPLETE")').first).to_be_visible()
-    expect(app_page.locator('td:has-text("genomic")').first).to_be_visible()
-    expect(app_page.locator('td:has-text("Hämatologie")').first).to_be_visible()
-    expect(app_page.locator('td:has-text("source_complete.csv")').first).to_be_visible()
+    # Note: Some cells in genomic rows may not be visible due to rowspan layout
+    # Use nth(1) to get the clinical row which is always fully visible
+    expect(app_page.get_by_text("VN_G_CASE_COMPLETE").first).to_be_visible()
+    expect(app_page.get_by_text("genomic", exact=True).first).to_be_visible()
+    expect(app_page.get_by_text("Hämatologie").first).to_be_visible()
+    expect(app_page.get_by_text("source_complete.csv").nth(1)).to_be_visible()
