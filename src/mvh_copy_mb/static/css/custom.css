@@ -106,7 +106,6 @@ table {
     border: 1px solid var(--border);
     width: 100%;
     table-layout: fixed;
-    font-size: 1rem;
 }
 
 th {
@@ -115,7 +114,6 @@ th {
     padding: 0.6rem 0.4rem;
     text-align: left;
     border-bottom: 2px solid var(--border);
-    font-size: 1rem;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -154,7 +152,6 @@ td:nth-child(2) {
 th:nth-child(3),
 td:nth-child(3) {
     width: 15%;
-    font-size: 0.85rem;
 }
 
 /* IBE String */
@@ -358,30 +355,9 @@ button:hover {
     margin-bottom: 1rem;
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-    .container {
-        padding: 1rem;
-    }
-
-    table {
-        font-size: 0.75rem;
-    }
-
-    th,
-    td {
-        padding: 0.3rem 0.2rem;
-    }
-
-    th {
-        font-size: 0.7rem;
-    }
-}
-
 /* Copy button styling */
 .copy-btn {
     cursor: pointer;
-    font-size: 0.85em;
     margin-left: 0.3rem;
     opacity: 1;
     transition: transform 0.1s;
@@ -391,11 +367,4 @@ button:hover {
 
 .copy-btn:hover {
     transform: scale(1.2);
-}
-
-/* IBE String styling */
-.ibe-string {
-    font-family: 'Courier New', monospace;
-    font-size: 0.85rem;
-    word-break: break-all;
 }
