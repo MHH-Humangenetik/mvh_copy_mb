@@ -218,20 +218,19 @@ tr.scheme-gold td {
     color: hsl(var(--color-gold) / var(--tw-text-opacity, 1));
 }
 
-tr.priority-group-3 td,
 tr.scheme-pine td {
     background-color: hsl(var(--color-pine) / .1);
     --tw-text-opacity: 1;
     color: hsl(var(--color-pine) / var(--tw-text-opacity, 1));
 }
 
-/* Alternative color schemes */
 tr.scheme-rose td {
     background-color: hsl(var(--color-rose) / .1);
     --tw-text-opacity: 1;
     color: hsl(var(--color-rose) / var(--tw-text-opacity, 1));
 }
 
+tr.priority-group-3 td,
 tr.scheme-foam td {
     background-color: hsl(var(--color-foam) / .1);
     --tw-text-opacity: 1;
