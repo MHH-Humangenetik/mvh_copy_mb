@@ -140,13 +140,13 @@ td {
 /* Column widths */
 th:nth-child(1),
 td:nth-child(1) {
-    width: 12%;
+    width: 14%;
 }
 
 /* Case ID */
 th:nth-child(2),
 td:nth-child(2) {
-    width: 12%;
+    width: 14%;
 }
 
 /* Vorgangsnummer */
