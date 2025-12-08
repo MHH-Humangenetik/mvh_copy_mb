@@ -17,6 +17,14 @@
     --rp-moon-highlight-low: #2a283e;
     --rp-moon-highlight-med: #44415a;
     --rp-moon-highlight-high: #56526e;
+    
+    /* HSL values for color schemes */
+    --color-love: 343 76% 68%;
+    --color-gold: 35 88% 72%;
+    --color-rose: 10 56% 91%;
+    --color-pine: 197 53% 34%;
+    --color-foam: 189 43% 73%;
+    --color-iris: 267 57% 78%;
 
     /* App theme tokens (always dark) */
     color-scheme: dark;
@@ -197,37 +205,45 @@ td:nth-child(11) {
     width: 4%;
 }
 
-.priority-group-1,
-.scheme-love {
-    background-color: hsl(var(--rp-moon-love) / .1);
-    color: var(--rp-moon-love);
+/* Priority group colors - applied to table rows */
+tr.priority-group-1 td,
+tr.scheme-love td {
+    background-color: hsl(var(--color-love) / .1);
+    --tw-text-opacity: 1;
+    color: hsl(var(--color-love) / var(--tw-text-opacity, 1));
 }
 
-.priority-group-2,
-.scheme-gold {
-    background-color: hsl(var(--rp-moon-gold) / .1);
-    color: var(--rp-moon-gold);
+tr.priority-group-2 td,
+tr.scheme-gold td {
+    background-color: hsl(var(--color-gold) / .1);
+    --tw-text-opacity: 1;
+    color: hsl(var(--color-gold) / var(--tw-text-opacity, 1));
 }
 
-.scheme-rose {
-    background-color: hsl(var(--rp-moon-rose) / .1);
-    color: var(--rp-moon-rose);
+tr.priority-group-3 td,
+tr.scheme-pine td {
+    background-color: hsl(var(--color-pine) / .1);
+    --tw-text-opacity: 1;
+    color: hsl(var(--color-pine) / var(--tw-text-opacity, 1));
 }
 
-.priority-group-3,
-.scheme-pine {
-    background-color: hsl(var(--rp-moon-pine) / .1);
-    color: var(--rp-moon-pine);
+/* Alternative color schemes */
+tr.scheme-rose td {
+    background-color: hsl(var(--color-rose) / .1);
+    --tw-text-opacity: 1;
+    color: hsl(var(--color-rose) / var(--tw-text-opacity, 1));
 }
 
-.scheme-foam {
-    background-color: hsl(var(--rp-moon-foam) / .1);
-    color: var(--rp-moon-foam);
+tr.scheme-foam td {
+    background-color: hsl(var(--color-foam) / .1);
+    --tw-text-opacity: 1;
+    color: hsl(var(--color-foam) / var(--tw-text-opacity, 1));
 }
 
-.scheme-iris {
-    background-color: hsl(var(--rp-moon-iris) / .1);
-    color: var(--rp-moon-iris);
+tr.scheme-iris td {
+    background-color: hsl(var(--color-iris) / .1);
+    --tw-text-opacity: 1;
+    color: hsl(var(--color-iris) / var(--tw-text-opacity, 1));
 }
 
 /* Pair grouping */
