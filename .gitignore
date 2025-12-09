@@ -209,6 +209,6 @@ __marimo__/
 # Kiro settings
 .kiro/settings
 
-.csv
-.duckdb
-.db
+*.csv
+*.duckdb
+*.db
