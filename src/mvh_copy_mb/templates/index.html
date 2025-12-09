@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Meldebestätigungen Viewer</title>
     
     <!-- Milligram CSS -->
@@ -86,123 +89,89 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <!-- Complete pairs: genomic row -->
-                    <template x-for="pair in filteredAndSorted.filter(p => p.genomic && p.clinical && !htmxManagedPairs.has(p.case_id))" :key="pair.case_id + '-g'">
-                        <tr class="pair-row genomic"
-                            :class="'priority-group-' + pair.priority_group"
-                            :data-case-id="pair.case_id"
-                            :id="'pair-genomic-' + pair.case_id">
-                            <td rowspan="2" class="case-id-cell" x-text="pair.case_id"></td>
+                    <template x-for="row in interleavedRows" :key="row.pair.case_id + '-' + row.type">
+                        <tr class="pair-row"
+                            :class="[row.type.includes('genomic') ? 'genomic' : 'clinical', 'priority-group-' + row.pair.priority_group]"
+                            :data-case-id="row.pair.case_id"
+                            :id="row.type === 'genomic' ? 'pair-genomic-' + row.pair.case_id : (row.type === 'clinical' ? 'pair-clinical-' + row.pair.case_id : '')">
+                            <template x-if="row.type === 'genomic'">
+                                <td class="case-id-cell" rowspan="2" x-text="row.pair.case_id"></td>
+                            </template>
+                            <template x-if="row.type === 'genomic-only' || row.type === 'clinical-only'">
+                                <td class="case-id-cell" x-text="row.pair.case_id"></td>
+                            </template>
+                            <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
+                                <td>
+                                    <span x-text="row.pair.genomic.vorgangsnummer"></span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.genomic.vorgangsnummer)" title="Copy to clipboard">📋</span>
+                                </td>
+                            </template>
+                            <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
+                                <td>
+                                    <span x-text="row.pair.clinical.vorgangsnummer"></span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.clinical.vorgangsnummer)" title="Copy to clipboard">📋</span>
+                                </td>
+                            </template>
+                            <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
+                                <td>
+                                    <span x-text="row.pair.genomic.meldebestaetigung"></span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.genomic.meldebestaetigung)" title="Copy to clipboard">📋</span>
+                                </td>
+                            </template>
+                            <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
+                                <td>
+                                    <span x-text="row.pair.clinical.meldebestaetigung"></span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.clinical.meldebestaetigung)" title="Copy to clipboard">📋</span>
+                                </td>
+                            </template>
+                            <td x-text="row.type.includes('genomic') ? 'genomic' : 'clinical'"></td>
+                            <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
+                                <td x-text="row.pair.genomic.typ_der_meldung"></td>
+                            </template>
+                            <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
+                                <td x-text="row.pair.clinical.typ_der_meldung"></td>
+                            </template>
+                            <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
+                                <td x-text="row.pair.genomic.indikationsbereich"></td>
+                            </template>
+                            <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
+                                <td x-text="row.pair.clinical.indikationsbereich"></td>
+                            </template>
+                            <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
+                                <td x-text="row.pair.genomic.ergebnis_qc"></td>
+                            </template>
+                            <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
+                                <td x-text="row.pair.clinical.ergebnis_qc"></td>
+                            </template>
+                            <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
+                                <td x-text="row.pair.genomic.source_file"></td>
+                            </template>
+                            <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
+                                <td x-text="row.pair.clinical.source_file"></td>
+                            </template>
                             <td>
-                                <span x-text="pair.genomic.vorgangsnummer"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.genomic.vorgangsnummer)" title="Copy to clipboard">📋</span>
-                            </td>
-                            <td>
-                                <span x-text="pair.genomic.meldebestaetigung"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.genomic.meldebestaetigung)" title="Copy to clipboard">📋</span>
-                            </td>
-                            <td>genomic</td>
-                            <td x-text="pair.genomic.typ_der_meldung"></td>
-                            <td x-text="pair.genomic.indikationsbereich"></td>
-                            <td x-text="pair.genomic.ergebnis_qc"></td>
-                            <td x-text="pair.genomic.source_file"></td>
-                            <td rowspan="2">
-                                <span class="complete-indicator" :class="pair.is_complete ? 'yes' : 'no'"></span>
-                            </td>
-                            <td rowspan="2">
-                                <span class="valid-indicator" :class="pair.is_valid ? 'yes' : 'no'"></span>
-                            </td>
-                            <td rowspan="2" class="done-cell">
-                                <input 
-                                    type="checkbox" 
-                                    :checked="pair.is_done"
-                                    :hx-post="'/api/done/' + pair.case_id"
-                                    :hx-vals="JSON.stringify({done: !pair.is_done})"
-                                    :hx-target="'#pair-genomic-' + pair.case_id"
-                                    hx-swap="outerHTML"
-                                    hx-indicator="#loading">
-                            </td>
-                        </tr>
-                    </template>
-                    <!-- Complete pairs: clinical row -->
-                    <template x-for="pair in filteredAndSorted.filter(p => p.genomic && p.clinical && !htmxManagedPairs.has(p.case_id))" :key="pair.case_id + '-c'">
-                        <tr class="pair-row clinical"
-                            :class="'priority-group-' + pair.priority_group"
-                            :data-case-id="pair.case_id"
-                            :id="'pair-clinical-' + pair.case_id">
-                            <td>
-                                <span x-text="pair.clinical.vorgangsnummer"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.clinical.vorgangsnummer)" title="Copy to clipboard">📋</span>
-                            </td>
-                            <td>
-                                <span x-text="pair.clinical.meldebestaetigung" class="ibe-string"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.clinical.meldebestaetigung)" title="Copy to clipboard">📋</span>
-                            </td>
-                            <td>clinical</td>
-                            <td x-text="pair.clinical.typ_der_meldung"></td>
-                            <td x-text="pair.clinical.indikationsbereich"></td>
-                            <td x-text="pair.clinical.ergebnis_qc"></td>
-                            <td x-text="pair.clinical.source_file"></td>
-                        </tr>
-                    </template>
-                    <!-- Genomic only pairs -->
-                    <template x-for="pair in filteredAndSorted.filter(p => p.genomic && !p.clinical)" :key="pair.case_id">
-                        <tr class="pair-row genomic"
-                            :class="'priority-group-' + pair.priority_group"
-                            :data-case-id="pair.case_id">
-                            <td class="case-id-cell" x-text="pair.case_id"></td>
-                            <td>
-                                <span x-text="pair.genomic.vorgangsnummer"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.genomic.vorgangsnummer)" title="Copy to clipboard">📋</span>
+                                <span class="complete-indicator" :class="row.pair.is_complete ? 'yes' : 'no'"></span>
                             </td>
                             <td>
-                                <span x-text="pair.genomic.meldebestaetigung" class="ibe-string"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.genomic.meldebestaetigung)" title="Copy to clipboard">📋</span>
+                                <span class="valid-indicator" :class="row.pair.is_valid ? 'yes' : 'no'"></span>
                             </td>
-                            <td>genomic</td>
-                            <td x-text="pair.genomic.typ_der_meldung"></td>
-                            <td x-text="pair.genomic.indikationsbereich"></td>
-                            <td x-text="pair.genomic.ergebnis_qc"></td>
-                            <td x-text="pair.genomic.source_file"></td>
-                            <td>
-                                <span class="complete-indicator" :class="pair.is_complete ? 'yes' : 'no'"></span>
-                            </td>
-                            <td>
-                                <span class="valid-indicator" :class="pair.is_valid ? 'yes' : 'no'"></span>
-                            </td>
-                            <td class="done-cell">
-                                <span>—</span>
-                            </td>
-                        </tr>
-                    </template>
-                    <!-- Clinical only pairs -->
-                    <template x-for="pair in filteredAndSorted.filter(p => !p.genomic && p.clinical)" :key="pair.case_id">
-                        <tr class="pair-row clinical"
-                            :class="'priority-group-' + pair.priority_group"
-                            :data-case-id="pair.case_id">
-                            <td class="case-id-cell" x-text="pair.case_id"></td>
-                            <td>
-                                <span x-text="pair.clinical.vorgangsnummer"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.clinical.vorgangsnummer)" title="Copy to clipboard">📋</span>
-                            </td>
-                            <td>
-                                <span x-text="pair.clinical.meldebestaetigung" class="ibe-string"></span>
-                                <span class="copy-btn" @click="copyToClipboard(pair.clinical.meldebestaetigung)" title="Copy to clipboard">📋</span>
-                            </td>
-                            <td>clinical</td>
-                            <td x-text="pair.clinical.typ_der_meldung"></td>
-                            <td x-text="pair.clinical.indikationsbereich"></td>
-                            <td x-text="pair.clinical.ergebnis_qc"></td>
-                            <td x-text="pair.clinical.source_file"></td>
-                            <td>
-                                <span class="complete-indicator" :class="pair.is_complete ? 'yes' : 'no'"></span>
-                            </td>
-                            <td>
-                                <span class="valid-indicator" :class="pair.is_valid ? 'yes' : 'no'"></span>
-                            </td>
-                            <td class="done-cell">
-                                <span>—</span>
-                            </td>
+                            <template x-if="row.type === 'genomic'">
+                                <td class="done-cell" rowspan="2">
+                                    <input 
+                                        type="checkbox" 
+                                        :checked="row.pair.is_done"
+                                        :hx-post="'/api/done/' + row.pair.case_id"
+                                        :hx-vals="JSON.stringify({done: !row.pair.is_done})"
+                                        :hx-target="'#pair-genomic-' + row.pair.case_id"
+                                        hx-swap="outerHTML"
+                                        hx-indicator="#loading">
+                                </td>
+                            </template>
+                            <template x-if="row.type === 'genomic-only' || row.type === 'clinical-only'">
+                                <td class="done-cell">
+                                    <span>—</span>
+                                </td>
+                            </template>
                         </tr>
                     </template>
                 </tbody>
@@ -263,6 +232,27 @@
                 sortDirection: 'asc',
                 interactedPairs: new Set(), // Track pairs that have been toggled
                 initialSortPositions: initialSortPositions, // Store initial sort position for each pair
+                
+                get interleavedRows() {
+                    const rows = [];
+                    const sorted = this.filteredAndSorted;
+                    
+                    sorted.forEach(pair => {
+                        if (pair.genomic && pair.clinical && !this.htmxManagedPairs.has(pair.case_id)) {
+                            // Complete pair: add both genomic and clinical rows
+                            rows.push({ type: 'genomic', pair: pair });
+                            rows.push({ type: 'clinical', pair: pair });
+                        } else if (pair.genomic && !pair.clinical) {
+                            // Genomic only
+                            rows.push({ type: 'genomic-only', pair: pair });
+                        } else if (!pair.genomic && pair.clinical) {
+                            // Clinical only
+                            rows.push({ type: 'clinical-only', pair: pair });
+                        }
+                    });
+                    
+                    return rows;
+                },
                 
                 get filteredAndSorted() {
                     let filtered = this.filter === '' 

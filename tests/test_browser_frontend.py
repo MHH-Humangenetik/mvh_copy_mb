@@ -371,8 +371,8 @@ def test_complete_indicator_visual_state(app_page: Page):
     - Complete pairs have 'yes' indicator
     - Incomplete pairs have 'no' indicator
     """
-    # CASE_COMPLETE should have complete indicator with 'yes' class
-    complete_indicator = app_page.locator('tr[data-case-id="CASE_COMPLETE"] .complete-indicator')
+    # CASE_COMPLETE should have complete indicator with 'yes' class (check first row)
+    complete_indicator = app_page.locator('tr[data-case-id="CASE_COMPLETE"].genomic .complete-indicator')
     expect(complete_indicator).to_have_class('complete-indicator yes')
     
     # CASE_INCOMPLETE should have complete indicator with 'no' class
@@ -389,12 +389,12 @@ def test_valid_indicator_visual_state(app_page: Page):
     - Valid pairs (complete + QC=1) have 'yes' indicator
     - Invalid pairs (failing QC) have 'no' indicator
     """
-    # CASE_COMPLETE should have valid indicator with 'yes' class (QC=1)
-    valid_indicator = app_page.locator('tr[data-case-id="CASE_COMPLETE"] .valid-indicator')
+    # CASE_COMPLETE should have valid indicator with 'yes' class (QC=1) - check first row
+    valid_indicator = app_page.locator('tr[data-case-id="CASE_COMPLETE"].genomic .valid-indicator')
     expect(valid_indicator).to_have_class('valid-indicator yes')
     
-    # CASE_INVALID should have valid indicator with 'no' class (QC=0)
-    invalid_indicator = app_page.locator('tr[data-case-id="CASE_INVALID"] .valid-indicator')
+    # CASE_INVALID should have valid indicator with 'no' class (QC=0) - check first row
+    invalid_indicator = app_page.locator('tr[data-case-id="CASE_INVALID"].genomic .valid-indicator')
     expect(invalid_indicator).to_have_class('valid-indicator no')
 
 

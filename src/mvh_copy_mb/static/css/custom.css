@@ -134,43 +134,42 @@ td {
     color: var(--text);
     word-wrap: break-word;
     overflow-wrap: break-word;
-    max-width: 0;
 }
 
 /* Column widths */
 th:nth-child(1),
 td:nth-child(1) {
-    width: 14%;
+    width: 12%;
 }
 
 /* Case ID */
 th:nth-child(2),
 td:nth-child(2) {
-    width: 14%;
+    width: 10%;
 }
 
 /* Vorgangsnummer */
 th:nth-child(3),
 td:nth-child(3) {
-    width: 14%;
+    width: 15%;
 }
 
 /* IBE String */
 th:nth-child(4),
 td:nth-child(4) {
-    width: 14%;
+    width: 8%;
 }
 
 /* Art der Daten */
 th:nth-child(5),
 td:nth-child(5) {
-    width: 9%;
+    width: 8%;
 }
 
 /* Typ der Meldung */
 th:nth-child(6),
 td:nth-child(6) {
-    width: 10%;
+    width: 12%;
 }
 
 /* Indikationsbereich */
@@ -188,13 +187,13 @@ td:nth-child(8) {
 /* Source File */
 th:nth-child(9),
 td:nth-child(9) {
-    width: 5%;
+    width: 4%;
 }
 
 /* Complete */
 th:nth-child(10),
 td:nth-child(10) {
-    width: 5%;
+    width: 4%;
 }
 
 /* Valid */
