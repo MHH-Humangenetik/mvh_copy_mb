@@ -52,6 +52,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Use the non-root user to run our application
 USER nonroot
 
+EXPOSE 8000
+
 # Use `/app` as the working directory
 WORKDIR /app
 
