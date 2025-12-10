@@ -627,3 +627,569 @@ class TestWebSocketConnectionMaintenance:
         
         # Run the async test
         asyncio.run(run_test())
+
+
+class TestEventBroadcastTiming:
+    """Property-based tests for event broadcast timing guarantees."""
+
+    @given(sync_event_strategy(), unique_client_connections_strategy())
+    def test_broadcast_timing_guarantee_property(self, event: SyncEvent, connections: List[ClientConnection]):
+        """Test that record modifications are broadcast to all clients within 100ms.
+        
+        **Feature: multi-user-sync, Property 2: Broadcast timing guarantee**
+        **Validates: Requirements 1.2**
+        """
+        from mvh_copy_mb.events.broker import EventBrokerImpl
+        
+        async def run_test():
+            # Create event broker with minimal batching for timing tests
+            broker = EventBrokerImpl(batch_size=1, batch_timeout=0.01)  # Very small timeout for immediate processing
+            
+            # Set up mock websockets for all connections
+            for conn in connections:
+                conn.websocket = AsyncMock()
+                conn.websocket.send = AsyncMock()
+                conn.websocket.closed = False
+                
+                # Subscribe all clients to receive the event
+                # Use wildcard subscription to ensure all clients receive all events
+                await broker.subscribe_client(conn, {"*"})
+            
+            # Property: When a user modifies a record, the system SHALL broadcast 
+            # the change to all other connected clients within 100 milliseconds
+            
+            # Record the time when we publish the event
+            publish_start_time = datetime.now()
+            
+            # Publish the event
+            await broker.publish_event(event)
+            
+            # Allow some time for async processing
+            await asyncio.sleep(0.05)  # 50ms should be enough for processing
+            
+            # Verify timing constraint
+            processing_time = (datetime.now() - publish_start_time).total_seconds() * 1000  # Convert to milliseconds
+            
+            # The processing should complete well within 100ms
+            # We use 80ms as threshold to account for test execution overhead
+            assert processing_time < 80, f"Event processing took {processing_time:.1f}ms, should be under 80ms"
+            
+            # Verify all clients received the event
+            for conn in connections:
+                # Each client should have received exactly one message
+                assert conn.websocket.send.call_count >= 1, f"Client {conn.connection_id} did not receive event"
+                
+                # Verify the message content
+                call_args = conn.websocket.send.call_args_list[-1]  # Get the last call
+                message_json = call_args[0][0]  # First argument to send()
+                
+                import json
+                message = json.loads(message_json)
+                
+                # Verify it's the correct event
+                assert message["type"] == "sync_event"
+                assert message["event_type"] == event.event_type
+                assert message["record_id"] == event.record_id
+                assert message["user_id"] == event.user_id
+                assert message["version"] == event.version
+                
+                # Verify timestamp is preserved
+                event_timestamp = datetime.fromisoformat(message["timestamp"])
+                assert abs((event_timestamp - event.timestamp).total_seconds()) < 1  # Allow 1 second tolerance
+        
+        # Skip test if no connections to test with
+        if not connections:
+            return
+            
+        # Run the async test
+        asyncio.run(run_test())
+
+    @given(st.lists(sync_event_strategy(), min_size=2, max_size=5), 
+           st.integers(min_value=1, max_value=3))
+    def test_multiple_events_broadcast_timing_property(self, events: List[SyncEvent], num_clients: int):
+        """Test that multiple events are broadcast efficiently within timing constraints.
+        
+        **Feature: multi-user-sync, Property 2: Broadcast timing guarantee**
+        **Validates: Requirements 1.2**
+        """
+        from mvh_copy_mb.events.broker import EventBrokerImpl
+        
+        async def run_test():
+            # Create event broker with small batch settings for timing tests
+            broker = EventBrokerImpl(batch_size=10, batch_timeout=0.05)  # 50ms timeout
+            
+            # Create test client connections
+            connections = []
+            for i in range(num_clients):
+                websocket_mock = AsyncMock()
+                websocket_mock.send = AsyncMock()
+                websocket_mock.closed = False
+                
+                conn = ClientConnection(
+                    connection_id=f"client_{i}",
+                    user_id=f"user_{i}",
+                    websocket=websocket_mock,
+                    last_seen=datetime.now(),
+                    subscriptions=set()
+                )
+                connections.append(conn)
+                
+                # Subscribe to all events
+                await broker.subscribe_client(conn, {"*"})
+            
+            # Property: Multiple record modifications should be broadcast 
+            # to all clients within the timing guarantee
+            
+            publish_start_time = datetime.now()
+            
+            # Publish all events
+            for event in events:
+                await broker.publish_event(event)
+            
+            # Allow time for batch processing
+            await asyncio.sleep(0.1)  # 100ms for batch processing
+            
+            # Verify overall timing
+            total_processing_time = (datetime.now() - publish_start_time).total_seconds() * 1000
+            
+            # Should complete within reasonable time (allowing for batch processing)
+            max_allowed_time = 150  # 150ms for multiple events
+            assert total_processing_time < max_allowed_time, (
+                f"Processing {len(events)} events took {total_processing_time:.1f}ms, "
+                f"should be under {max_allowed_time}ms"
+            )
+            
+            # Verify all clients received all events
+            for conn in connections:
+                # Should have received at least one message (could be batched)
+                assert conn.websocket.send.call_count >= 1, (
+                    f"Client {conn.connection_id} did not receive any messages"
+                )
+                
+                # Count total events received across all messages
+                total_events_received = 0
+                for call in conn.websocket.send.call_args_list:
+                    message_json = call[0][0]
+                    import json
+                    message = json.loads(message_json)
+                    
+                    if message["type"] == "sync_event":
+                        total_events_received += 1
+                    elif message["type"] == "sync_batch":
+                        total_events_received += message["count"]
+                
+                # Should have received all events
+                assert total_events_received == len(events), (
+                    f"Client {conn.connection_id} received {total_events_received} events, "
+                    f"expected {len(events)}"
+                )
+        
+        # Run the async test
+        asyncio.run(run_test())
+
+    @given(sync_event_strategy())
+    def test_single_client_broadcast_timing_property(self, event: SyncEvent):
+        """Test broadcast timing with a single client to verify baseline performance.
+        
+        **Feature: multi-user-sync, Property 2: Broadcast timing guarantee**
+        **Validates: Requirements 1.2**
+        """
+        from mvh_copy_mb.events.broker import EventBrokerImpl
+        
+        async def run_test():
+            broker = EventBrokerImpl(batch_size=1, batch_timeout=0.01)
+            
+            # Create single test client
+            websocket_mock = AsyncMock()
+            websocket_mock.send = AsyncMock()
+            websocket_mock.closed = False
+            
+            conn = ClientConnection(
+                connection_id="single_client",
+                user_id="test_user",
+                websocket=websocket_mock,
+                last_seen=datetime.now(),
+                subscriptions=set()
+            )
+            
+            await broker.subscribe_client(conn, {"*"})
+            
+            # Property: Even with a single client, broadcast should be fast
+            
+            publish_start_time = datetime.now()
+            await broker.publish_event(event)
+            await asyncio.sleep(0.02)  # Minimal wait for processing
+            
+            processing_time = (datetime.now() - publish_start_time).total_seconds() * 1000
+            
+            # Single client should be very fast
+            assert processing_time < 50, f"Single client broadcast took {processing_time:.1f}ms, should be under 50ms"
+            
+            # Verify client received the event
+            assert conn.websocket.send.call_count == 1
+            
+            call_args = conn.websocket.send.call_args_list[0]
+            message_json = call_args[0][0]
+            
+            import json
+            message = json.loads(message_json)
+            
+            assert message["type"] == "sync_event"
+            assert message["record_id"] == event.record_id
+            assert message["event_type"] == event.event_type
+        
+        # Run the async test
+        asyncio.run(run_test())
+
+
+class TestBulkOperationEfficiency:
+    """Property-based tests for bulk operation efficiency."""
+
+    def test_bulk_operation_efficiency_property(self):
+        """Test that bulk changes are broadcast efficiently without overwhelming client connections.
+        
+        **Feature: multi-user-sync, Property 14: Bulk operation efficiency**
+        **Validates: Requirements 3.5**
+        """
+        from mvh_copy_mb.events.broker import EventBrokerImpl
+        
+        async def run_test():
+            # Test with fixed values to avoid Hypothesis/asyncio interaction issues
+            num_events = 20
+            num_clients = 2
+            
+            # Create event broker with reasonable batch settings for bulk operations
+            broker = EventBrokerImpl(batch_size=10, batch_timeout=0.05, max_batch_size=25)
+            
+            # Create unique events to avoid deduplication issues
+            events = []
+            for i in range(num_events):
+                event = SyncEvent(
+                    event_type="record_updated",
+                    record_id=f"record_{i}",  # Unique record IDs
+                    data={"index": i, "bulk_test": True},
+                    version=1,
+                    timestamp=datetime.now(),
+                    user_id="bulk_user"
+                )
+                events.append(event)
+            
+            # Create test client connections
+            connections = []
+            for i in range(num_clients):
+                websocket_mock = AsyncMock()
+                websocket_mock.send = AsyncMock()
+                websocket_mock.closed = False
+                
+                conn = ClientConnection(
+                    connection_id=f"bulk_client_{i}",
+                    user_id=f"bulk_user_{i}",
+                    websocket=websocket_mock,
+                    last_seen=datetime.now(),
+                    subscriptions=set()
+                )
+                connections.append(conn)
+                
+                # Subscribe to all events
+                await broker.subscribe_client(conn, {"*"})
+            
+            # Property: Bulk changes should be broadcast efficiently without overwhelming connections
+            
+            # Record initial metrics
+            initial_metrics = broker.get_metrics()
+            
+            # Measure time for bulk operation
+            bulk_start_time = datetime.now()
+            
+            # Publish bulk events
+            await broker.publish_bulk_events(events)
+            
+            # Allow time for processing
+            await asyncio.sleep(0.1)  # 100ms should be sufficient for bulk processing
+            
+            bulk_processing_time = (datetime.now() - bulk_start_time).total_seconds() * 1000
+            
+            # Get final metrics
+            final_metrics = broker.get_metrics()
+            
+            # Efficiency Property 1: Processing time should be reasonable
+            max_allowed_time = 500  # 500ms should be more than enough
+            
+            assert bulk_processing_time <= max_allowed_time, (
+                f"Bulk processing of {num_events} events took {bulk_processing_time:.1f}ms, "
+                f"should be under {max_allowed_time:.1f}ms for efficiency"
+            )
+            
+            # Efficiency Property 2: Events should be published correctly
+            events_published = final_metrics["events_published"] - initial_metrics["events_published"]
+            assert events_published == num_events, f"Expected {num_events} events published, got {events_published}"
+            
+            # Efficiency Property 3: All clients should receive all events
+            for i, conn in enumerate(connections):
+                assert conn.websocket.send.call_count >= 1, (
+                    f"Client {i} did not receive any messages"
+                )
+                
+                # Count total events received
+                total_events_received = 0
+                for call in conn.websocket.send.call_args_list:
+                    message_json = call[0][0]
+                    import json
+                    message = json.loads(message_json)
+                    
+                    if message["type"] == "sync_event":
+                        total_events_received += 1
+                    elif message["type"] == "sync_batch":
+                        total_events_received += message["count"]
+                
+                # Should receive all events since they're unique
+                assert total_events_received == num_events, (
+                    f"Client {i} received {total_events_received} events, expected {num_events}"
+                )
+            
+            # Efficiency Property 4: Batching should reduce network calls
+            total_individual_sends = num_events * num_clients
+            total_actual_sends = sum(conn.websocket.send.call_count for conn in connections)
+            
+            # Batching should reduce the number of send calls
+            efficiency_ratio = total_actual_sends / total_individual_sends if total_individual_sends > 0 else 1
+            
+            # Should be more efficient than individual sends
+            assert efficiency_ratio <= 0.6, (
+                f"Bulk operation not efficient enough: {total_actual_sends} sends vs "
+                f"{total_individual_sends} individual sends (ratio: {efficiency_ratio:.2f})"
+            )
+            
+            # Efficiency Property 5: Memory usage should be reasonable (buffer should be cleared)
+            assert final_metrics["buffer_size"] == 0, "Event buffer should be cleared after processing"
+        
+        # Run the async test
+        asyncio.run(run_test())
+
+    @given(st.lists(sync_event_strategy(), min_size=5, max_size=20))
+    def test_event_deduplication_efficiency_property(self, events: List[SyncEvent]):
+        """Test that duplicate events are efficiently deduplicated in bulk operations.
+        
+        **Feature: multi-user-sync, Property 14: Bulk operation efficiency**
+        **Validates: Requirements 3.5**
+        """
+        from mvh_copy_mb.events.broker import EventBrokerImpl
+        
+        async def run_test():
+            broker = EventBrokerImpl(batch_size=50, batch_timeout=0.1)
+            
+            # Create duplicate events by modifying some events to have same record_id and event_type
+            # but different versions/timestamps
+            duplicate_events = events.copy()
+            
+            if len(events) >= 2:
+                # Make some events duplicates with different versions
+                base_event = events[0]
+                for i in range(1, min(4, len(events))):  # Create up to 3 duplicates
+                    duplicate_events[i] = SyncEvent(
+                        event_type=base_event.event_type,
+                        record_id=base_event.record_id,  # Same record_id
+                        data={"version": i, "duplicate": True},
+                        version=base_event.version + i,  # Higher version
+                        timestamp=base_event.timestamp,
+                        user_id=base_event.user_id
+                    )
+            
+            # Property: Deduplication should efficiently reduce redundant events
+            
+            # Test deduplication directly
+            deduplicated = await broker.deduplicate_events(duplicate_events)
+            
+            # Should have fewer or equal events after deduplication
+            assert len(deduplicated) <= len(duplicate_events), (
+                f"Deduplication increased events: {len(duplicate_events)} -> {len(deduplicated)}"
+            )
+            
+            # If we created duplicates, deduplication should have reduced the count
+            if len(events) >= 2:
+                assert len(deduplicated) < len(duplicate_events), (
+                    "Deduplication should have reduced duplicate events"
+                )
+            
+            # All remaining events should be unique by record_id + event_type
+            seen_keys = set()
+            for event in deduplicated:
+                key = f"{event.record_id}:{event.event_type}"
+                assert key not in seen_keys, f"Duplicate key found after deduplication: {key}"
+                seen_keys.add(key)
+            
+            # For duplicates, should keep the one with highest version
+            if len(events) >= 2:
+                base_record_events = [e for e in deduplicated 
+                                    if e.record_id == events[0].record_id and 
+                                       e.event_type == events[0].event_type]
+                
+                if base_record_events:
+                    # Should have kept the highest version
+                    kept_event = base_record_events[0]
+                    expected_version = max(e.version for e in duplicate_events 
+                                         if e.record_id == events[0].record_id and 
+                                            e.event_type == events[0].event_type)
+                    assert kept_event.version == expected_version, (
+                        f"Should have kept highest version {expected_version}, got {kept_event.version}"
+                    )
+        
+        # Run the async test
+        asyncio.run(run_test())
+
+    @given(st.integers(min_value=50, max_value=200), st.integers(min_value=2, max_value=4))
+    def test_large_batch_chunking_efficiency_property(self, num_events: int, num_clients: int):
+        """Test that very large batches are efficiently chunked to prevent overwhelming.
+        
+        **Feature: multi-user-sync, Property 14: Bulk operation efficiency**
+        **Validates: Requirements 3.5**
+        """
+        from mvh_copy_mb.events.broker import EventBrokerImpl
+        
+        async def run_test():
+            # Use smaller max_batch_size to test chunking
+            broker = EventBrokerImpl(batch_size=25, batch_timeout=0.1, max_batch_size=50)
+            
+            # Create large number of events
+            events = []
+            for i in range(num_events):
+                event = SyncEvent(
+                    event_type="record_updated",
+                    record_id=f"record_{i}",
+                    data={"index": i, "large_batch": True},
+                    version=1,
+                    timestamp=datetime.now(),
+                    user_id="bulk_user"
+                )
+                events.append(event)
+            
+            # Create test clients
+            connections = []
+            for i in range(num_clients):
+                websocket_mock = AsyncMock()
+                websocket_mock.send = AsyncMock()
+                websocket_mock.closed = False
+                
+                conn = ClientConnection(
+                    connection_id=f"chunk_client_{i}",
+                    user_id=f"chunk_user_{i}",
+                    websocket=websocket_mock,
+                    last_seen=datetime.now(),
+                    subscriptions=set()
+                )
+                connections.append(conn)
+                await broker.subscribe_client(conn, {"*"})
+            
+            # Property: Large batches should be efficiently chunked without overwhelming clients
+            
+            start_time = datetime.now()
+            
+            # Publish large bulk operation
+            await broker.publish_bulk_events(events)
+            
+            # Allow time for chunked processing
+            await asyncio.sleep(0.5)  # 500ms for large batch processing
+            
+            processing_time = (datetime.now() - start_time).total_seconds() * 1000
+            
+            # Efficiency Property 1: Should complete in reasonable time even for large batches
+            # Allow up to 3ms per event for large batch processing
+            max_allowed_time = num_events * 3
+            max_allowed_time = min(max_allowed_time, 5000)  # Cap at 5 seconds
+            
+            assert processing_time <= max_allowed_time, (
+                f"Large batch processing of {num_events} events took {processing_time:.1f}ms, "
+                f"should be under {max_allowed_time:.1f}ms"
+            )
+            
+            # Efficiency Property 2: All clients should receive all events despite chunking
+            for i, conn in enumerate(connections):
+                total_events_received = 0
+                for call in conn.websocket.send.call_args_list:
+                    message_json = call[0][0]
+                    import json
+                    message = json.loads(message_json)
+                    
+                    if message["type"] == "sync_event":
+                        total_events_received += 1
+                    elif message["type"] == "sync_batch":
+                        total_events_received += message["count"]
+                
+                assert total_events_received == num_events, (
+                    f"Client {i} received {total_events_received} events, expected {num_events}"
+                )
+            
+            # Efficiency Property 3: Should use batching to reduce network calls
+            total_send_calls = sum(conn.websocket.send.call_count for conn in connections)
+            max_expected_calls = num_events * num_clients  # Worst case: one call per event per client
+            
+            # Should be significantly more efficient than individual sends
+            efficiency_ratio = total_send_calls / max_expected_calls if max_expected_calls > 0 else 1
+            assert efficiency_ratio <= 0.6, (
+                f"Large batch not efficient enough: {total_send_calls} calls vs "
+                f"{max_expected_calls} individual calls (ratio: {efficiency_ratio:.2f})"
+            )
+            
+            # Efficiency Property 4: Metrics should show good performance
+            metrics = broker.get_metrics()
+            assert metrics["events_published"] >= num_events
+            assert metrics["batches_sent"] > 0, "Should have sent at least one batch"
+            assert metrics["buffer_size"] == 0, "Buffer should be cleared after processing"
+        
+        # Run the async test
+        asyncio.run(run_test())
+
+    @given(st.integers(min_value=1, max_value=10))
+    def test_dynamic_batch_optimization_property(self, connection_count: int):
+        """Test that batch settings are dynamically optimized based on connection count.
+        
+        **Feature: multi-user-sync, Property 14: Bulk operation efficiency**
+        **Validates: Requirements 3.5**
+        """
+        from mvh_copy_mb.events.broker import EventBrokerImpl
+        
+        async def run_test():
+            broker = EventBrokerImpl(batch_size=50, batch_timeout=0.1)
+            
+            # Property: Batch settings should be optimized based on connection count
+            
+            # Test optimization for different connection counts
+            await broker.optimize_batch_settings(connection_count)
+            
+            metrics = broker.get_metrics()
+            
+            # Verify that batch settings are reasonable for the connection count
+            if connection_count <= 5:
+                # Small number of clients - should prioritize latency
+                assert metrics["batch_size_config"] <= 15, (
+                    f"Batch size {metrics['batch_size_config']} too large for {connection_count} connections"
+                )
+                assert metrics["batch_timeout_config"] <= 0.1, (
+                    f"Batch timeout {metrics['batch_timeout_config']} too high for low latency"
+                )
+            elif connection_count <= 20:
+                # Medium number of clients - balanced settings
+                assert 15 <= metrics["batch_size_config"] <= 35, (
+                    f"Batch size {metrics['batch_size_config']} not balanced for {connection_count} connections"
+                )
+                assert 0.05 <= metrics["batch_timeout_config"] <= 0.15, (
+                    f"Batch timeout {metrics['batch_timeout_config']} not balanced"
+                )
+            else:
+                # Large number of clients - should prioritize throughput
+                assert metrics["batch_size_config"] >= 30, (
+                    f"Batch size {metrics['batch_size_config']} too small for {connection_count} connections"
+                )
+                assert metrics["batch_timeout_config"] >= 0.1, (
+                    f"Batch timeout {metrics['batch_timeout_config']} too low for high throughput"
+                )
+            
+            # Verify metrics are properly tracked
+            assert "active_connections" in metrics
+            assert "total_subscriptions" in metrics
+            assert "buffer_size" in metrics
+            assert isinstance(metrics["events_published"], int)
+            assert isinstance(metrics["batches_sent"], int)
+        
+        # Run the async test
+        asyncio.run(run_test())
