@@ -37,11 +37,33 @@
         </div>
         {% else %}
 
-        <!-- Filter input -->
-        <div class="filter-container">
-            <label for="filter">Filter:</label>
-            <input type="text" id="filter" x-model="filter" placeholder="Search across all columns..."
-                class="filter-input">
+        <!-- Filter input and Statistics -->
+        <div class="filter-and-stats-container">
+            <div class="filter-container">
+                <label for="filter">Filter:</label>
+                <input type="text" id="filter" x-model="filter" placeholder="Search across all columns..."
+                    class="filter-input">
+            </div>
+            
+            <!-- Statistics display -->
+            <div class="statistics-container">
+                <div class="statistics-item">
+                    <span class="statistics-label">Total Cases:</span>
+                    <span class="statistics-value" x-text="totalCases">0</span>
+                </div>
+                <div class="statistics-item">
+                    <span class="statistics-label">Complete:</span>
+                    <span class="statistics-value" x-text="completePairs">0</span>
+                </div>
+                <div class="statistics-item">
+                    <span class="statistics-label">Valid:</span>
+                    <span class="statistics-value" x-text="validPairs">0</span>
+                </div>
+                <div class="statistics-item">
+                    <span class="statistics-label">Done:</span>
+                    <span class="statistics-value" x-text="donePairs">0</span>
+                </div>
+            </div>
         </div>
 
         <!-- Table -->
@@ -321,6 +343,22 @@
                             return aVal < bVal ? 1 : -1;
                         }
                     });
+                },
+
+                get totalCases() {
+                    return this.filteredAndSorted.length;
+                },
+
+                get completePairs() {
+                    return this.filteredAndSorted.filter(pair => pair.is_complete).length;
+                },
+
+                get validPairs() {
+                    return this.filteredAndSorted.filter(pair => pair.is_valid).length;
+                },
+
+                get donePairs() {
+                    return this.filteredAndSorted.filter(pair => pair.is_done).length;
                 },
 
                 getColumnValue(pair, column) {
