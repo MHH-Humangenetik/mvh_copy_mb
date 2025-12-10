@@ -87,7 +87,7 @@ h6 {
 @media (min-width: 768px) {
     .filter-and-stats-container {
         flex-direction: row;
-        align-items: flex-start;
+        align-items: center;
         justify-content: space-between;
     }
 }
@@ -121,6 +121,8 @@ h6 {
     border: 1px solid var(--border);
     border-radius: 4px;
     min-width: fit-content;
+    justify-content: center;
+    align-items: center;
 }
 
 @media (min-width: 768px) {
@@ -168,19 +170,15 @@ h6 {
 
 /* Color coding for different statistics */
 .statistics-item:nth-child(1) .statistics-value {
-    color: var(--rp-moon-iris); /* Total Cases - iris */
+    color: var(--rp-moon-iris); /* Total Cases */
 }
 
 .statistics-item:nth-child(2) .statistics-value {
-    color: var(--rp-moon-gold); /* Complete - foam */
+    color: var(--rp-moon-love); /* Ready */
 }
 
 .statistics-item:nth-child(3) .statistics-value {
-    color: var(--rp-moon-gold); /* Valid - pine */
-}
-
-.statistics-item:nth-child(4) .statistics-value {
-    color: var(--rp-moon-foam); /* Done - gold */
+    color: var(--rp-moon-foam); /* Done */
 }
 
 /* Table container */
