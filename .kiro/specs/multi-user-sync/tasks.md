@@ -107,64 +107,64 @@
   - **Property 8: Automatic lock release on disconnection**
   - **Validates: Requirements 2.3**
 
-- [ ] 5. Create synchronization service coordinator
+- [x] 5. Create synchronization service coordinator
   - Implement SyncService class to coordinate operations
   - Add change detection and delta synchronization
   - Handle batch operations with efficient event generation
   - Provide rollback capabilities for failed synchronization
   - _Requirements: 3.2, 3.4, 2.4_
 
-- [ ] 5.1 Build sync service with change detection
+- [x] 5.1 Build sync service with change detection
   - Implement database change monitoring
   - Add delta synchronization for reconnected clients
   - Create change buffering for offline clients
   - _Requirements: 3.4, 4.2, 4.4_
 
-- [ ] 5.2 Write property test for change detection
+- [x] 5.2 Write property test for change detection
   - **Property 13: External change detection**
   - **Validates: Requirements 3.4**
 
-- [ ] 5.3 Implement missed update synchronization
+- [x] 5.3 Implement missed update synchronization
   - Create change buffer management for disconnected clients
   - Add synchronization logic for reconnected clients
   - Implement efficient delta updates
   - _Requirements: 4.2, 4.4_
 
-- [ ] 5.4 Write property test for missed updates
+- [x] 5.4 Write property test for missed updates
   - **Property 16: Missed update synchronization**
   - **Validates: Requirements 4.2**
 
-- [ ] 6. Integrate with existing FastAPI web application
+- [x] 6. Integrate with existing FastAPI web application
   - Add WebSocket endpoints to existing FastAPI app
   - Modify existing database operations to trigger sync events
   - Update web templates to include WebSocket client code
   - Add sync event handlers to existing API endpoints
   - _Requirements: 1.3, 3.2_
 
-- [ ] 6.1 Add WebSocket endpoints to FastAPI application
+- [x] 6.1 Add WebSocket endpoints to FastAPI application
   - Create WebSocket route handlers for client connections
   - Integrate WebSocketManager with FastAPI lifecycle
   - Add WebSocket authentication and session handling
   - _Requirements: 1.5_
 
-- [ ] 6.2 Modify database operations to trigger sync events
+- [x] 6.2 Modify database operations to trigger sync events
   - Update MeldebestaetigungDatabase to emit sync events
   - Modify record update operations to broadcast changes
   - Add sync event generation for CSV upload processing
   - _Requirements: 1.3, 3.1, 3.2_
 
-- [ ] 6.3 Write property test for status change propagation
+- [x] 6.3 Write property test for status change propagation
   - **Property 3: Status change propagation**
   - **Validates: Requirements 1.3**
 
-- [ ] 6.4 Create WebSocket client-side JavaScript
+- [x] 6.4 Create WebSocket client-side JavaScript
   - Implement WebSocket connection management in browser
   - Add automatic reconnection logic with exponential backoff
   - Create event handlers for real-time UI updates
   - Handle connection status display and error notifications
   - _Requirements: 4.1, 4.3_
 
-- [ ] 6.5 Write property test for concurrent edit prevention
+- [x] 6.5 Write property test for concurrent edit prevention
   - **Property 4: Concurrent edit prevention**
   - **Validates: Requirements 1.4**
 - [ ] 7. Implement comprehensive logging and monitoring

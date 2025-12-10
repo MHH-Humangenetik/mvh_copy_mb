@@ -8,13 +8,15 @@ marking records as done.
 
 import logging
 import os
+import uuid
 from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 import click
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -44,6 +46,11 @@ templates = Jinja2Templates(directory=str(templates_dir))
 static_dir = BASE_DIR / "static"
 static_dir.mkdir(exist_ok=True)
 
+# Global sync system components (will be initialized in lifespan)
+websocket_manager = None
+event_broker = None
+sync_service = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,16 +59,78 @@ async def lifespan(app: FastAPI):
     
     Handles startup and shutdown events for the FastAPI application.
     """
+    global websocket_manager, event_broker, sync_service
+    
     # Startup
     logger.info("Starting Meldebestätigungen Viewer application")
     logger.info(f"FastAPI version: {app.version}")
     logger.info(f"Templates directory: {templates_dir}")
     logger.info(f"Static files directory: {static_dir}")
     
+    # Initialize sync system components
+    try:
+        from .sync.config import SyncConfig
+        from .websocket.manager import WebSocketManager
+        from .events.broker import EventBrokerImpl
+        from .sync.service import SyncServiceImpl
+        from .sync.lock_manager import LockManagerImpl
+        from .database import MeldebestaetigungDatabase
+        
+        # Create sync configuration
+        config = SyncConfig()
+        
+        # Initialize components
+        websocket_manager = WebSocketManager(config)
+        event_broker = EventBrokerImpl()
+        
+        # Get database path for sync service
+        db_path_str = os.getenv('DB_PATH', './data/meldebestaetigungen.duckdb')
+        db_path = Path(db_path_str)
+        database = MeldebestaetigungDatabase(db_path)
+        
+        # Initialize lock manager
+        lock_manager = LockManagerImpl(config)
+        
+        # Initialize sync service
+        sync_service = SyncServiceImpl(
+            event_broker=event_broker,
+            lock_manager=lock_manager,
+            connection_manager=websocket_manager,
+            database=database
+        )
+        
+        # Start all services
+        await websocket_manager.start()
+        await sync_service.start()
+        
+        logger.info("Multi-user sync system initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"Failed to initialize sync system: {e}", exc_info=True)
+        # Continue without sync system for now
+        websocket_manager = None
+        event_broker = None
+        sync_service = None
+    
     yield
     
     # Shutdown
     logger.info("Shutting down Meldebestätigungen Viewer application")
+    
+    # Stop sync system components
+    if sync_service:
+        try:
+            await sync_service.stop()
+        except Exception as e:
+            logger.error(f"Error stopping sync service: {e}")
+    
+    if websocket_manager:
+        try:
+            await websocket_manager.stop()
+        except Exception as e:
+            logger.error(f"Error stopping WebSocket manager: {e}")
+    
+    logger.info("Sync system shutdown complete")
 
 
 # Initialize FastAPI application with lifespan handler
@@ -234,6 +303,43 @@ async def update_done_status(case_id: str, request: Request):
                     detail=f"Case ID {case_id} not found after update"
                 )
             
+            # Trigger sync event if sync system is available
+            if sync_service and event_broker:
+                try:
+                    # Create sync event data
+                    sync_data = {
+                        "case_id": case_id,
+                        "is_done": done,
+                        "is_complete": pair.is_complete,
+                        "is_valid": pair.is_valid,
+                        "priority_group": pair.priority_group,
+                        "genomic": {
+                            "vorgangsnummer": pair.genomic.vorgangsnummer,
+                            "is_done": pair.genomic.is_done
+                        } if pair.genomic else None,
+                        "clinical": {
+                            "vorgangsnummer": pair.clinical.vorgangsnummer,
+                            "is_done": pair.clinical.is_done
+                        } if pair.clinical else None
+                    }
+                    
+                    # Get user ID from request (for now use a default)
+                    user_id = request.headers.get("X-User-ID", "web_user")
+                    
+                    # Trigger sync event
+                    await sync_service.handle_record_update(
+                        record_id=case_id,
+                        data=sync_data,
+                        user_id=user_id,
+                        version=1  # Simple versioning for now
+                    )
+                    
+                    logger.info(f"Sync event triggered for Case ID {case_id}")
+                    
+                except Exception as sync_error:
+                    # Log sync error but don't fail the request
+                    logger.error(f"Failed to trigger sync event for {case_id}: {sync_error}")
+            
             # Render the updated pair rows for HTMX swap
             return templates.TemplateResponse(
                 request,
@@ -272,11 +378,185 @@ async def health_check():
     Returns:
         JSON response with application status
     """
+    sync_status = "disabled"
+    if websocket_manager and event_broker and sync_service:
+        sync_status = "enabled"
+        
     return {
         "status": "healthy",
         "application": "Meldebestätigungen Viewer",
-        "version": app.version
+        "version": app.version,
+        "sync_system": sync_status
     }
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    Main WebSocket endpoint for real-time synchronization.
+    
+    Handles client connections, authentication, and message routing.
+    """
+    if not websocket_manager or not event_broker:
+        logger.warning("WebSocket connection attempted but sync system not available")
+        await websocket.close(code=1011, reason="Sync system unavailable")
+        return
+    
+    # Accept the WebSocket connection
+    await websocket.accept()
+    
+    # Generate connection ID and extract user info
+    connection_id = str(uuid.uuid4())
+    
+    # For now, use a simple user identification scheme
+    # In production, you'd extract this from authentication headers/tokens
+    user_id = websocket.query_params.get("user_id", "anonymous")
+    
+    logger.info(f"WebSocket connection established: {connection_id} for user {user_id}")
+    
+    try:
+        # Import sync models
+        from .sync.models import ClientConnection
+        
+        # Create client connection object
+        client_connection = ClientConnection(
+            connection_id=connection_id,
+            user_id=user_id,
+            websocket=websocket,
+            last_seen=datetime.now(),
+            subscriptions=set()
+        )
+        
+        # Add connection to manager
+        await websocket_manager.add_connection(client_connection)
+        
+        # Subscribe client to all events (for now - could be more selective)
+        await event_broker.subscribe_client(client_connection, {"*"})
+        
+        # Send welcome message
+        welcome_message = {
+            "type": "connection_established",
+            "connection_id": connection_id,
+            "user_id": user_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        await websocket.send_json(welcome_message)
+        
+        # Handle incoming messages
+        while True:
+            try:
+                # Receive message from client
+                data = await websocket.receive_json()
+                
+                # Update last seen timestamp
+                await websocket_manager.update_last_seen(connection_id)
+                
+                # Handle different message types
+                message_type = data.get("type")
+                
+                if message_type == "heartbeat":
+                    # Respond to heartbeat
+                    response = {
+                        "type": "heartbeat_response",
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    await websocket.send_json(response)
+                    
+                elif message_type == "subscribe":
+                    # Handle subscription updates
+                    subscriptions = set(data.get("subscriptions", []))
+                    await event_broker.subscribe_client(client_connection, subscriptions)
+                    
+                    response = {
+                        "type": "subscription_updated",
+                        "subscriptions": list(subscriptions),
+                        "timestamp": datetime.now().isoformat()
+                    }
+                    await websocket.send_json(response)
+                    
+                elif message_type == "sync_request":
+                    # Handle sync request for missed updates
+                    last_sync = data.get("last_sync_timestamp")
+                    if last_sync:
+                        last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                        await sync_service.sync_client(connection_id, last_sync_dt)
+                    else:
+                        await sync_service.sync_client(connection_id)
+                        
+                else:
+                    logger.warning(f"Unknown message type from {connection_id}: {message_type}")
+                    
+            except WebSocketDisconnect:
+                logger.info(f"WebSocket client {connection_id} disconnected normally")
+                break
+            except Exception as e:
+                logger.error(f"Error handling WebSocket message from {connection_id}: {e}")
+                # Send error response
+                error_response = {
+                    "type": "error",
+                    "message": "Failed to process message",
+                    "timestamp": datetime.now().isoformat()
+                }
+                try:
+                    await websocket.send_json(error_response)
+                except:
+                    # Connection might be broken
+                    break
+                    
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket client {connection_id} disconnected during setup")
+    except Exception as e:
+        logger.error(f"Error in WebSocket connection {connection_id}: {e}", exc_info=True)
+    finally:
+        # Clean up connection
+        if websocket_manager:
+            try:
+                await websocket_manager.remove_connection(connection_id)
+            except Exception as e:
+                logger.error(f"Error removing WebSocket connection {connection_id}: {e}")
+        
+        if event_broker:
+            try:
+                await event_broker.unsubscribe_client(connection_id)
+            except Exception as e:
+                logger.error(f"Error unsubscribing WebSocket client {connection_id}: {e}")
+        
+        logger.info(f"WebSocket connection {connection_id} cleanup complete")
+
+
+@app.get("/api/sync/status")
+async def get_sync_status():
+    """
+    Get the current status of the synchronization system.
+    
+    Returns:
+        JSON response with sync system status and metrics
+    """
+    if not websocket_manager or not event_broker or not sync_service:
+        return {
+            "status": "disabled",
+            "message": "Synchronization system is not available"
+        }
+    
+    try:
+        # Get metrics from all components
+        connection_metrics = await websocket_manager.get_connection_metrics()
+        broker_metrics = event_broker.get_metrics()
+        buffer_stats = sync_service.get_buffer_stats()
+        
+        return {
+            "status": "enabled",
+            "connections": connection_metrics,
+            "events": broker_metrics,
+            "buffers": buffer_stats,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Error getting sync status: {e}")
+        return {
+            "status": "error",
+            "message": f"Failed to get sync status: {str(e)}"
+        }
 
 
 @click.command()

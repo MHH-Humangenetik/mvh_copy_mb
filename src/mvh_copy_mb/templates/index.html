@@ -24,7 +24,10 @@
 
 <body>
     <div class="container" x-data="tableData()">
-        <h1>Meldebestätigungen Viewer</h1>
+        <div class="header-container">
+            <h1>Meldebestätigungen Viewer</h1>
+            <div id="connection-status" class="connection-status connecting">Connecting...</div>
+        </div>
 
         <!-- Loading indicator -->
         <div id="loading" class="htmx-indicator">
@@ -236,6 +239,312 @@
     </script>
 
     <script>
+        // WebSocket connection management
+        class SyncWebSocket {
+            constructor() {
+                this.ws = null;
+                this.reconnectAttempts = 0;
+                this.maxReconnectAttempts = 10;
+                this.reconnectDelay = 1000; // Start with 1 second
+                this.maxReconnectDelay = 30000; // Max 30 seconds
+                this.connectionId = null;
+                this.isConnected = false;
+                this.isReconnecting = false;
+                this.heartbeatInterval = null;
+                this.lastSyncTimestamp = null;
+                
+                // Connection status callbacks
+                this.onConnectionChange = null;
+                this.onSyncEvent = null;
+                
+                this.connect();
+            }
+            
+            connect() {
+                if (this.ws && (this.ws.readyState === WebSocket.CONNECTING || this.ws.readyState === WebSocket.OPEN)) {
+                    return;
+                }
+                
+                try {
+                    // Construct WebSocket URL
+                    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                    const wsUrl = `${protocol}//${window.location.host}/ws?user_id=web_user_${Date.now()}`;
+                    
+                    console.log('Connecting to WebSocket:', wsUrl);
+                    this.ws = new WebSocket(wsUrl);
+                    
+                    this.ws.onopen = (event) => {
+                        console.log('WebSocket connected');
+                        this.isConnected = true;
+                        this.isReconnecting = false;
+                        this.reconnectAttempts = 0;
+                        this.reconnectDelay = 1000;
+                        
+                        // Start heartbeat
+                        this.startHeartbeat();
+                        
+                        // Subscribe to all events
+                        this.subscribe(['*']);
+                        
+                        // Request sync for missed updates
+                        if (this.lastSyncTimestamp) {
+                            this.requestSync(this.lastSyncTimestamp);
+                        }
+                        
+                        this.updateConnectionStatus('connected');
+                    };
+                    
+                    this.ws.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            this.handleMessage(data);
+                        } catch (error) {
+                            console.error('Error parsing WebSocket message:', error);
+                        }
+                    };
+                    
+                    this.ws.onclose = (event) => {
+                        console.log('WebSocket closed:', event.code, event.reason);
+                        this.isConnected = false;
+                        this.stopHeartbeat();
+                        
+                        if (!this.isReconnecting && this.reconnectAttempts < this.maxReconnectAttempts) {
+                            this.scheduleReconnect();
+                        } else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+                            this.updateConnectionStatus('failed');
+                        }
+                    };
+                    
+                    this.ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                        this.updateConnectionStatus('error');
+                    };
+                    
+                } catch (error) {
+                    console.error('Failed to create WebSocket connection:', error);
+                    this.scheduleReconnect();
+                }
+            }
+            
+            scheduleReconnect() {
+                if (this.isReconnecting) return;
+                
+                this.isReconnecting = true;
+                this.reconnectAttempts++;
+                
+                console.log(`Scheduling reconnect attempt ${this.reconnectAttempts} in ${this.reconnectDelay}ms`);
+                this.updateConnectionStatus('reconnecting');
+                
+                setTimeout(() => {
+                    this.isReconnecting = false;
+                    this.connect();
+                }, this.reconnectDelay);
+                
+                // Exponential backoff with jitter
+                this.reconnectDelay = Math.min(
+                    this.reconnectDelay * 2 + Math.random() * 1000,
+                    this.maxReconnectDelay
+                );
+            }
+            
+            handleMessage(data) {
+                console.log('WebSocket message received:', data);
+                
+                switch (data.type) {
+                    case 'connection_established':
+                        this.connectionId = data.connection_id;
+                        console.log('Connection established with ID:', this.connectionId);
+                        break;
+                        
+                    case 'heartbeat_response':
+                        // Heartbeat acknowledged
+                        break;
+                        
+                    case 'sync_event':
+                        this.handleSyncEvent(data);
+                        break;
+                        
+                    case 'sync_batch':
+                        if (data.events && Array.isArray(data.events)) {
+                            data.events.forEach(event => this.handleSyncEvent(event));
+                        }
+                        break;
+                        
+                    case 'error':
+                        console.error('WebSocket error message:', data.message);
+                        if (data.details && data.details.manual_refresh_required) {
+                            this.updateConnectionStatus('degraded');
+                        }
+                        break;
+                        
+                    case 'connection_degraded':
+                        console.warn('Connection degraded:', data.message);
+                        this.updateConnectionStatus('degraded');
+                        break;
+                        
+                    default:
+                        console.log('Unknown message type:', data.type);
+                }
+            }
+            
+            handleSyncEvent(event) {
+                console.log('Sync event:', event);
+                
+                // Update last sync timestamp
+                this.lastSyncTimestamp = event.timestamp;
+                
+                // Call sync event callback if set
+                if (this.onSyncEvent) {
+                    this.onSyncEvent(event);
+                }
+                
+                // Handle different event types
+                switch (event.event_type) {
+                    case 'record_updated':
+                        this.handleRecordUpdate(event);
+                        break;
+                    case 'record_added':
+                        this.handleRecordAdded(event);
+                        break;
+                    case 'record_deleted':
+                        this.handleRecordDeleted(event);
+                        break;
+                }
+            }
+            
+            handleRecordUpdate(event) {
+                // Update the UI for record changes
+                const caseId = event.data.case_id || event.record_id;
+                
+                if (event.data.is_done !== undefined) {
+                    // Status change - update the UI
+                    this.updateRecordStatus(caseId, event.data);
+                }
+            }
+            
+            handleRecordAdded(event) {
+                // New record added - refresh the page or add to table
+                console.log('New record added:', event.record_id);
+                // For now, just log - could implement dynamic table updates
+            }
+            
+            handleRecordDeleted(event) {
+                // Record deleted - remove from UI
+                console.log('Record deleted:', event.record_id);
+            }
+            
+            updateRecordStatus(caseId, data) {
+                // Find and update the record in the Alpine.js data
+                const alpineComponent = Alpine.$data(document.querySelector('[x-data]'));
+                if (alpineComponent && alpineComponent.pairs) {
+                    const pair = alpineComponent.pairs.find(p => p.case_id === caseId);
+                    if (pair) {
+                        // Update the pair data
+                        pair.is_done = data.is_done;
+                        pair.priority_group = data.priority_group || pair.priority_group;
+                        
+                        if (data.genomic && pair.genomic) {
+                            pair.genomic.is_done = data.genomic.is_done;
+                        }
+                        if (data.clinical && pair.clinical) {
+                            pair.clinical.is_done = data.clinical.is_done;
+                        }
+                        
+                        console.log(`Updated record ${caseId} status to done=${data.is_done}`);
+                        
+                        // Mark as interacted to prevent reordering
+                        if (alpineComponent.interactedPairs) {
+                            alpineComponent.interactedPairs.add(caseId);
+                        }
+                    }
+                }
+            }
+            
+            startHeartbeat() {
+                this.stopHeartbeat();
+                this.heartbeatInterval = setInterval(() => {
+                    if (this.isConnected && this.ws.readyState === WebSocket.OPEN) {
+                        this.send({
+                            type: 'heartbeat',
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                }, 30000); // Send heartbeat every 30 seconds
+            }
+            
+            stopHeartbeat() {
+                if (this.heartbeatInterval) {
+                    clearInterval(this.heartbeatInterval);
+                    this.heartbeatInterval = null;
+                }
+            }
+            
+            subscribe(subscriptions) {
+                if (this.isConnected) {
+                    this.send({
+                        type: 'subscribe',
+                        subscriptions: subscriptions
+                    });
+                }
+            }
+            
+            requestSync(lastSyncTimestamp) {
+                if (this.isConnected) {
+                    this.send({
+                        type: 'sync_request',
+                        last_sync_timestamp: lastSyncTimestamp
+                    });
+                }
+            }
+            
+            send(data) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(data));
+                } else {
+                    console.warn('Cannot send message - WebSocket not connected');
+                }
+            }
+            
+            updateConnectionStatus(status) {
+                console.log('Connection status:', status);
+                
+                // Update UI connection indicator
+                const indicator = document.getElementById('connection-status');
+                if (indicator) {
+                    indicator.className = `connection-status ${status}`;
+                    
+                    const statusText = {
+                        'connected': 'Connected',
+                        'connecting': 'Connecting...',
+                        'reconnecting': 'Reconnecting...',
+                        'error': 'Connection Error',
+                        'failed': 'Connection Failed',
+                        'degraded': 'Degraded Mode'
+                    };
+                    
+                    indicator.textContent = statusText[status] || status;
+                }
+                
+                // Call connection change callback if set
+                if (this.onConnectionChange) {
+                    this.onConnectionChange(status);
+                }
+            }
+            
+            disconnect() {
+                this.stopHeartbeat();
+                if (this.ws) {
+                    this.ws.close();
+                    this.ws = null;
+                }
+                this.isConnected = false;
+                this.connectionId = null;
+            }
+        }
+        
+        // Initialize WebSocket connection
+        let syncWebSocket = null;
+        
         // Global copy function for onclick handlers (used by HTMX-swapped content)
         function copyToClipboard(text) {
             if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -495,6 +804,40 @@
                 }
             }
         }
+
+        // Initialize WebSocket connection when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Only initialize WebSocket if we have data (not an error page)
+            const dataElement = document.getElementById('pairs-data');
+            if (dataElement && dataElement.textContent) {
+                syncWebSocket = new SyncWebSocket();
+                
+                // Set up connection status callback
+                syncWebSocket.onConnectionChange = function(status) {
+                    console.log('Connection status changed to:', status);
+                    
+                    if (status === 'degraded' || status === 'failed') {
+                        // Show manual refresh notice
+                        const existingNotice = document.querySelector('.connection-notice');
+                        if (!existingNotice) {
+                            const notice = document.createElement('div');
+                            notice.className = 'connection-notice';
+                            notice.innerHTML = `
+                                <p><strong>Connection Issue:</strong> Real-time updates are unavailable. 
+                                <button onclick="window.location.reload()">Refresh Page</button></p>
+                            `;
+                            document.querySelector('.container').insertBefore(notice, document.querySelector('.filter-and-stats-container'));
+                        }
+                    }
+                };
+                
+                // Set up sync event callback
+                syncWebSocket.onSyncEvent = function(event) {
+                    console.log('Received sync event:', event);
+                    // Additional sync event handling can be added here
+                };
+            }
+        });
 
         // Listen for HTMX beforeSwap event to remove Alpine.js rendered rows
         document.body.addEventListener('htmx:beforeSwap', function (event) {

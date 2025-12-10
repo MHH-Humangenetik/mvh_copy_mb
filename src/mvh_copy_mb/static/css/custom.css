@@ -496,3 +496,103 @@ button:hover {
 .site-footer p {
     margin: 0;
 }
+
+/* Header container with connection status */
+.header-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+/* Connection status indicator */
+.connection-status {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    min-width: 120px;
+    text-align: center;
+    border: 2px solid transparent;
+}
+
+.connection-status.connected {
+    background-color: hsl(var(--color-pine) / .2);
+    color: var(--rp-moon-pine);
+    border-color: var(--rp-moon-pine);
+}
+
+.connection-status.connecting,
+.connection-status.reconnecting {
+    background-color: hsl(var(--color-gold) / .2);
+    color: var(--rp-moon-gold);
+    border-color: var(--rp-moon-gold);
+    animation: pulse 2s infinite;
+}
+
+.connection-status.error,
+.connection-status.failed {
+    background-color: hsl(var(--color-love) / .2);
+    color: var(--rp-moon-love);
+    border-color: var(--rp-moon-love);
+}
+
+.connection-status.degraded {
+    background-color: hsl(var(--color-rose) / .2);
+    color: var(--rp-moon-rose);
+    border-color: var(--rp-moon-rose);
+}
+
+/* Connection notice for degraded/failed states */
+.connection-notice {
+    background-color: hsl(var(--color-love) / .1);
+    border: 1px solid var(--rp-moon-love);
+    color: var(--rp-moon-love);
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.connection-notice button {
+    background-color: var(--rp-moon-love);
+    color: var(--bg);
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: 0.5rem;
+    font-weight: bold;
+}
+
+.connection-notice button:hover {
+    background-color: var(--rp-moon-rose);
+}
+
+/* Pulse animation for connecting states */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+}
+
+/* Responsive adjustments for header */
+@media (max-width: 768px) {
+    .header-container {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    
+    .connection-status {
+        align-self: center;
+        min-width: 150px;
+    }
+}

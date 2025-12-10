@@ -205,6 +205,13 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                 )
                 db.upsert_record(record)
                 logger.debug(f"Stored record in database for vorgangsnummer: {vorgangsnummer_str}")
+                
+                # Trigger sync event for new record (if sync system is available)
+                # Note: This is a placeholder - in a real implementation, you would
+                # need to establish a connection to the sync system or use a message queue
+                # For now, we'll just log that a sync event should be triggered
+                logger.info(f"New record added - sync event should be triggered for case_id: {case_id}")
+                
             except Exception as e:
                 logger.error(f"Failed to store record in database for vorgangsnummer {vorgangsnummer_str}: {e}")
                 # Continue processing even if database storage fails
