@@ -76,9 +76,26 @@ h6 {
     margin-bottom: 2rem;
 }
 
+/* Filter and Statistics container */
+.filter-and-stats-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+@media (min-width: 768px) {
+    .filter-and-stats-container {
+        flex-direction: row;
+        align-items: flex-start;
+        justify-content: space-between;
+    }
+}
+
 /* Filter container */
 .filter-container {
-    margin-bottom: 2rem;
+    flex: 1;
+    min-width: 0;
 }
 
 .filter-input {
@@ -92,6 +109,78 @@ h6 {
 .filter-input:focus {
     border-color: var(--accent);
     outline: none;
+}
+
+/* Statistics container */
+.statistics-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem;
+    background-color: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    min-width: fit-content;
+}
+
+@media (min-width: 768px) {
+    .statistics-container {
+        flex-shrink: 0;
+        max-width: 400px;
+    }
+}
+
+@media (max-width: 767px) {
+    .statistics-container {
+        justify-content: space-between;
+    }
+}
+
+/* Statistics items */
+.statistics-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 80px;
+    text-align: center;
+}
+
+@media (max-width: 480px) {
+    .statistics-item {
+        min-width: 70px;
+    }
+}
+
+.statistics-label {
+    font-size: 0.9rem;
+    color: var(--subtle);
+    margin-bottom: 0.25rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.statistics-value {
+    font-size: 1.4rem;
+    font-weight: bold;
+    color: var(--text);
+    line-height: 1;
+}
+
+/* Color coding for different statistics */
+.statistics-item:nth-child(1) .statistics-value {
+    color: var(--rp-moon-iris); /* Total Cases - iris */
+}
+
+.statistics-item:nth-child(2) .statistics-value {
+    color: var(--rp-moon-gold); /* Complete - foam */
+}
+
+.statistics-item:nth-child(3) .statistics-value {
+    color: var(--rp-moon-gold); /* Valid - pine */
+}
+
+.statistics-item:nth-child(4) .statistics-value {
+    color: var(--rp-moon-foam); /* Done - gold */
 }
 
 /* Table container */
@@ -136,70 +225,70 @@ td {
     overflow-wrap: break-word;
 }
 
-/* Column widths */
+/* Case ID */
 th:nth-child(1),
 td:nth-child(1) {
     width: 12%;
 }
 
-/* Case ID */
+/* Vorgangsnummer */
 th:nth-child(2),
 td:nth-child(2) {
     width: 10%;
 }
 
-/* Vorgangsnummer */
+/* IBE String */
 th:nth-child(3),
 td:nth-child(3) {
     width: 15%;
 }
 
-/* IBE String */
+/* Art der Daten */
 th:nth-child(4),
 td:nth-child(4) {
     width: 8%;
 }
 
-/* Art der Daten */
+/* Typ der Meldung */
 th:nth-child(5),
 td:nth-child(5) {
     width: 8%;
 }
 
-/* Typ der Meldung */
+/* Indikationsbereich */
 th:nth-child(6),
 td:nth-child(6) {
     width: 12%;
 }
 
-/* Indikationsbereich */
+/* Ergebnis QC */
 th:nth-child(7),
 td:nth-child(7) {
     width: 8%;
 }
 
-/* Ergebnis QC */
+/* Source File */
 th:nth-child(8),
 td:nth-child(8) {
     width: 15%;
 }
 
-/* Source File */
+/* Complete */
 th:nth-child(9),
 td:nth-child(9) {
-    width: 4%;
-}
-
-/* Complete */
-th:nth-child(10),
-td:nth-child(10) {
-    width: 4%;
+    width: 5%;
 }
 
 /* Valid */
+th:nth-child(10),
+td:nth-child(10) {
+    width: 5%;
+}
+
+/* Done */
 th:nth-child(11),
 td:nth-child(11) {
-    width: 4%;
+    width: 5%;
 }
 
 /* Priority group colors - applied to table rows */
