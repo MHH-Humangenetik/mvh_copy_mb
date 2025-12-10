@@ -52,12 +52,8 @@
                     <span class="statistics-value" x-text="totalCases">0</span>
                 </div>
                 <div class="statistics-item">
-                    <span class="statistics-label">Complete:</span>
-                    <span class="statistics-value" x-text="completePairs">0</span>
-                </div>
-                <div class="statistics-item">
-                    <span class="statistics-label">Valid:</span>
-                    <span class="statistics-value" x-text="validPairs">0</span>
+                    <span class="statistics-label">Ready:</span>
+                    <span class="statistics-value" x-text="readyPairs">0</span>
                 </div>
                 <div class="statistics-item">
                     <span class="statistics-label">Done:</span>
@@ -349,12 +345,8 @@
                     return this.filteredAndSorted.length;
                 },
 
-                get completePairs() {
-                    return this.filteredAndSorted.filter(pair => pair.is_complete).length;
-                },
-
-                get validPairs() {
-                    return this.filteredAndSorted.filter(pair => pair.is_valid).length;
+                get readyPairs() {
+                    return this.filteredAndSorted.filter(pair => pair.is_complete && pair.is_valid && !pair.is_done).length;
                 },
 
                 get donePairs() {
