@@ -37,33 +37,51 @@
         </div>
         {% else %}
 
-        <!-- Filter input and Statistics -->
-        <div class="filter-and-stats-container">
-            <div class="filter-container">
-                <label for="filter">Filter:</label>
-                <input type="text" id="filter" x-model="filter" placeholder="Search across all columns..."
-                    class="filter-input">
+        <!-- JavaScript required notice (hidden when JS is available) -->
+        <noscript>
+            <div class="noscript-notice">
+                <h2>JavaScript Required</h2>
+                <p>This application requires JavaScript to function properly. Please enable JavaScript in your browser to view and interact with the Meldebestätigungen data.</p>
+                <p>Features that require JavaScript include:</p>
+                <ul>
+                    <li>Data table display and rendering</li>
+                    <li>Real-time filtering and search</li>
+                    <li>Column sorting</li>
+                    <li>Statistics display</li>
+                    <li>Done status updates</li>
+                </ul>
             </div>
-            
-            <!-- Statistics display -->
-            <div class="statistics-container">
-                <div class="statistics-item">
-                    <span class="statistics-label">Total Cases:</span>
-                    <span class="statistics-value" x-text="totalCases">0</span>
-                </div>
-                <div class="statistics-item">
-                    <span class="statistics-label">Ready:</span>
-                    <span class="statistics-value" x-text="readyPairs">0</span>
-                </div>
-                <div class="statistics-item">
-                    <span class="statistics-label">Done:</span>
-                    <span class="statistics-value" x-text="donePairs">0</span>
-                </div>
-            </div>
-        </div>
+        </noscript>
 
-        <!-- Table -->
-        <div class="table-container">
+        <!-- Main application content (requires JavaScript) -->
+        <div class="js-required-content">
+            <!-- Filter input and Statistics -->
+            <div class="filter-and-stats-container">
+                <div class="filter-container">
+                    <label for="filter">Filter:</label>
+                    <input type="text" id="filter" x-model="filter" placeholder="Search across all columns..."
+                        class="filter-input">
+                </div>
+                
+                <!-- Statistics display -->
+                <div class="statistics-container">
+                    <div class="statistics-item">
+                        <span class="statistics-label">Total Cases:</span>
+                        <span class="statistics-value" x-text="totalCases || '--'">--</span>
+                    </div>
+                    <div class="statistics-item">
+                        <span class="statistics-label">Ready:</span>
+                        <span class="statistics-value" x-text="readyPairs || '--'">--</span>
+                    </div>
+                    <div class="statistics-item">
+                        <span class="statistics-label">Done:</span>
+                        <span class="statistics-value" x-text="donePairs || '--'">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table -->
+            <div class="table-container">
             <table>
                 <thead>
                     <tr>
@@ -193,6 +211,7 @@
                     </template>
                 </tbody>
             </table>
+            </div>
         </div>
 
         {% endif %}
@@ -248,13 +267,35 @@
         }
 
         function tableData() {
-            const pairsData = JSON.parse(document.getElementById('pairs-data').textContent);
+            let pairsData = [];
+            try {
+                const dataElement = document.getElementById('pairs-data');
+                if (dataElement && dataElement.textContent) {
+                    pairsData = JSON.parse(dataElement.textContent);
+                    // Ensure it's an array
+                    if (!Array.isArray(pairsData)) {
+                        console.error('Pairs data is not an array:', pairsData);
+                        pairsData = [];
+                    }
+                } else {
+                    console.error('Pairs data element not found or empty');
+                }
+            } catch (error) {
+                console.error('Error parsing pairs data:', error);
+                pairsData = [];
+            }
 
             // Pre-calculate initial sort positions before returning the component
             const initialSortPositions = new Map();
-            pairsData.forEach((pair, index) => {
-                initialSortPositions.set(pair.case_id, index);
-            });
+            try {
+                pairsData.forEach((pair, index) => {
+                    if (pair && pair.case_id) {
+                        initialSortPositions.set(pair.case_id, index);
+                    }
+                });
+            } catch (error) {
+                console.error('Error calculating initial sort positions:', error);
+            }
 
             return {
                 pairs: pairsData,
@@ -286,79 +327,142 @@
                 },
 
                 get filteredAndSorted() {
-                    let filtered = this.filter === ''
-                        ? [...this.pairs]  // Create a copy to avoid mutating original
-                        : this.pairs.filter(pair => {
-                            // Search across all columns
-                            const searchStr = this.filter.toLowerCase();
-                            return (
-                                (pair.case_id && pair.case_id.toLowerCase().includes(searchStr)) ||
-                                (pair.genomic && (
-                                    pair.genomic.vorgangsnummer.toLowerCase().includes(searchStr) ||
-                                    pair.genomic.meldebestaetigung.toLowerCase().includes(searchStr) ||
-                                    pair.genomic.typ_der_meldung.toLowerCase().includes(searchStr) ||
-                                    pair.genomic.indikationsbereich.toLowerCase().includes(searchStr) ||
-                                    pair.genomic.ergebnis_qc.toLowerCase().includes(searchStr) ||
-                                    pair.genomic.source_file.toLowerCase().includes(searchStr)
-                                )) ||
-                                (pair.clinical && (
-                                    pair.clinical.vorgangsnummer.toLowerCase().includes(searchStr) ||
-                                    pair.clinical.meldebestaetigung.toLowerCase().includes(searchStr) ||
-                                    pair.clinical.typ_der_meldung.toLowerCase().includes(searchStr) ||
-                                    pair.clinical.indikationsbereich.toLowerCase().includes(searchStr) ||
-                                    pair.clinical.ergebnis_qc.toLowerCase().includes(searchStr) ||
-                                    pair.clinical.source_file.toLowerCase().includes(searchStr)
-                                ))
-                            );
+                    try {
+                        // Ensure pairs is an array and filter out malformed entries
+                        const validPairs = Array.isArray(this.pairs) ? this.pairs.filter(pair => 
+                            pair && typeof pair === 'object' && pair.case_id
+                        ) : [];
+
+                        let filtered = this.filter === ''
+                            ? [...validPairs]  // Create a copy to avoid mutating original
+                            : validPairs.filter(pair => {
+                                try {
+                                    // Search across all columns with safe property access
+                                    const searchStr = this.filter.toLowerCase();
+                                    const safeString = (str) => str && typeof str === 'string' ? str.toLowerCase() : '';
+                                    
+                                    return (
+                                        safeString(pair.case_id).includes(searchStr) ||
+                                        (pair.genomic && (
+                                            safeString(pair.genomic.vorgangsnummer).includes(searchStr) ||
+                                            safeString(pair.genomic.meldebestaetigung).includes(searchStr) ||
+                                            safeString(pair.genomic.typ_der_meldung).includes(searchStr) ||
+                                            safeString(pair.genomic.indikationsbereich).includes(searchStr) ||
+                                            safeString(pair.genomic.ergebnis_qc).includes(searchStr) ||
+                                            safeString(pair.genomic.source_file).includes(searchStr)
+                                        )) ||
+                                        (pair.clinical && (
+                                            safeString(pair.clinical.vorgangsnummer).includes(searchStr) ||
+                                            safeString(pair.clinical.meldebestaetigung).includes(searchStr) ||
+                                            safeString(pair.clinical.typ_der_meldung).includes(searchStr) ||
+                                            safeString(pair.clinical.indikationsbereich).includes(searchStr) ||
+                                            safeString(pair.clinical.ergebnis_qc).includes(searchStr) ||
+                                            safeString(pair.clinical.source_file).includes(searchStr)
+                                        ))
+                                    );
+                                } catch (filterError) {
+                                    console.error('Error filtering pair:', pair, filterError);
+                                    return false; // Exclude malformed pairs from results
+                                }
+                            });
+
+                        return filtered.sort((a, b) => {
+                            try {
+                                // Ensure both objects are valid
+                                if (!a || !b || !a.case_id || !b.case_id) return 0;
+
+                                // If either pair has been interacted with, use initial sort position
+                                const aInteracted = this.interactedPairs.has(a.case_id);
+                                const bInteracted = this.interactedPairs.has(b.case_id);
+
+                                if (aInteracted || bInteracted) {
+                                    // Use initial positions to maintain order
+                                    const aPos = this.initialSortPositions.get(a.case_id) ?? 999999;
+                                    const bPos = this.initialSortPositions.get(b.case_id) ?? 999999;
+                                    return aPos - bPos;
+                                }
+
+                                // Neither interacted: use normal priority group sorting
+                                const aPriority = typeof a.priority_group === 'number' ? a.priority_group : 999;
+                                const bPriority = typeof b.priority_group === 'number' ? b.priority_group : 999;
+                                
+                                if (aPriority !== bPriority) {
+                                    return aPriority - bPriority;
+                                }
+
+                                // Secondary sort: selected column
+                                let aVal = this.getColumnValue(a, this.sortColumn);
+                                let bVal = this.getColumnValue(b, this.sortColumn);
+
+                                if (this.sortDirection === 'asc') {
+                                    return aVal > bVal ? 1 : -1;
+                                } else {
+                                    return aVal < bVal ? 1 : -1;
+                                }
+                            } catch (sortError) {
+                                console.error('Error sorting pairs:', a, b, sortError);
+                                return 0; // Keep original order if sorting fails
+                            }
                         });
-
-                    return filtered.sort((a, b) => {
-                        // If either pair has been interacted with, use initial sort position
-                        const aInteracted = this.interactedPairs.has(a.case_id);
-                        const bInteracted = this.interactedPairs.has(b.case_id);
-
-                        if (aInteracted || bInteracted) {
-                            // Use initial positions to maintain order
-                            const aPos = this.initialSortPositions.get(a.case_id) ?? 999999;
-                            const bPos = this.initialSortPositions.get(b.case_id) ?? 999999;
-                            return aPos - bPos;
-                        }
-
-                        // Neither interacted: use normal priority group sorting
-                        if (a.priority_group !== b.priority_group) {
-                            return a.priority_group - b.priority_group;
-                        }
-
-                        // Secondary sort: selected column
-                        let aVal = this.getColumnValue(a, this.sortColumn);
-                        let bVal = this.getColumnValue(b, this.sortColumn);
-
-                        if (this.sortDirection === 'asc') {
-                            return aVal > bVal ? 1 : -1;
-                        } else {
-                            return aVal < bVal ? 1 : -1;
-                        }
-                    });
+                    } catch (error) {
+                        console.error('Error in filteredAndSorted:', error);
+                        return []; // Return empty array if everything fails
+                    }
                 },
 
                 get totalCases() {
-                    return this.filteredAndSorted.length;
+                    try {
+                        return this.filteredAndSorted.length;
+                    } catch (error) {
+                        console.error('Error calculating total cases:', error);
+                        return 0;
+                    }
                 },
 
                 get readyPairs() {
-                    return this.filteredAndSorted.filter(pair => pair.is_complete && pair.is_valid && !pair.is_done).length;
+                    try {
+                        return this.filteredAndSorted.filter(pair => {
+                            // Handle malformed pair objects
+                            if (!pair || typeof pair !== 'object') return false;
+                            const isComplete = pair.is_complete === true;
+                            const isValid = pair.is_valid === true;
+                            const isDone = pair.is_done === true;
+                            return isComplete && isValid && !isDone;
+                        }).length;
+                    } catch (error) {
+                        console.error('Error calculating ready pairs:', error);
+                        return 0;
+                    }
                 },
 
                 get donePairs() {
-                    return this.filteredAndSorted.filter(pair => pair.is_done).length;
+                    try {
+                        return this.filteredAndSorted.filter(pair => {
+                            // Handle malformed pair objects
+                            if (!pair || typeof pair !== 'object') return false;
+                            return pair.is_done === true;
+                        }).length;
+                    } catch (error) {
+                        console.error('Error calculating done pairs:', error);
+                        return 0;
+                    }
                 },
 
                 getColumnValue(pair, column) {
-                    if (column === 'case_id') return pair.case_id || '';
-                    // For other columns, use genomic record if available, otherwise clinical
-                    const record = pair.genomic || pair.clinical;
-                    if (!record) return '';
-                    return record[column] || '';
+                    try {
+                        if (!pair || typeof pair !== 'object') return '';
+                        if (column === 'case_id') return pair.case_id || '';
+                        
+                        // For other columns, use genomic record if available, otherwise clinical
+                        const record = pair.genomic || pair.clinical;
+                        if (!record || typeof record !== 'object') return '';
+                        
+                        const value = record[column];
+                        return value && typeof value === 'string' ? value : '';
+                    } catch (error) {
+                        console.error('Error getting column value:', pair, column, error);
+                        return '';
+                    }
                 },
 
                 sortBy(column) {

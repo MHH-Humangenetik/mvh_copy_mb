@@ -181,6 +181,36 @@ h6 {
     color: var(--rp-moon-foam); /* Done */
 }
 
+/* Noscript notice styling */
+.noscript-notice {
+    background-color: var(--warn);
+    color: var(--bg);
+    padding: 2rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    text-align: center;
+}
+
+.noscript-notice h2 {
+    color: var(--bg);
+    margin-bottom: 1rem;
+}
+
+.noscript-notice ul {
+    text-align: left;
+    max-width: 400px;
+    margin: 1rem auto;
+}
+
+.noscript-notice li {
+    margin-bottom: 0.5rem;
+}
+
+/* Hide main content when JavaScript is disabled */
+.js-required-content {
+    display: block;
+}
+
 /* Table container */
 .table-container {
     overflow-x: auto;
