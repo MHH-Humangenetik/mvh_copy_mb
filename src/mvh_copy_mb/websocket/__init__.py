@@ -1,0 +1,1 @@
+"""WebSocket management components for multi-user synchronization."""

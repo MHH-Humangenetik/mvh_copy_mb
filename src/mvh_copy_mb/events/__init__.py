@@ -1,0 +1,1 @@
+"""Event broadcasting and handling components."""
