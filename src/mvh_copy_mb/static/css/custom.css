@@ -17,7 +17,7 @@
     --rp-moon-highlight-low: #2a283e;
     --rp-moon-highlight-med: #44415a;
     --rp-moon-highlight-high: #56526e;
-    
+
     /* HSL values for color schemes */
     --color-love: 343 76% 68%;
     --color-gold: 35 88% 72%;
@@ -366,4 +366,16 @@ button:hover {
 
 .copy-btn:hover {
     transform: scale(1.2);
+}
+
+.site-footer {
+    margin-top: 3rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--border);
+    font-size: 1.2rem;
+    color: var(--muted);
+}
+
+.site-footer p {
+    margin: 0;
 }

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,45 +8,42 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <title>Meldebestätigungen Viewer</title>
-    
+
     <!-- Milligram CSS -->
     <link rel="stylesheet" href="https://unpkg.com/milligram@1.4.1/dist/milligram.min.css">
-    
+
     <!-- Custom Rosé Pine CSS -->
     <link rel="stylesheet" href="/static/css/custom.css">
-    
+
     <!-- HTMX -->
     <script src="https://unpkg.com/htmx.org@1.9.10" defer></script>
-    
+
     <!-- Alpine.js -->
     <script src="https://unpkg.com/alpinejs@3.13.3" defer></script>
 </head>
+
 <body>
     <div class="container" x-data="tableData()">
         <h1>Meldebestätigungen Viewer</h1>
-        
+
         <!-- Loading indicator -->
         <div id="loading" class="htmx-indicator">
             <p>Loading...</p>
         </div>
-        
+
         {% if error_message %}
         <div class="error-message">
             <p><strong>Error:</strong> {{ error_message }}</p>
         </div>
         {% else %}
-        
+
         <!-- Filter input -->
         <div class="filter-container">
             <label for="filter">Filter:</label>
-            <input 
-                type="text" 
-                id="filter" 
-                x-model="filter" 
-                placeholder="Search across all columns..."
+            <input type="text" id="filter" x-model="filter" placeholder="Search across all columns..."
                 class="filter-input">
         </div>
-        
+
         <!-- Table -->
         <div class="table-container">
             <table>
@@ -103,25 +101,29 @@
                             <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
                                 <td>
                                     <span x-text="row.pair.genomic.vorgangsnummer"></span>
-                                    <span class="copy-btn" @click="copyToClipboard(row.pair.genomic.vorgangsnummer)" title="Copy to clipboard">📋</span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.genomic.vorgangsnummer)"
+                                        title="Copy to clipboard">📋</span>
                                 </td>
                             </template>
                             <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
                                 <td>
                                     <span x-text="row.pair.clinical.vorgangsnummer"></span>
-                                    <span class="copy-btn" @click="copyToClipboard(row.pair.clinical.vorgangsnummer)" title="Copy to clipboard">📋</span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.clinical.vorgangsnummer)"
+                                        title="Copy to clipboard">📋</span>
                                 </td>
                             </template>
                             <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
                                 <td>
                                     <span x-text="row.pair.genomic.meldebestaetigung"></span>
-                                    <span class="copy-btn" @click="copyToClipboard(row.pair.genomic.meldebestaetigung)" title="Copy to clipboard">📋</span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.genomic.meldebestaetigung)"
+                                        title="Copy to clipboard">📋</span>
                                 </td>
                             </template>
                             <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
                                 <td>
                                     <span x-text="row.pair.clinical.meldebestaetigung"></span>
-                                    <span class="copy-btn" @click="copyToClipboard(row.pair.clinical.meldebestaetigung)" title="Copy to clipboard">📋</span>
+                                    <span class="copy-btn" @click="copyToClipboard(row.pair.clinical.meldebestaetigung)"
+                                        title="Copy to clipboard">📋</span>
                                 </td>
                             </template>
                             <td x-text="row.type.includes('genomic') ? 'genomic' : 'clinical'"></td>
@@ -157,13 +159,10 @@
                             </td>
                             <template x-if="row.type === 'genomic'">
                                 <td class="done-cell" rowspan="2">
-                                    <input 
-                                        type="checkbox" 
-                                        :checked="row.pair.is_done"
+                                    <input type="checkbox" :checked="row.pair.is_done"
                                         :hx-post="'/api/done/' + row.pair.case_id"
                                         :hx-vals="JSON.stringify({done: !row.pair.is_done})"
-                                        :hx-target="'#pair-genomic-' + row.pair.case_id"
-                                        hx-swap="outerHTML"
+                                        :hx-target="'#pair-genomic-' + row.pair.case_id" hx-swap="outerHTML"
                                         hx-indicator="#loading">
                                 </td>
                             </template>
@@ -177,14 +176,28 @@
                 </tbody>
             </table>
         </div>
-        
+
         {% endif %}
     </div>
-    
+
+
+    <footer class="site-footer">
+        <div class="container">
+            <p>
+                <em>Meldebstätigungen Viewer</em>
+                erstellt von
+                <a href="https://github.com/BeneKenobi" target="_blank" rel="noopener noreferrer">@BeneKenobi</a>
+                für das
+                <a href="https://github.com/MHH-Humangenetik" target="_blank" rel="noopener noreferrer">Institut für
+                    Humangenetik der MHH</a>
+            </p>
+        </div>
+    </footer>
+
     <script id="pairs-data" type="application/json">
         {{ pairs | tojson | safe }}
     </script>
-    
+
     <script>
         // Global copy function for onclick handlers (used by HTMX-swapped content)
         function copyToClipboard(text) {
@@ -199,7 +212,7 @@
                 fallbackCopy(text);
             }
         }
-        
+
         function fallbackCopy(text) {
             const textArea = document.createElement('textarea');
             textArea.value = text;
@@ -215,16 +228,16 @@
             }
             document.body.removeChild(textArea);
         }
-        
+
         function tableData() {
             const pairsData = JSON.parse(document.getElementById('pairs-data').textContent);
-            
+
             // Pre-calculate initial sort positions before returning the component
             const initialSortPositions = new Map();
             pairsData.forEach((pair, index) => {
                 initialSortPositions.set(pair.case_id, index);
             });
-            
+
             return {
                 pairs: pairsData,
                 filter: '',
@@ -232,11 +245,11 @@
                 sortDirection: 'asc',
                 interactedPairs: new Set(), // Track pairs that have been toggled
                 initialSortPositions: initialSortPositions, // Store initial sort position for each pair
-                
+
                 get interleavedRows() {
                     const rows = [];
                     const sorted = this.filteredAndSorted;
-                    
+
                     sorted.forEach(pair => {
                         if (pair.genomic && pair.clinical && !this.htmxManagedPairs.has(pair.case_id)) {
                             // Complete pair: add both genomic and clinical rows
@@ -250,12 +263,12 @@
                             rows.push({ type: 'clinical-only', pair: pair });
                         }
                     });
-                    
+
                     return rows;
                 },
-                
+
                 get filteredAndSorted() {
-                    let filtered = this.filter === '' 
+                    let filtered = this.filter === ''
                         ? [...this.pairs]  // Create a copy to avoid mutating original
                         : this.pairs.filter(pair => {
                             // Search across all columns
@@ -280,28 +293,28 @@
                                 ))
                             );
                         });
-                    
+
                     return filtered.sort((a, b) => {
                         // If either pair has been interacted with, use initial sort position
                         const aInteracted = this.interactedPairs.has(a.case_id);
                         const bInteracted = this.interactedPairs.has(b.case_id);
-                        
+
                         if (aInteracted || bInteracted) {
                             // Use initial positions to maintain order
                             const aPos = this.initialSortPositions.get(a.case_id) ?? 999999;
                             const bPos = this.initialSortPositions.get(b.case_id) ?? 999999;
                             return aPos - bPos;
                         }
-                        
+
                         // Neither interacted: use normal priority group sorting
                         if (a.priority_group !== b.priority_group) {
                             return a.priority_group - b.priority_group;
                         }
-                        
+
                         // Secondary sort: selected column
                         let aVal = this.getColumnValue(a, this.sortColumn);
                         let bVal = this.getColumnValue(b, this.sortColumn);
-                        
+
                         if (this.sortDirection === 'asc') {
                             return aVal > bVal ? 1 : -1;
                         } else {
@@ -309,7 +322,7 @@
                         }
                     });
                 },
-                
+
                 getColumnValue(pair, column) {
                     if (column === 'case_id') return pair.case_id || '';
                     // For other columns, use genomic record if available, otherwise clinical
@@ -317,7 +330,7 @@
                     if (!record) return '';
                     return record[column] || '';
                 },
-                
+
                 sortBy(column) {
                     if (this.sortColumn === column) {
                         this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
@@ -326,9 +339,9 @@
                         this.sortDirection = 'asc';
                     }
                 },
-                
+
                 htmxManagedPairs: new Set(),
-                
+
                 updatePairDoneStatus(caseId, isDone) {
                     // Mark this pair as managed by HTMX
                     this.htmxManagedPairs.add(caseId);
@@ -342,15 +355,15 @@
                         pair.priority_group = isDone ? 3 : 1;
                     }
                 },
-                
+
                 isHtmxManaged(caseId) {
                     return this.htmxManagedPairs.has(caseId);
                 }
             }
         }
-        
+
         // Listen for HTMX beforeSwap event to remove Alpine.js rendered rows
-        document.body.addEventListener('htmx:beforeSwap', function(event) {
+        document.body.addEventListener('htmx:beforeSwap', function (event) {
             // Check if this was a done status update
             if (event.detail.target && event.detail.target.id && event.detail.target.id.startsWith('pair-genomic-')) {
                 const caseId = event.detail.target.id.replace('pair-genomic-', '');
@@ -364,9 +377,9 @@
                 });
             }
         });
-        
+
         // Listen for HTMX afterSwap event to update Alpine.js data
-        document.body.addEventListener('htmx:afterSwap', function(event) {
+        document.body.addEventListener('htmx:afterSwap', function (event) {
             // Check if this was a done status update
             if (event.detail.target && event.detail.target.id && event.detail.target.id.startsWith('pair-genomic-')) {
                 const caseId = event.detail.target.id.replace('pair-genomic-', '');
@@ -384,4 +397,5 @@
         });
     </script>
 </body>
+
 </html>
