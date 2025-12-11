@@ -75,3 +75,29 @@ The web interface provides:
 #### Database Path
 
 By default, the web server looks for the database at `./data/meldebestaetigungen.duckdb`. You can change this by setting the `DB_PATH` environment variable in your `.env` file.
+
+## Multi-User Synchronization
+
+The system supports real-time multi-user collaboration with WebSocket-based synchronization. Multiple users can work simultaneously on different records with automatic conflict resolution and real-time updates.
+
+### Features
+
+- **Real-time Updates**: Changes are instantly synchronized across all connected users
+- **Optimistic Locking**: Prevents conflicts when multiple users edit the same record
+- **Automatic Reconnection**: Handles network interruptions gracefully
+- **Audit Trail**: Complete logging of all multi-user interactions
+- **Performance Optimized**: Efficient batching and connection pooling
+
+### Quick Start
+
+For development:
+```bash
+# Start with multi-user sync enabled (default)
+uv run web
+```
+
+## Requirements
+
+- Python 3.11+
+- Modern web browser with WebSocket support
+- Network access to gPAS service endpoint

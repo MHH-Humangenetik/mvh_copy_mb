@@ -13,6 +13,7 @@ from hypothesis import assume
 from mvh_copy_mb.sync.service import SyncServiceImpl
 from mvh_copy_mb.sync.models import SyncEvent, EventType, ClientConnection
 from mvh_copy_mb.sync.interfaces import EventBroker, LockManager, ConnectionManager
+from mvh_copy_mb.sync.exceptions import VersionConflictError
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
 
@@ -1034,7 +1035,7 @@ class TestConcurrentEditPrevention:
                     # If we reach here, the concurrent edit was not properly rejected
                     assert False, "Concurrent edit should have been rejected due to version conflict"
                     
-                except ValueError as e:
+                except VersionConflictError as e:
                     # Property verification: Concurrent edit should be rejected
                     assert "Version conflict" in str(e) or "conflict" in str(e).lower()
                     
@@ -1161,7 +1162,7 @@ class TestConcurrentEditPrevention:
                             version=2
                         )
                         successful_edits.append(conn.user_id)
-                    except ValueError:
+                    except VersionConflictError:
                         # Expected for concurrent editors
                         failed_edits.append(conn.user_id)
                 
@@ -1661,7 +1662,7 @@ class TestConflictResolutionLogging:
                     # Should not reach here due to version conflict
                     assert False, "Expected version conflict was not raised"
                     
-                except ValueError as e:
+                except VersionConflictError as e:
                     # Expected conflict
                     assert "Version conflict" in str(e)
                 

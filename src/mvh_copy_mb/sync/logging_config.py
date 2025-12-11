@@ -156,11 +156,15 @@ def log_conflict_event(logger: logging.Logger, record_id: str,
         **kwargs
     }
     
+    # Create detailed message including user information
+    users_str = ','.join(users) if users else 'unknown'
+    message = f"Conflict resolved: {resolution} for record {record_id} [users={users_str}, record_id={record_id}, event_type=conflict_resolution]"
+    
     # Log at appropriate level based on conflict severity
     if conflict_type in ['version_conflict', 'concurrent_edit']:
-        logger.warning(f"Conflict resolved: {resolution} for record {record_id}", extra=extra)
+        logger.warning(message, extra=extra)
     else:
-        logger.error(f"Critical conflict resolved: {resolution} for record {record_id}", extra=extra)
+        logger.error(f"Critical conflict resolved: {resolution} for record {record_id} [users={users_str}]", extra=extra)
 
 
 def log_performance_metrics(logger: logging.Logger, operation: str, 

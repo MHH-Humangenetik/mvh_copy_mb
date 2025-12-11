@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import time
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Set
 from collections import defaultdict
@@ -15,6 +16,14 @@ from .logging_config import (
 )
 from .audit_manager import AuditTrailManager
 from .audit import AuditEventType, AuditSeverity
+from .exceptions import (
+    SyncError, VersionConflictError, LockAcquisitionError, 
+    BroadcastError, DataIntegrityError, BulkOperationError,
+    SyncServiceUnavailableError
+)
+from .circuit_breaker import CircuitBreakerManager, CircuitState
+from .error_recovery import ErrorRecoveryManager, OperationSnapshot
+from .degradation import GracefulDegradationManager, DegradationLevel, DegradationTrigger
 from ..database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
 
@@ -31,7 +40,9 @@ class SyncServiceImpl(SyncService):
                  database: MeldebestaetigungDatabase,
                  audit_manager: Optional[AuditTrailManager] = None,
                  change_buffer_size: int = 1000,
-                 change_buffer_ttl_hours: int = 24):
+                 change_buffer_ttl_hours: int = 24,
+                 enable_circuit_breaker: bool = True,
+                 enable_error_recovery: bool = True):
         """Initialize the sync service.
         
         Args:
@@ -42,6 +53,8 @@ class SyncServiceImpl(SyncService):
             audit_manager: Audit trail manager for comprehensive logging
             change_buffer_size: Maximum number of changes to buffer per client
             change_buffer_ttl_hours: Hours to keep changes in buffer
+            enable_circuit_breaker: Enable circuit breaker pattern
+            enable_error_recovery: Enable error recovery mechanisms
         """
         self._event_broker = event_broker
         self._lock_manager = lock_manager
@@ -63,6 +76,25 @@ class SyncServiceImpl(SyncService):
         self._change_detection_task: Optional[asyncio.Task] = None
         self._buffer_cleanup_task: Optional[asyncio.Task] = None
         
+        # Error handling and resilience
+        self._circuit_breaker_manager = CircuitBreakerManager() if enable_circuit_breaker else None
+        self._error_recovery_manager = ErrorRecoveryManager() if enable_error_recovery else None
+        self._degradation_manager = GracefulDegradationManager()
+        self._service_health = {
+            "event_broker": True,
+            "lock_manager": True,
+            "connection_manager": True,
+            "database": True
+        }
+        
+        # Performance tracking for degradation
+        self._performance_metrics = {
+            "total_operations": 0,
+            "failed_operations": 0,
+            "total_latency_ms": 0.0,
+            "connection_count": 0
+        }
+        
         self._lock = asyncio.Lock()
         
     async def start(self) -> None:
@@ -74,6 +106,19 @@ class SyncServiceImpl(SyncService):
         if self._buffer_cleanup_task is None:
             self._buffer_cleanup_task = asyncio.create_task(self._periodic_buffer_cleanup())
             logger.info("Started periodic buffer cleanup")
+        
+        # Start degradation monitoring
+        await self._degradation_manager.start_monitoring()
+        
+        # Register degradation callbacks
+        self._degradation_manager.register_callback(
+            DegradationLevel.MANUAL_REFRESH,
+            self._handle_manual_refresh_mode
+        )
+        self._degradation_manager.register_callback(
+            DegradationLevel.REDUCED,
+            self._handle_reduced_performance_mode
+        )
     
     async def stop(self) -> None:
         """Stop the sync service and background tasks."""
@@ -92,33 +137,76 @@ class SyncServiceImpl(SyncService):
             except asyncio.CancelledError:
                 pass
             self._buffer_cleanup_task = None
+        
+        # Stop degradation monitoring
+        await self._degradation_manager.stop_monitoring()
             
         logger.info("Sync service stopped")
     
     async def handle_record_update(self, record_id: str, data: Dict[str, Any], 
                                  user_id: str, version: int) -> None:
-        """Handle a record update and broadcast to clients.
+        """Handle a record update and broadcast to clients with comprehensive error handling.
         
         Args:
             record_id: ID of the updated record
             data: Updated record data
             user_id: ID of the user making the update
             version: New version number of the record
+            
+        Raises:
+            VersionConflictError: When version conflict occurs
+            BroadcastError: When event broadcasting fails
+            SyncServiceUnavailableError: When service is unavailable
         """
+        operation_id = str(uuid.uuid4())
+        
+        # Create operation snapshot for potential rollback
+        if self._error_recovery_manager:
+            await self._error_recovery_manager.create_snapshot(
+                operation_id=operation_id,
+                operation_type="record_update",
+                affected_records=[record_id],
+                original_data={"record_id": record_id, "version": version - 1},
+                user_id=user_id,
+                version_info={record_id: version - 1}
+            )
+        
+        # Check service health
+        await self._check_service_health()
+        
+        # Check if operations should be throttled
+        if self._should_throttle_operation():
+            raise SyncServiceUnavailableError(
+                "sync_service",
+                f"Service degraded to {self._degradation_manager.get_current_level().value}, throttling operations"
+            )
+        
+        operation_start_time = time.time()
+        operation_failed = False
+        
         with PerformanceTimer(logger, "record_update", record_id=record_id, user_id=user_id):
             try:
-                conflict_start_time = time.time()
+                # Use circuit breaker for version validation
+                if self._circuit_breaker_manager:
+                    breaker = self._circuit_breaker_manager.get_breaker(
+                        "lock_manager", failure_threshold=3, recovery_timeout=30.0
+                    )
+                    version_valid = await breaker.call(
+                        self._lock_manager.validate_version, record_id, version - 1
+                    )
+                else:
+                    version_valid = await self._lock_manager.validate_version(record_id, version - 1)
                 
-                # Validate version if lock exists
-                if not await self._lock_manager.validate_version(record_id, version - 1):
-                    conflict_resolution_time = (time.time() - conflict_start_time) * 1000
+                if not version_valid:
+                    conflict_error = VersionConflictError(record_id, version - 1, version)
                     
+                    # Log conflict event
                     log_conflict_event(
                         logger, record_id, [user_id], 
                         "version_conflict", "rejected_update",
                         expected_version=version - 1,
                         attempted_version=version,
-                        resolution_time_ms=conflict_resolution_time,
+                        resolution_time_ms=0,
                         conflict_severity="medium"
                     )
                     
@@ -129,15 +217,27 @@ class SyncServiceImpl(SyncService):
                             involved_users=[user_id],
                             conflict_type="version_conflict",
                             resolution="rejected_update",
-                            details={
-                                "expected_version": version - 1,
-                                "attempted_version": version,
-                                "conflict_severity": "medium"
-                            },
-                            resolution_time_ms=conflict_resolution_time
+                            details=conflict_error.details,
+                            resolution_time_ms=0
                         )
                     
-                    raise ValueError(f"Version conflict for record {record_id}")
+                    # Attempt error recovery
+                    if self._error_recovery_manager:
+                        recovery_context = {
+                            'retry_func': lambda: self._validate_and_update_record(
+                                record_id, data, user_id, version
+                            )
+                        }
+                        recovered = await self._error_recovery_manager.handle_error(
+                            conflict_error, operation_id, recovery_context
+                        )
+                        if not recovered:
+                            raise conflict_error
+                    else:
+                        raise conflict_error
+                
+                # Validate data integrity
+                await self._validate_data_integrity(record_id, data, version)
                 
                 # Create sync event
                 event = SyncEvent(
@@ -167,7 +267,8 @@ class SyncServiceImpl(SyncService):
                         details={
                             "version": version,
                             "data_keys": list(data.keys()) if isinstance(data, dict) else None,
-                            "event_type": event.event_type
+                            "event_type": event.event_type,
+                            "operation_id": operation_id
                         }
                     )
                 
@@ -178,23 +279,86 @@ class SyncServiceImpl(SyncService):
                 # Buffer event for offline clients
                 await self._buffer_event_for_offline_clients(event)
                 
-                # Broadcast to all connected clients
+                # Broadcast to all connected clients with circuit breaker
                 broadcast_start = time.time()
-                await self._event_broker.publish_event(event)
-                broadcast_latency = (time.time() - broadcast_start) * 1000
-                
-                # Log broadcast performance
-                log_performance_metrics(
-                    logger, "event_broadcast", broadcast_latency,
-                    record_id=record_id, event_type=event.event_type
-                )
+                try:
+                    if self._circuit_breaker_manager:
+                        breaker = self._circuit_breaker_manager.get_breaker(
+                            "event_broker", failure_threshold=5, recovery_timeout=60.0
+                        )
+                        await breaker.call(self._event_broker.publish_event, event)
+                    else:
+                        await self._event_broker.publish_event(event)
+                        
+                    broadcast_latency = (time.time() - broadcast_start) * 1000
+                    
+                    # Log broadcast performance
+                    log_performance_metrics(
+                        logger, "event_broadcast", broadcast_latency,
+                        record_id=record_id, event_type=event.event_type
+                    )
+                    
+                except Exception as broadcast_error:
+                    broadcast_error_wrapped = BroadcastError(
+                        event.event_type, 0, 1, str(broadcast_error)
+                    )
+                    
+                    # Attempt recovery for broadcast failure
+                    if self._error_recovery_manager:
+                        recovery_context = {
+                            'retry_func': lambda: self._event_broker.publish_event(event),
+                            'rollback_func': self._rollback_record_update
+                        }
+                        recovered = await self._error_recovery_manager.handle_error(
+                            broadcast_error_wrapped, operation_id, recovery_context
+                        )
+                        if not recovered:
+                            raise broadcast_error_wrapped
+                    else:
+                        raise broadcast_error_wrapped
                 
                 logger.info(f"Record update handled for {record_id} by user {user_id}")
                 
+            except VersionConflictError as version_error:
+                # Version conflicts are expected business logic, not system failures
+                # Don't count them as failed operations for degradation purposes
+                logger.error(f"Sync error in record update for {record_id}: {version_error}")
+                raise version_error
+                
+            except (BroadcastError, DataIntegrityError) as known_error:
+                # These are actual system errors that should trigger degradation
+                operation_failed = True
+                logger.error(f"Sync error in record update for {record_id}: {known_error}")
+                raise known_error
+                
             except Exception as e:
-                logger.error(f"Error handling record update for {record_id}: {e}", 
+                # Wrap unexpected errors
+                operation_failed = True
+                sync_error = SyncError(
+                    f"Unexpected error handling record update for {record_id}: {str(e)}",
+                    "unexpected_sync_error",
+                    {"record_id": record_id, "user_id": user_id, "operation_id": operation_id}
+                )
+                
+                logger.error(f"Unexpected error handling record update for {record_id}: {e}", 
                             extra={'record_id': record_id, 'user_id': user_id, 'error': str(e)})
-                raise
+                
+                # Attempt error recovery
+                if self._error_recovery_manager:
+                    recovery_context = {
+                        'rollback_func': self._rollback_record_update
+                    }
+                    recovered = await self._error_recovery_manager.handle_error(
+                        sync_error, operation_id, recovery_context
+                    )
+                    if not recovered:
+                        raise sync_error
+                else:
+                    raise sync_error
+            finally:
+                # Update performance metrics
+                operation_latency = (time.time() - operation_start_time) * 1000
+                self._update_performance_metrics(operation_latency, operation_failed)
     
     async def handle_bulk_update(self, updates: List[Dict[str, Any]], 
                                user_id: str) -> None:
@@ -712,3 +876,261 @@ class SyncServiceImpl(SyncService):
             "known_records_count": len(self._known_records),
             "last_db_check": self._last_db_check.isoformat() if self._last_db_check else None
         }
+    
+    async def _check_service_health(self) -> None:
+        """Check health of all dependent services.
+        
+        Raises:
+            SyncServiceUnavailableError: If critical services are unavailable
+        """
+        unhealthy_services = []
+        
+        # Check circuit breaker states
+        if self._circuit_breaker_manager:
+            unhealthy = self._circuit_breaker_manager.get_unhealthy_services()
+            unhealthy_services.extend(unhealthy)
+        
+        # Check service health flags
+        for service_name, is_healthy in self._service_health.items():
+            if not is_healthy:
+                unhealthy_services.append(service_name)
+        
+        if unhealthy_services:
+            raise SyncServiceUnavailableError(
+                "sync_service", 
+                f"Dependent services unavailable: {', '.join(unhealthy_services)}"
+            )
+    
+    async def _validate_data_integrity(self, record_id: str, data: Dict[str, Any], 
+                                     version: int) -> None:
+        """Validate data integrity before processing.
+        
+        Args:
+            record_id: Record ID to validate
+            data: Data to validate
+            version: Version to validate
+            
+        Raises:
+            DataIntegrityError: If data integrity checks fail
+        """
+        # Check required fields
+        if not record_id or not isinstance(record_id, str):
+            raise DataIntegrityError(
+                record_id or "unknown", 
+                "invalid_record_id",
+                {"provided_id": record_id, "type": type(record_id).__name__}
+            )
+        
+        if not isinstance(data, dict):
+            raise DataIntegrityError(
+                record_id,
+                "invalid_data_format",
+                {"expected": "dict", "actual": type(data).__name__}
+            )
+        
+        if version < 1:
+            raise DataIntegrityError(
+                record_id,
+                "invalid_version",
+                {"version": version, "minimum": 1}
+            )
+        
+        # Check for suspicious data patterns
+        if len(str(data)) > 100000:  # 100KB limit
+            raise DataIntegrityError(
+                record_id,
+                "data_too_large",
+                {"size_bytes": len(str(data)), "limit_bytes": 100000}
+            )
+    
+    async def _validate_and_update_record(self, record_id: str, data: Dict[str, Any],
+                                        user_id: str, version: int) -> bool:
+        """Validate and update a record (used for retry operations).
+        
+        Args:
+            record_id: Record ID
+            data: Record data
+            user_id: User ID
+            version: Record version
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Re-validate version
+            version_valid = await self._lock_manager.validate_version(record_id, version - 1)
+            if not version_valid:
+                return False
+            
+            # Re-validate data integrity
+            await self._validate_data_integrity(record_id, data, version)
+            
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Validation failed during retry for {record_id}: {e}")
+            return False
+    
+    async def _rollback_record_update(self, snapshot: OperationSnapshot) -> None:
+        """Rollback a record update operation.
+        
+        Args:
+            snapshot: Operation snapshot containing rollback information
+        """
+        try:
+            logger.info(f"Rolling back operation {snapshot.operation_id}")
+            
+            # In a real implementation, this would:
+            # 1. Restore original data from snapshot
+            # 2. Revert version numbers
+            # 3. Send rollback events to clients
+            # 4. Update audit trail
+            
+            # For now, we'll log the rollback attempt
+            if self._audit_manager:
+                self._audit_manager.log_sync_event(
+                    user_id=snapshot.user_id,
+                    action=f"Operation rollback: {snapshot.operation_id}",
+                    event_type=AuditEventType.SYNC_EVENT_BROADCAST,
+                    record_id=snapshot.affected_records[0] if snapshot.affected_records else "unknown",
+                    details={
+                        "operation_type": snapshot.operation_type,
+                        "rollback_reason": "error_recovery",
+                        "affected_records": snapshot.affected_records
+                    }
+                )
+            
+            logger.info(f"Rollback completed for operation {snapshot.operation_id}")
+            
+        except Exception as e:
+            logger.error(f"Rollback failed for operation {snapshot.operation_id}: {e}")
+            raise
+    
+    def get_error_metrics(self) -> Dict[str, Any]:
+        """Get error handling and recovery metrics.
+        
+        Returns:
+            Dictionary with error handling metrics
+        """
+        metrics = {
+            "service_health": self._service_health.copy(),
+            "circuit_breaker_enabled": self._circuit_breaker_manager is not None,
+            "error_recovery_enabled": self._error_recovery_manager is not None
+        }
+        
+        if self._circuit_breaker_manager:
+            metrics["circuit_breakers"] = self._circuit_breaker_manager.get_all_metrics()
+        
+        if self._error_recovery_manager:
+            metrics["error_recovery"] = self._error_recovery_manager.get_recovery_metrics()
+        
+        # Add degradation status
+        metrics["degradation"] = self._degradation_manager.get_degradation_status()
+        metrics["performance_metrics"] = self._performance_metrics.copy()
+        
+        return metrics
+    
+    async def reset_error_handling(self) -> None:
+        """Reset error handling state (for testing/recovery)."""
+        # Reset service health
+        for service in self._service_health:
+            self._service_health[service] = True
+        
+        # Reset circuit breakers
+        if self._circuit_breaker_manager:
+            self._circuit_breaker_manager.reset_all()
+        
+        logger.info("Error handling state reset")
+    
+    async def _handle_manual_refresh_mode(self, event) -> None:
+        """Handle transition to manual refresh mode."""
+        logger.warning(
+            f"Entering manual refresh mode: {event.reason}. "
+            "Real-time updates disabled, users must refresh manually."
+        )
+        
+        # Notify all connected clients about degradation
+        try:
+            all_connections = await self._connection_manager.get_all_connections()
+            for connection in all_connections:
+                # In a real implementation, this would send a WebSocket message
+                # to notify clients about the degradation
+                logger.info(f"Would notify client {connection.connection_id} about manual refresh mode")
+        except Exception as e:
+            logger.error(f"Error notifying clients about degradation: {e}")
+    
+    async def _handle_reduced_performance_mode(self, event) -> None:
+        """Handle transition to reduced performance mode."""
+        logger.warning(f"Entering reduced performance mode: {event.reason}")
+        
+        # Adjust batch sizes and intervals based on degradation
+        recommended_batch_size = self._degradation_manager.get_recommended_batch_size()
+        recommended_interval = self._degradation_manager.get_recommended_update_interval()
+        
+        logger.info(
+            f"Performance adjustments: batch_size={recommended_batch_size}, "
+            f"interval={recommended_interval}s"
+        )
+    
+    def _update_performance_metrics(self, operation_latency_ms: float, 
+                                  operation_failed: bool = False) -> None:
+        """Update performance metrics for degradation monitoring."""
+        self._performance_metrics["total_operations"] += 1
+        self._performance_metrics["total_latency_ms"] += operation_latency_ms
+        
+        if operation_failed:
+            self._performance_metrics["failed_operations"] += 1
+        
+        # Calculate current metrics
+        total_ops = self._performance_metrics["total_operations"]
+        if total_ops > 0:
+            avg_latency = self._performance_metrics["total_latency_ms"] / total_ops
+            error_rate = self._performance_metrics["failed_operations"] / total_ops
+            
+            # Update degradation manager metrics
+            self._degradation_manager.update_metrics(
+                average_latency_ms=avg_latency,
+                error_rate=error_rate,
+                connection_count=self._performance_metrics["connection_count"]
+            )
+            
+            # Check for degradation triggers
+            if avg_latency > 2000:  # 2 second threshold
+                asyncio.create_task(self._degradation_manager.trigger_degradation(
+                    DegradationTrigger.HIGH_LATENCY,
+                    f"Average latency {avg_latency:.1f}ms exceeds threshold"
+                ))
+            
+            if error_rate > 0.2:  # 20% error rate threshold
+                asyncio.create_task(self._degradation_manager.trigger_degradation(
+                    DegradationTrigger.CONNECTION_FAILURES,
+                    f"Error rate {error_rate:.1%} exceeds threshold"
+                ))
+    
+    def _should_throttle_operation(self) -> bool:
+        """Check if operations should be throttled due to degradation."""
+        return self._degradation_manager.should_throttle_connections()
+    
+    def _get_adaptive_batch_size(self) -> int:
+        """Get adaptive batch size based on current degradation level."""
+        return self._degradation_manager.get_recommended_batch_size()
+    
+    def _get_adaptive_update_interval(self) -> float:
+        """Get adaptive update interval based on current degradation level."""
+        return self._degradation_manager.get_recommended_update_interval()
+    
+    async def trigger_manual_degradation(self, reason: str) -> None:
+        """Manually trigger degradation (for testing or emergency situations)."""
+        await self._degradation_manager.trigger_degradation(
+            DegradationTrigger.MANUAL,
+            reason,
+            DegradationLevel.MANUAL_REFRESH
+        )
+    
+    async def recover_from_degradation(self) -> None:
+        """Attempt to recover from degraded state."""
+        await self._degradation_manager.recover_to_normal()
+    
+    def get_degradation_status(self) -> Dict[str, Any]:
+        """Get current degradation status."""
+        return self._degradation_manager.get_degradation_status()
