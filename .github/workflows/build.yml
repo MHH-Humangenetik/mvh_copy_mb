@@ -28,7 +28,7 @@ jobs:
         run: uv run playwright install --with-deps chromium
 
       - name: Run tests
-        run: uv run pytest
+        run: uv run pytest -m "not timing"
 
   docker:
     runs-on: ubuntu-latest

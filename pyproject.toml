@@ -54,6 +54,7 @@ python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
     "browser: marks tests as browser-based tests using Playwright (deselect with '-m \"not browser\"')",
+    "timing: marks tests that depend on performance timing (deselect with '-m \"not timing\"')",
 ]
 
 [tool.uv]
