@@ -13,7 +13,7 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from ..sync.models import ClientConnection, ConnectionHeartbeat, ErrorMessage
 from ..sync.interfaces import ConnectionManager
 from ..sync.config import SyncConfig
-from ..sync.logging_config import get_logger
+from ..sync.logging_config import get_logger, log_connection_event
 from .reconnection import ReconnectionManager, ConnectionHealthMonitor
 
 
@@ -140,6 +140,14 @@ class WebSocketManager(ConnectionManager):
         # Update metrics
         self._connection_count += 1
         self._total_connections += 1
+        
+        # Log connection event
+        log_connection_event(
+            self.logger, connection_id, user_id, "connected",
+            f"WebSocket connection established",
+            total_connections=self._connection_count,
+            user_connection_count=len(self._user_connections.get(user_id, set()))
+        )
         
         self.logger.info(
             f"Added connection {connection_id} for user {user_id}. "
@@ -328,6 +336,14 @@ class WebSocketManager(ConnectionManager):
         # Update metrics
         self._connection_count -= 1
         self._disconnection_count += 1
+        
+        # Log disconnection event
+        log_connection_event(
+            self.logger, connection_id, user_id, "disconnected",
+            f"WebSocket connection cleaned up",
+            remaining_connections=self._connection_count,
+            total_disconnections=self._disconnection_count
+        )
         
         self.logger.info(
             f"Cleaned up connection {connection_id} for user {user_id}. "

@@ -10,9 +10,10 @@ from websockets.exceptions import ConnectionClosed
 
 from ..sync.interfaces import EventBroker
 from ..sync.models import SyncEvent, ClientConnection, WebSocketMessage
+from ..sync.logging_config import get_logger, log_sync_event
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EventBrokerImpl(EventBroker):
@@ -48,6 +49,14 @@ class EventBrokerImpl(EventBroker):
         """Publish a synchronization event to all subscribed clients."""
         # Update metrics
         self._metrics["events_published"] += 1
+        
+        # Log the event publication
+        log_sync_event(
+            logger, event.event_type, event.record_id, event.user_id,
+            f"Event published: {event.event_type}",
+            version=event.version,
+            target_clients=len(self._connections)
+        )
         
         async with self._lock:
             # Add to buffer for batching
@@ -87,6 +96,15 @@ class EventBrokerImpl(EventBroker):
             
         # Update metrics
         self._metrics["events_published"] += len(events)
+        
+        # Log bulk event publication
+        log_sync_event(
+            logger, "bulk_publish", f"bulk_{len(events)}_events", 
+            events[0].user_id if events else "system",
+            f"Bulk events published: {len(events)} events",
+            event_count=len(events),
+            target_clients=len(self._connections)
+        )
         
         async with self._lock:
             # For very large bulk operations, process in chunks to avoid overwhelming clients

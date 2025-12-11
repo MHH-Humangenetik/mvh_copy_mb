@@ -1217,3 +1217,363 @@ class TestConcurrentEditPrevention:
         
         # Run the async test
         asyncio.run(run_test())
+
+class TestSynchronizationEventLogging:
+    """Property-based tests for synchronization event logging."""
+
+    @given(st.lists(record_update_strategy(), min_size=1, max_size=10))
+    def test_synchronization_event_logging_property(self, updates: List[Dict[str, Any]]):
+        """Test that all synchronization events are logged with timestamps and user identification.
+        
+        **Feature: multi-user-sync, Property 19: Synchronization event logging**
+        **Validates: Requirements 5.1**
+        """
+        async def run_test():
+            # Set up logging capture with custom formatter
+            import logging
+            from io import StringIO
+            from mvh_copy_mb.sync.logging_config import SyncEventFormatter
+            
+            log_capture = StringIO()
+            handler = logging.StreamHandler(log_capture)
+            handler.setLevel(logging.INFO)
+            
+            # Use the sync event formatter
+            formatter = SyncEventFormatter(
+                fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            handler.setFormatter(formatter)
+            
+            # Create sync service with mocks
+            event_broker = MockEventBroker()
+            lock_manager = MockLockManager()
+            connection_manager = MockConnectionManager()
+            database = MockDatabase()
+            
+            service = SyncServiceImpl(
+                event_broker=event_broker,
+                lock_manager=lock_manager,
+                connection_manager=connection_manager,
+                database=database
+            )
+            
+            # Add handler to sync logger
+            sync_logger = logging.getLogger("mvh_copy_mb.sync")
+            sync_logger.addHandler(handler)
+            sync_logger.setLevel(logging.INFO)
+            
+            await service.start()
+            
+            try:
+                # Property: For any synchronization event, the system should log 
+                # all data changes with timestamps and user identification
+                
+                logged_events = []
+                
+                # Process each update and verify logging
+                for update in updates:
+                    # Clear log capture
+                    log_capture.seek(0)
+                    log_capture.truncate(0)
+                    
+                    # Handle record update
+                    await service.handle_record_update(
+                        record_id=update['record_id'],
+                        data=update['data'],
+                        user_id=update['user_id'],
+                        version=update['version']
+                    )
+                    
+                    # Get logged content
+                    log_content = log_capture.getvalue()
+                    
+                    # Property verification: Event should be logged
+                    assert log_content, f"No log entry for update {update['record_id']}"
+                    
+                    # Verify log contains required information
+                    assert update['record_id'] in log_content, "Record ID should be in log"
+                    assert update['user_id'] in log_content, "User ID should be in log"
+                    assert "record_id=" in log_content, "Structured record_id field should be present"
+                    assert "user_id=" in log_content, "Structured user_id field should be present"
+                    assert "event_type=" in log_content, "Event type should be logged"
+                    
+                    # Verify timestamp is present (ISO format check)
+                    import re
+                    timestamp_pattern = r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}'
+                    assert re.search(timestamp_pattern, log_content), "Timestamp should be in log"
+                    
+                    logged_events.append({
+                        'record_id': update['record_id'],
+                        'user_id': update['user_id'],
+                        'log_content': log_content
+                    })
+                
+                # Property: All events should be logged
+                assert len(logged_events) == len(updates), "All updates should be logged"
+                
+                # Property: Each log entry should be unique and identifiable
+                log_contents = [event['log_content'] for event in logged_events]
+                for i, content in enumerate(log_contents):
+                    # Each log should contain the specific record and user
+                    expected_record = updates[i]['record_id']
+                    expected_user = updates[i]['user_id']
+                    
+                    assert expected_record in content, f"Log {i} should contain record {expected_record}"
+                    assert expected_user in content, f"Log {i} should contain user {expected_user}"
+                
+                # Test bulk update logging
+                if len(updates) > 1:
+                    log_capture.seek(0)
+                    log_capture.truncate(0)
+                    
+                    # Perform bulk update
+                    await service.handle_bulk_update(updates, "bulk_user")
+                    
+                    bulk_log_content = log_capture.getvalue()
+                    
+                    # Property: Bulk operations should be logged
+                    assert bulk_log_content, "Bulk update should be logged"
+                    assert "bulk_user" in bulk_log_content, "Bulk user should be in log"
+                    assert "bulk_update" in bulk_log_content, "Bulk update event type should be logged"
+                    assert str(len(updates)) in bulk_log_content, "Record count should be logged"
+                
+            finally:
+                # Clean up
+                sync_logger.removeHandler(handler)
+                await service.stop()
+        
+        # Run the async test
+        asyncio.run(run_test())
+
+    @given(st.lists(client_connection_strategy(), min_size=1, max_size=5))
+    def test_connection_event_logging_property(self, connections: List[ClientConnection]):
+        """Test that connection events are logged with diagnostic information.
+        
+        **Feature: multi-user-sync, Property 19: Synchronization event logging**
+        **Validates: Requirements 5.1**
+        """
+        async def run_test():
+            # Set up logging capture with custom formatter
+            import logging
+            from io import StringIO
+            from mvh_copy_mb.sync.logging_config import SyncEventFormatter
+            
+            log_capture = StringIO()
+            handler = logging.StreamHandler(log_capture)
+            handler.setLevel(logging.INFO)
+            
+            # Use the sync event formatter
+            formatter = SyncEventFormatter(
+                fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            handler.setFormatter(formatter)
+            
+            # Create WebSocket manager
+            from mvh_copy_mb.sync.config import SyncConfig
+            from mvh_copy_mb.websocket.manager import WebSocketManager
+            
+            config = SyncConfig()
+            manager = WebSocketManager(config)
+            
+            # Add handler to WebSocket logger
+            ws_logger = logging.getLogger("mvh_copy_mb.websocket.manager")
+            ws_logger.addHandler(handler)
+            ws_logger.setLevel(logging.INFO)
+            
+            await manager.start()
+            
+            try:
+                # Property: Connection events should be logged with diagnostic information
+                
+                # Add unique connections and verify logging
+                unique_connections = []
+                seen_ids = set()
+                
+                for conn in connections:
+                    if conn.connection_id not in seen_ids:
+                        # Clear log capture
+                        log_capture.seek(0)
+                        log_capture.truncate(0)
+                        
+                        # Add connection
+                        await manager.add_connection(conn)
+                        unique_connections.append(conn)
+                        seen_ids.add(conn.connection_id)
+                        
+                        # Get logged content
+                        log_content = log_capture.getvalue()
+                        
+                        # Property verification: Connection should be logged
+                        assert log_content, f"No log entry for connection {conn.connection_id}"
+                        
+                        # Verify log contains required information
+                        assert conn.connection_id in log_content, "Connection ID should be in log"
+                        assert conn.user_id in log_content, "User ID should be in log"
+                        assert "connection_id=" in log_content, "Structured connection_id field should be present"
+                        assert "user_id=" in log_content, "Structured user_id field should be present"
+                        assert "event_type=connection_connected" in log_content, "Connection event type should be logged"
+                        
+                        # Verify diagnostic information
+                        assert "total_connections=" in log_content, "Total connections count should be logged"
+                
+                # Test disconnection logging
+                for conn in unique_connections[:2]:  # Test first 2 connections
+                    log_capture.seek(0)
+                    log_capture.truncate(0)
+                    
+                    # Remove connection
+                    await manager.remove_connection(conn.connection_id)
+                    
+                    # Get logged content
+                    disconnect_log = log_capture.getvalue()
+                    
+                    # Property: Disconnection should be logged
+                    assert disconnect_log, f"No log entry for disconnection {conn.connection_id}"
+                    assert conn.connection_id in disconnect_log, "Connection ID should be in disconnect log"
+                    assert "event_type=connection_disconnected" in disconnect_log, "Disconnect event type should be logged"
+                    assert "remaining_connections=" in disconnect_log, "Remaining connections should be logged"
+                
+            finally:
+                # Clean up
+                ws_logger.removeHandler(handler)
+                await manager.stop()
+        
+        # Run the async test
+        asyncio.run(run_test())
+
+    @given(st.text(min_size=1, max_size=50, alphabet=st.characters(whitelist_categories=('Lu', 'Ll', 'Nd'))),
+           st.lists(st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=('Lu', 'Ll', 'Nd'))), 
+                   min_size=2, max_size=5))
+    def test_structured_logging_format_property(self, record_id: str, user_ids: List[str]):
+        """Test that all log entries follow structured format with consistent fields.
+        
+        **Feature: multi-user-sync, Property 19: Synchronization event logging**
+        **Validates: Requirements 5.1**
+        """
+        async def run_test():
+            # Set up logging capture with custom formatter
+            import logging
+            from io import StringIO
+            from mvh_copy_mb.sync.logging_config import SyncEventFormatter
+            
+            log_capture = StringIO()
+            handler = logging.StreamHandler(log_capture)
+            handler.setLevel(logging.INFO)
+            
+            # Use the sync event formatter
+            formatter = SyncEventFormatter(
+                fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            )
+            handler.setFormatter(formatter)
+            
+            # Create sync service
+            event_broker = MockEventBroker()
+            lock_manager = MockLockManager()
+            connection_manager = MockConnectionManager()
+            database = MockDatabase()
+            
+            service = SyncServiceImpl(
+                event_broker=event_broker,
+                lock_manager=lock_manager,
+                connection_manager=connection_manager,
+                database=database
+            )
+            
+            # Add handler to sync logger
+            sync_logger = logging.getLogger("mvh_copy_mb.sync")
+            sync_logger.addHandler(handler)
+            sync_logger.setLevel(logging.INFO)
+            
+            await service.start()
+            
+            try:
+                # Property: All log entries should follow structured format
+                
+                all_log_entries = []
+                
+                # Generate various types of events
+                for i, user_id in enumerate(user_ids):
+                    log_capture.seek(0)
+                    log_capture.truncate(0)
+                    
+                    # Create different types of events
+                    test_data = {
+                        'action': f'test_action_{i}',
+                        'value': i * 10
+                    }
+                    
+                    await service.handle_record_update(
+                        record_id=f"{record_id}_{i}",
+                        data=test_data,
+                        user_id=user_id,
+                        version=i + 1
+                    )
+                    
+                    log_content = log_capture.getvalue()
+                    all_log_entries.append(log_content)
+                
+                # Property verification: All entries should have consistent structure
+                required_fields = ['record_id=', 'user_id=', 'event_type=', 'timestamp=']
+                
+                for i, log_entry in enumerate(all_log_entries):
+                    assert log_entry, f"Log entry {i} should not be empty"
+                    
+                    # Check for required structured fields
+                    for field in required_fields:
+                        assert field in log_entry, f"Log entry {i} should contain {field}"
+                    
+                    # Verify specific values are present
+                    expected_record = f"{record_id}_{i}"
+                    expected_user = user_ids[i]
+                    
+                    assert f"record_id={expected_record}" in log_entry, f"Log {i} should contain correct record_id"
+                    assert f"user_id={expected_user}" in log_entry, f"Log {i} should contain correct user_id"
+                    
+                    # Verify timestamp format (ISO-like)
+                    import re
+                    timestamp_match = re.search(r'timestamp=([^,\]]+)', log_entry)
+                    assert timestamp_match, f"Log {i} should have timestamp field"
+                    
+                    timestamp_value = timestamp_match.group(1)
+                    # Should be ISO format
+                    iso_pattern = r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}'
+                    assert re.match(iso_pattern, timestamp_value), f"Timestamp should be ISO format in log {i}"
+                
+                # Property: Log entries should be chronologically ordered
+                timestamps = []
+                for log_entry in all_log_entries:
+                    timestamp_match = re.search(r'timestamp=([^,\]]+)', log_entry)
+                    if timestamp_match:
+                        timestamps.append(timestamp_match.group(1))
+                
+                # Timestamps should be in order (or very close due to rapid execution)
+                assert len(timestamps) == len(all_log_entries), "All entries should have timestamps"
+                
+                # Convert to datetime for comparison
+                from datetime import datetime
+                parsed_timestamps = []
+                for ts in timestamps:
+                    try:
+                        parsed_ts = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                        parsed_timestamps.append(parsed_ts)
+                    except ValueError:
+                        # Try without timezone
+                        parsed_ts = datetime.fromisoformat(ts)
+                        parsed_timestamps.append(parsed_ts)
+                
+                # Should be in chronological order (allowing for same millisecond)
+                for i in range(1, len(parsed_timestamps)):
+                    assert parsed_timestamps[i] >= parsed_timestamps[i-1], (
+                        f"Timestamps should be chronological: {parsed_timestamps[i-1]} <= {parsed_timestamps[i]}"
+                    )
+                
+            finally:
+                # Clean up
+                sync_logger.removeHandler(handler)
+                await service.stop()
+        
+        # Run the async test
+        asyncio.run(run_test())

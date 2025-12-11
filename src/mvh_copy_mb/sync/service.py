@@ -8,10 +8,11 @@ from collections import defaultdict
 
 from .interfaces import SyncService, EventBroker, LockManager, ConnectionManager
 from .models import SyncEvent, EventType, ClientConnection
+from .logging_config import get_logger, log_sync_event, log_connection_event, log_conflict_event
 from ..database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class SyncServiceImpl(SyncService):
@@ -98,7 +99,12 @@ class SyncServiceImpl(SyncService):
         try:
             # Validate version if lock exists
             if not await self._lock_manager.validate_version(record_id, version - 1):
-                logger.warning(f"Version validation failed for record {record_id}")
+                log_conflict_event(
+                    logger, record_id, [user_id], 
+                    "version_conflict", "rejected_update",
+                    expected_version=version - 1,
+                    attempted_version=version
+                )
                 raise ValueError(f"Version conflict for record {record_id}")
             
             # Create sync event
@@ -109,6 +115,14 @@ class SyncServiceImpl(SyncService):
                 version=version,
                 timestamp=datetime.now(),
                 user_id=user_id
+            )
+            
+            # Log the sync event
+            log_sync_event(
+                logger, event.event_type, record_id, user_id,
+                f"Record update processed for {record_id}",
+                version=version,
+                data_keys=list(data.keys()) if isinstance(data, dict) else None
             )
             
             # Update known records for change detection
@@ -124,7 +138,8 @@ class SyncServiceImpl(SyncService):
             logger.info(f"Record update handled for {record_id} by user {user_id}")
             
         except Exception as e:
-            logger.error(f"Error handling record update for {record_id}: {e}")
+            logger.error(f"Error handling record update for {record_id}: {e}", 
+                        extra={'record_id': record_id, 'user_id': user_id, 'error': str(e)})
             raise
     
     async def handle_bulk_update(self, updates: List[Dict[str, Any]], 
@@ -153,7 +168,12 @@ class SyncServiceImpl(SyncService):
                 
                 # Validate version if lock exists
                 if not await self._lock_manager.validate_version(record_id, version - 1):
-                    logger.warning(f"Version validation failed for record {record_id} in bulk update")
+                    log_conflict_event(
+                        logger, record_id, [user_id], 
+                        "bulk_version_conflict", "skipped_update",
+                        expected_version=version - 1,
+                        attempted_version=version
+                    )
                     continue
                 
                 event = SyncEvent(
@@ -179,6 +199,14 @@ class SyncServiceImpl(SyncService):
             for event in events:
                 await self._buffer_event_for_offline_clients(event)
             
+            # Log bulk update event
+            log_sync_event(
+                logger, "bulk_update", f"bulk_{len(events)}_records", user_id,
+                f"Bulk update processed: {len(events)} records",
+                record_count=len(events),
+                skipped_count=len(updates) - len(events)
+            )
+            
             # Broadcast all events efficiently
             await self._event_broker.publish_bulk_events(events)
             
@@ -199,7 +227,10 @@ class SyncServiceImpl(SyncService):
         try:
             connection = await self._connection_manager.get_connection(connection_id)
             if not connection:
-                logger.warning(f"Connection not found for sync: {connection_id}")
+                log_connection_event(
+                    logger, connection_id, "unknown", "sync_failed",
+                    f"Connection not found for sync: {connection_id}"
+                )
                 return
             
             # Get buffered events for this client
@@ -218,10 +249,21 @@ class SyncServiceImpl(SyncService):
                 self._last_sync_timestamps[connection_id] = datetime.now()
             
             if buffered_events:
+                # Log sync event
+                log_connection_event(
+                    logger, connection_id, connection.user_id, "sync_completed",
+                    f"Synchronized {len(buffered_events)} events to client",
+                    event_count=len(buffered_events)
+                )
+                
                 # Send buffered events to client
                 await self._event_broker.publish_bulk_events(buffered_events)
                 logger.info(f"Synchronized {len(buffered_events)} events to client {connection_id}")
             else:
+                log_connection_event(
+                    logger, connection_id, connection.user_id, "sync_no_updates",
+                    "No missed updates for client"
+                )
                 logger.debug(f"No missed updates for client {connection_id}")
                 
         except Exception as e:
