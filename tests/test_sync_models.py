@@ -329,6 +329,8 @@ class TestWebSocketConnectionMaintenance:
                     conn.websocket.closed = False
                     conn.websocket.send = AsyncMock()
                     conn.websocket.close = AsyncMock()
+                    conn.websocket.remote_address = ('127.0.0.1', 12345)
+                    conn.websocket.request_headers = {'User-Agent': 'test-client'}
                     
                     # Set recent last_seen time to simulate active session
                     conn.last_seen = datetime.now()
@@ -415,6 +417,8 @@ class TestWebSocketConnectionMaintenance:
                     websocket_mock.closed = False
                     websocket_mock.send = AsyncMock()
                     websocket_mock.close = AsyncMock()
+                    websocket_mock.remote_address = ('127.0.0.1', 12345)
+                    websocket_mock.request_headers = {'User-Agent': 'test-client'}
                     
                     conn = ClientConnection(
                         connection_id=f"conn_{i}",
@@ -495,6 +499,8 @@ class TestWebSocketConnectionMaintenance:
                 websocket_mock.closed = False
                 websocket_mock.send = AsyncMock()
                 websocket_mock.close = AsyncMock()
+                websocket_mock.remote_address = ('127.0.0.1', 12345)
+                websocket_mock.request_headers = {'User-Agent': 'test-client'}
                 
                 connection_id = f"conn_{user_id}"
                 conn = ClientConnection(
@@ -650,6 +656,8 @@ class TestEventBroadcastTiming:
                 conn.websocket = AsyncMock()
                 conn.websocket.send = AsyncMock()
                 conn.websocket.closed = False
+                conn.websocket.remote_address = ('127.0.0.1', 12345)
+                conn.websocket.request_headers = {'User-Agent': 'test-client'}
                 
                 # Subscribe all clients to receive the event
                 # Use wildcard subscription to ensure all clients receive all events
@@ -724,6 +732,8 @@ class TestEventBroadcastTiming:
                 websocket_mock = AsyncMock()
                 websocket_mock.send = AsyncMock()
                 websocket_mock.closed = False
+                websocket_mock.remote_address = ('127.0.0.1', 12345)
+                websocket_mock.request_headers = {'User-Agent': 'test-client'}
                 
                 conn = ClientConnection(
                     connection_id=f"client_{i}",
@@ -803,6 +813,8 @@ class TestEventBroadcastTiming:
             websocket_mock = AsyncMock()
             websocket_mock.send = AsyncMock()
             websocket_mock.closed = False
+            websocket_mock.remote_address = ('127.0.0.1', 12345)
+            websocket_mock.request_headers = {'User-Agent': 'test-client'}
             
             conn = ClientConnection(
                 connection_id="single_client",
@@ -880,6 +892,8 @@ class TestBulkOperationEfficiency:
                 websocket_mock = AsyncMock()
                 websocket_mock.send = AsyncMock()
                 websocket_mock.closed = False
+                websocket_mock.remote_address = ('127.0.0.1', 12345)
+                websocket_mock.request_headers = {'User-Agent': 'test-client'}
                 
                 conn = ClientConnection(
                     connection_id=f"bulk_client_{i}",
@@ -1069,6 +1083,8 @@ class TestBulkOperationEfficiency:
                 websocket_mock = AsyncMock()
                 websocket_mock.send = AsyncMock()
                 websocket_mock.closed = False
+                websocket_mock.remote_address = ('127.0.0.1', 12345)
+                websocket_mock.request_headers = {'User-Agent': 'test-client'}
                 
                 conn = ClientConnection(
                     connection_id=f"chunk_client_{i}",
@@ -1088,7 +1104,7 @@ class TestBulkOperationEfficiency:
             await broker.publish_bulk_events(events)
             
             # Allow time for chunked processing
-            await asyncio.sleep(0.5)  # 500ms for large batch processing
+            await asyncio.sleep(0.1)  # 100ms for large batch processing
             
             processing_time = (datetime.now() - start_time).total_seconds() * 1000
             

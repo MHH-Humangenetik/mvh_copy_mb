@@ -2,13 +2,17 @@
 
 import asyncio
 import logging
+import time
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any, Set
 from collections import defaultdict
 
 from .interfaces import SyncService, EventBroker, LockManager, ConnectionManager
 from .models import SyncEvent, EventType, ClientConnection
-from .logging_config import get_logger, log_sync_event, log_connection_event, log_conflict_event
+from .logging_config import (
+    get_logger, log_sync_event, log_connection_event, log_conflict_event,
+    log_performance_metrics, log_batch_metrics, PerformanceTimer
+)
 from ..database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
 
@@ -96,51 +100,66 @@ class SyncServiceImpl(SyncService):
             user_id: ID of the user making the update
             version: New version number of the record
         """
-        try:
-            # Validate version if lock exists
-            if not await self._lock_manager.validate_version(record_id, version - 1):
-                log_conflict_event(
-                    logger, record_id, [user_id], 
-                    "version_conflict", "rejected_update",
-                    expected_version=version - 1,
-                    attempted_version=version
+        with PerformanceTimer(logger, "record_update", record_id=record_id, user_id=user_id):
+            try:
+                conflict_start_time = time.time()
+                
+                # Validate version if lock exists
+                if not await self._lock_manager.validate_version(record_id, version - 1):
+                    conflict_resolution_time = (time.time() - conflict_start_time) * 1000
+                    
+                    log_conflict_event(
+                        logger, record_id, [user_id], 
+                        "version_conflict", "rejected_update",
+                        expected_version=version - 1,
+                        attempted_version=version,
+                        resolution_time_ms=conflict_resolution_time,
+                        conflict_severity="medium"
+                    )
+                    raise ValueError(f"Version conflict for record {record_id}")
+                
+                # Create sync event
+                event = SyncEvent(
+                    event_type=EventType.RECORD_UPDATED.value,
+                    record_id=record_id,
+                    data=data,
+                    version=version,
+                    timestamp=datetime.now(),
+                    user_id=user_id
                 )
-                raise ValueError(f"Version conflict for record {record_id}")
-            
-            # Create sync event
-            event = SyncEvent(
-                event_type=EventType.RECORD_UPDATED.value,
-                record_id=record_id,
-                data=data,
-                version=version,
-                timestamp=datetime.now(),
-                user_id=user_id
-            )
-            
-            # Log the sync event
-            log_sync_event(
-                logger, event.event_type, record_id, user_id,
-                f"Record update processed for {record_id}",
-                version=version,
-                data_keys=list(data.keys()) if isinstance(data, dict) else None
-            )
-            
-            # Update known records for change detection
-            async with self._lock:
-                self._known_records[record_id] = event.timestamp
-            
-            # Buffer event for offline clients
-            await self._buffer_event_for_offline_clients(event)
-            
-            # Broadcast to all connected clients
-            await self._event_broker.publish_event(event)
-            
-            logger.info(f"Record update handled for {record_id} by user {user_id}")
-            
-        except Exception as e:
-            logger.error(f"Error handling record update for {record_id}: {e}", 
-                        extra={'record_id': record_id, 'user_id': user_id, 'error': str(e)})
-            raise
+                
+                # Log the sync event
+                log_sync_event(
+                    logger, event.event_type, record_id, user_id,
+                    f"Record update processed for {record_id}",
+                    version=version,
+                    data_keys=list(data.keys()) if isinstance(data, dict) else None
+                )
+                
+                # Update known records for change detection
+                async with self._lock:
+                    self._known_records[record_id] = event.timestamp
+                
+                # Buffer event for offline clients
+                await self._buffer_event_for_offline_clients(event)
+                
+                # Broadcast to all connected clients
+                broadcast_start = time.time()
+                await self._event_broker.publish_event(event)
+                broadcast_latency = (time.time() - broadcast_start) * 1000
+                
+                # Log broadcast performance
+                log_performance_metrics(
+                    logger, "event_broadcast", broadcast_latency,
+                    record_id=record_id, event_type=event.event_type
+                )
+                
+                logger.info(f"Record update handled for {record_id} by user {user_id}")
+                
+            except Exception as e:
+                logger.error(f"Error handling record update for {record_id}: {e}", 
+                            extra={'record_id': record_id, 'user_id': user_id, 'error': str(e)})
+                raise
     
     async def handle_bulk_update(self, updates: List[Dict[str, Any]], 
                                user_id: str) -> None:
@@ -153,8 +172,11 @@ class SyncServiceImpl(SyncService):
         if not updates:
             return
             
+        batch_start_time = time.time()
+        
         try:
             events = []
+            conflicts = []
             now = datetime.now()
             
             for update in updates:
@@ -166,13 +188,21 @@ class SyncServiceImpl(SyncService):
                     logger.warning("Skipping update without record_id")
                     continue
                 
+                conflict_start_time = time.time()
+                
                 # Validate version if lock exists
                 if not await self._lock_manager.validate_version(record_id, version - 1):
+                    conflict_resolution_time = (time.time() - conflict_start_time) * 1000
+                    conflicts.append(record_id)
+                    
                     log_conflict_event(
                         logger, record_id, [user_id], 
                         "bulk_version_conflict", "skipped_update",
                         expected_version=version - 1,
-                        attempted_version=version
+                        attempted_version=version,
+                        resolution_time_ms=conflict_resolution_time,
+                        conflict_severity="low",
+                        batch_operation=True
                     )
                     continue
                 
@@ -185,6 +215,19 @@ class SyncServiceImpl(SyncService):
                     user_id=user_id
                 )
                 events.append(event)
+            
+            # Calculate batch metrics even if no events succeeded
+            total_processing_time = (time.time() - batch_start_time) * 1000
+            success_count = len(events)
+            failure_count = len(updates) - success_count
+            
+            # Log batch metrics regardless of success/failure
+            log_batch_metrics(
+                logger, len(updates), total_processing_time, 
+                success_count, failure_count,
+                user_id=user_id,
+                conflict_count=len(conflicts)
+            )
             
             if not events:
                 logger.warning("No valid events in bulk update")
@@ -199,6 +242,17 @@ class SyncServiceImpl(SyncService):
             for event in events:
                 await self._buffer_event_for_offline_clients(event)
             
+            # Broadcast all events efficiently
+            broadcast_start = time.time()
+            await self._event_broker.publish_bulk_events(events)
+            broadcast_time = (time.time() - broadcast_start) * 1000
+            
+            # Log broadcast performance
+            log_performance_metrics(
+                logger, "bulk_event_broadcast", broadcast_time,
+                event_count=len(events), user_id=user_id
+            )
+            
             # Log bulk update event
             log_sync_event(
                 logger, "bulk_update", f"bulk_{len(events)}_records", user_id,
@@ -206,9 +260,6 @@ class SyncServiceImpl(SyncService):
                 record_count=len(events),
                 skipped_count=len(updates) - len(events)
             )
-            
-            # Broadcast all events efficiently
-            await self._event_broker.publish_bulk_events(events)
             
             logger.info(f"Bulk update handled: {len(events)} records by user {user_id}")
             

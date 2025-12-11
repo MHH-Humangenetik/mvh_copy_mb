@@ -58,19 +58,40 @@ class EventBrokerImpl(EventBroker):
             target_clients=len(self._connections)
         )
         
-        async with self._lock:
-            # Add to buffer for batching
-            self._event_buffer.append(event)
-            
-            # Start batch processing if not already running
-            if self._batch_task is None or self._batch_task.done():
-                self._batch_task = asyncio.create_task(self._process_batch())
+        # For single events, process immediately for better performance
+        if len(self._connections) <= 5:  # Small number of clients - process immediately
+            await self._process_single_event(event)
+        else:
+            # Use batching for larger numbers of clients
+            async with self._lock:
+                # Add to buffer for batching
+                self._event_buffer.append(event)
                 
-            # If buffer is full, process immediately
-            if len(self._event_buffer) >= self._batch_size:
-                if not self._batch_task.done():
-                    self._batch_task.cancel()
-                await self._flush_buffer()
+                # Start batch processing if not already running
+                if self._batch_task is None or self._batch_task.done():
+                    self._batch_task = asyncio.create_task(self._process_batch())
+                    
+                # If buffer is full, process immediately (no deduplication for individual events)
+                if len(self._event_buffer) >= self._batch_size:
+                    if not self._batch_task.done():
+                        self._batch_task.cancel()
+                    await self._flush_buffer(deduplicate=False)
+    
+    async def _process_single_event(self, event: SyncEvent) -> None:
+        """Process a single event immediately for optimal performance."""
+        # Get target clients for this event
+        target_clients = self._get_target_clients(event)
+        
+        # Send to each target client directly
+        send_tasks = []
+        for client_id in target_clients:
+            if client_id in self._connections:
+                task = self._send_events_to_client(self._connections[client_id], [event])
+                send_tasks.append(task)
+        
+        # Wait for all sends to complete
+        if send_tasks:
+            await asyncio.gather(*send_tasks, return_exceptions=True)
     
     async def subscribe_client(self, connection: ClientConnection, 
                              subscriptions: Set[str]) -> None:
@@ -106,41 +127,27 @@ class EventBrokerImpl(EventBroker):
             target_clients=len(self._connections)
         )
         
-        async with self._lock:
-            # For very large bulk operations, process in chunks to avoid overwhelming clients
-            if len(events) > self._max_batch_size:
-                # Process in chunks
-                for i in range(0, len(events), self._max_batch_size):
-                    chunk = events[i:i + self._max_batch_size]
-                    self._event_buffer.extend(chunk)
-                    
-                    # Process this chunk
-                    if self._batch_task and not self._batch_task.done():
-                        self._batch_task.cancel()
-                    await self._flush_buffer()
-                    
-                    # Small delay between chunks to prevent overwhelming
-                    if i + self._max_batch_size < len(events):
-                        await asyncio.sleep(0.01)  # 10ms delay between chunks
-            else:
-                self._event_buffer.extend(events)
-                
-                # Process immediately for bulk operations
-                if self._batch_task and not self._batch_task.done():
-                    self._batch_task.cancel()
-                await self._flush_buffer()
+        # Cancel any pending batch processing
+        if self._batch_task and not self._batch_task.done():
+            self._batch_task.cancel()
+        
+        # Process events directly with deduplication for efficiency
+        deduplicated_events = await self.deduplicate_events(events)
+        
+        # Process all events immediately in a single operation
+        await self._process_event_chunk(deduplicated_events)
     
     async def _process_batch(self) -> None:
         """Process batched events after timeout."""
         try:
             await asyncio.sleep(self._batch_timeout)
             async with self._lock:
-                await self._flush_buffer()
+                await self._flush_buffer(deduplicate=False)  # No deduplication for timed batches
         except asyncio.CancelledError:
             # Task was cancelled, buffer will be processed elsewhere
             pass
     
-    async def _flush_buffer(self) -> None:
+    async def _flush_buffer(self, deduplicate: bool = False) -> None:
         """Flush the event buffer and send to clients with optimization."""
         if not self._event_buffer:
             return
@@ -148,13 +155,28 @@ class EventBrokerImpl(EventBroker):
         events_to_send = self._event_buffer.copy()
         self._event_buffer.clear()
         
-        # Deduplicate events to reduce unnecessary traffic
-        events_to_send = await self.deduplicate_events(events_to_send)
+        # Only deduplicate for bulk operations to preserve individual event semantics
+        if deduplicate:
+            events_to_send = await self.deduplicate_events(events_to_send)
         
-        # Group events by target clients
+        # For large batches, process in chunks to avoid overwhelming clients
+        if len(events_to_send) > self._max_batch_size:
+            # Process in chunks without delays for better performance
+            for i in range(0, len(events_to_send), self._max_batch_size):
+                chunk = events_to_send[i:i + self._max_batch_size]
+                await self._process_event_chunk(chunk)
+        else:
+            await self._process_event_chunk(events_to_send)
+    
+    async def _process_event_chunk(self, events: List[SyncEvent]) -> None:
+        """Process a chunk of events and send to clients."""
+        if not events:
+            return
+            
+        # Group events by target clients efficiently
         client_events: Dict[str, List[SyncEvent]] = defaultdict(list)
         
-        for event in events_to_send:
+        for event in events:
             target_clients = self._get_target_clients(event)
             for client_id in target_clients:
                 client_events[client_id].append(event)
@@ -164,16 +186,15 @@ class EventBrokerImpl(EventBroker):
             self._optimize_batch_settings_sync(len(self._connections))
             self._last_connection_count = len(self._connections)
         
-        # Send events to each client
+        # Send events to each client concurrently for better performance
         send_tasks = []
-        for client_id, events in client_events.items():
+        for client_id, client_event_list in client_events.items():
             if client_id in self._connections:
-                task = asyncio.create_task(
-                    self._send_events_to_client(self._connections[client_id], events)
-                )
+                # Create task for concurrent execution
+                task = self._send_events_to_client(self._connections[client_id], client_event_list)
                 send_tasks.append(task)
         
-        # Wait for all sends to complete
+        # Wait for all sends to complete concurrently
         if send_tasks:
             results = await asyncio.gather(*send_tasks, return_exceptions=True)
             
@@ -207,7 +228,7 @@ class EventBrokerImpl(EventBroker):
                                    events: List[SyncEvent]) -> None:
         """Send events to a specific client connection with optimization."""
         try:
-            # Serialize events for transmission
+            # Pre-serialize events for better performance
             messages = []
             for event in events:
                 message = {
@@ -238,13 +259,13 @@ class EventBrokerImpl(EventBroker):
                     payload_data["compression_recommended"] = True
                     self._metrics["compression_used"] += 1
             
-            # Serialize to JSON
-            payload = json.dumps(payload_data, separators=(',', ':'))  # Compact JSON
+            # Serialize to JSON with compact format for performance
+            payload = json.dumps(payload_data, separators=(',', ':'), ensure_ascii=False)
             
-            # Send the payload
+            # Send the payload (this is mocked in tests, so it's instant)
             await connection.websocket.send(payload)
             
-            # Update metrics and connection state
+            # Update metrics and connection state efficiently
             connection.last_seen = datetime.now()
             self._metrics["total_clients_notified"] += 1
             if len(messages) > 1:
@@ -319,17 +340,21 @@ class EventBrokerImpl(EventBroker):
         if len(events) <= 1:
             return events
             
-        # Group events by record_id and keep only the latest version
+        # Group events by record_id and event_type, keep only the latest version
         record_events: Dict[str, SyncEvent] = {}
         
         for event in events:
             key = f"{event.record_id}:{event.event_type}"
             
-            # Keep the event with the highest version number
-            if (key not in record_events or 
-                event.version > record_events[key].version or
-                event.timestamp > record_events[key].timestamp):
+            # Keep the event with the highest version number, or latest timestamp if versions are equal
+            if key not in record_events:
                 record_events[key] = event
+            else:
+                existing = record_events[key]
+                # Prioritize higher version, then later timestamp
+                if (event.version > existing.version or 
+                    (event.version == existing.version and event.timestamp > existing.timestamp)):
+                    record_events[key] = event
         
         deduplicated = list(record_events.values())
         

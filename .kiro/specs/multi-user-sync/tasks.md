@@ -180,17 +180,17 @@
   - Create log formatters for different event types
   - _Requirements: 5.1_
 
-- [ ] 7.2 Write property test for event logging
+- [x] 7.2 Write property test for event logging
   - **Property 19: Synchronization event logging**
   - **Validates: Requirements 5.1**
 
-- [ ] 7.3 Add conflict resolution and connection logging
+- [x] 7.3 Add conflict resolution and connection logging
   - Implement detailed conflict logging with resolution methods
   - Add connection event logging with diagnostic information
   - Create performance metrics collection for latency and throughput
   - _Requirements: 5.2, 5.3, 5.4_
 
-- [ ] 7.4 Write property test for conflict logging
+- [x] 7.4 Write property test for conflict logging
   - **Property 20: Conflict resolution logging**
   - **Validates: Requirements 5.2**
 

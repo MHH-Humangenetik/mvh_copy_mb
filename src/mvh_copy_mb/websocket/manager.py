@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set, Any
@@ -100,7 +101,8 @@ class WebSocketManager(ConnectionManager):
             await connection.websocket.close()
             return
         
-        # Store connection
+        # Store connection with timing information
+        connection._connection_start_time = time.time()
         self._connections[connection_id] = connection
         self._connection_states[connection_id] = ConnectionState.CONNECTED
         
@@ -141,12 +143,15 @@ class WebSocketManager(ConnectionManager):
         self._connection_count += 1
         self._total_connections += 1
         
-        # Log connection event
+        # Log connection event with diagnostic information
         log_connection_event(
             self.logger, connection_id, user_id, "connected",
             f"WebSocket connection established",
             total_connections=self._connection_count,
-            user_connection_count=len(self._user_connections.get(user_id, set()))
+            user_connection_count=len(self._user_connections.get(user_id, set())),
+            connection_start=time.time(),
+            client_ip=getattr(connection.websocket, 'remote_address', ['unknown'])[0] if hasattr(connection.websocket, 'remote_address') else 'unknown',
+            user_agent=getattr(connection.websocket, 'request_headers', {}).get('User-Agent', 'unknown') if hasattr(connection.websocket, 'request_headers') else 'unknown'
         )
         
         self.logger.info(
@@ -337,12 +342,20 @@ class WebSocketManager(ConnectionManager):
         self._connection_count -= 1
         self._disconnection_count += 1
         
-        # Log disconnection event
+        # Calculate connection duration
+        connection_start = getattr(connection, '_connection_start_time', None)
+        connection_duration_ms = None
+        if connection_start:
+            connection_duration_ms = (time.time() - connection_start) * 1000
+        
+        # Log disconnection event with diagnostic information
         log_connection_event(
             self.logger, connection_id, user_id, "disconnected",
             f"WebSocket connection cleaned up",
             remaining_connections=self._connection_count,
-            total_disconnections=self._disconnection_count
+            total_disconnections=self._disconnection_count,
+            connection_duration_ms=connection_duration_ms,
+            cleanup_reason=getattr(connection, '_cleanup_reason', 'normal')
         )
         
         self.logger.info(
