@@ -50,6 +50,8 @@ static_dir.mkdir(exist_ok=True)
 websocket_manager = None
 event_broker = None
 sync_service = None
+audit_manager = None
+audit_scheduler = None
 
 
 @asynccontextmanager
@@ -59,7 +61,7 @@ async def lifespan(app: FastAPI):
     
     Handles startup and shutdown events for the FastAPI application.
     """
-    global websocket_manager, event_broker, sync_service
+    global websocket_manager, event_broker, sync_service, audit_manager, audit_scheduler
     
     # Startup
     logger.info("Starting Meldebestätigungen Viewer application")
@@ -74,10 +76,20 @@ async def lifespan(app: FastAPI):
         from .events.broker import EventBrokerImpl
         from .sync.service import SyncServiceImpl
         from .sync.lock_manager import LockManagerImpl
+        from .sync.audit_manager import AuditTrailManager
+        from .sync.audit_scheduler import AuditScheduler
         from .database import MeldebestaetigungDatabase
         
         # Create sync configuration
         config = SyncConfig()
+        
+        # Initialize audit trail manager
+        audit_db_path_str = os.getenv('AUDIT_DB_PATH', './data/audit.duckdb')
+        audit_db_path = Path(audit_db_path_str)
+        audit_db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        audit_manager = AuditTrailManager(audit_db_path)
+        audit_manager.__enter__()  # Initialize audit database
         
         # Initialize components
         websocket_manager = WebSocketManager(config)
@@ -91,19 +103,24 @@ async def lifespan(app: FastAPI):
         # Initialize lock manager
         lock_manager = LockManagerImpl(config)
         
-        # Initialize sync service
+        # Initialize sync service with audit manager
         sync_service = SyncServiceImpl(
             event_broker=event_broker,
             lock_manager=lock_manager,
             connection_manager=websocket_manager,
-            database=database
+            database=database,
+            audit_manager=audit_manager
         )
+        
+        # Initialize audit scheduler
+        audit_scheduler = AuditScheduler(audit_manager)
         
         # Start all services
         await websocket_manager.start()
         await sync_service.start()
+        await audit_scheduler.start()
         
-        logger.info("Multi-user sync system initialized successfully")
+        logger.info("Multi-user sync system with audit trail initialized successfully")
         
     except Exception as e:
         logger.error(f"Failed to initialize sync system: {e}", exc_info=True)
@@ -111,6 +128,13 @@ async def lifespan(app: FastAPI):
         websocket_manager = None
         event_broker = None
         sync_service = None
+        if audit_manager:
+            try:
+                audit_manager.__exit__(None, None, None)
+            except Exception:
+                pass
+            audit_manager = None
+        audit_scheduler = None
     
     yield
     
@@ -129,6 +153,18 @@ async def lifespan(app: FastAPI):
             await websocket_manager.stop()
         except Exception as e:
             logger.error(f"Error stopping WebSocket manager: {e}")
+    
+    if audit_scheduler:
+        try:
+            await audit_scheduler.stop()
+        except Exception as e:
+            logger.error(f"Error stopping audit scheduler: {e}")
+    
+    if audit_manager:
+        try:
+            audit_manager.__exit__(None, None, None)
+        except Exception as e:
+            logger.error(f"Error stopping audit manager: {e}")
     
     logger.info("Sync system shutdown complete")
 
@@ -279,16 +315,46 @@ async def update_done_status(case_id: str, request: Request):
         
         logger.info(f"Updating Case ID {case_id} to done={done}")
         
+        # Get user information for audit logging
+        user_id = request.headers.get("X-User-ID", "web_user")
+        session_id = request.headers.get("X-Session-ID")
+        ip_address = request.client.host if request.client else None
+        user_agent = request.headers.get("User-Agent")
+        
         # Import WebDatabaseService
         from .web_database import WebDatabaseService
         
         # Update the done status
         web_db = WebDatabaseService(db_path)
         
+        # Get current state for audit logging
+        current_pair = web_db.get_pair_by_case_id(case_id)
+        before_state = {
+            "is_done": current_pair.is_done if current_pair else None,
+            "genomic_done": current_pair.genomic.is_done if current_pair and current_pair.genomic else None,
+            "clinical_done": current_pair.clinical.is_done if current_pair and current_pair.clinical else None
+        } if current_pair else None
+        
         try:
             result = web_db.update_pair_done_status(case_id, done)
             
             if not result:
+                # Log failed update to audit trail
+                if audit_manager:
+                    audit_manager.log_record_status_change(
+                        user_id=user_id,
+                        record_id=case_id,
+                        before_status=before_state.get("is_done") if before_state else None,
+                        after_status=done,
+                        session_id=session_id,
+                        details={
+                            "ip_address": ip_address,
+                            "user_agent": user_agent,
+                            "success": False,
+                            "error": "Failed to update done status"
+                        }
+                    )
+                
                 raise HTTPException(
                     status_code=500,
                     detail="Failed to update done status"
@@ -296,6 +362,29 @@ async def update_done_status(case_id: str, request: Request):
             
             # Get the updated pair for rendering
             pair = web_db.get_pair_by_case_id(case_id)
+            
+            # Log successful update to audit trail
+            if audit_manager and pair:
+                after_state = {
+                    "is_done": pair.is_done,
+                    "genomic_done": pair.genomic.is_done if pair.genomic else None,
+                    "clinical_done": pair.clinical.is_done if pair.clinical else None
+                }
+                
+                audit_manager.log_record_status_change(
+                    user_id=user_id,
+                    record_id=case_id,
+                    before_status=before_state.get("is_done") if before_state else None,
+                    after_status=done,
+                    session_id=session_id,
+                    details={
+                        "ip_address": ip_address,
+                        "user_agent": user_agent,
+                        "before_state": before_state,
+                        "after_state": after_state,
+                        "success": True
+                    }
+                )
             
             if pair is None:
                 raise HTTPException(
@@ -411,8 +500,23 @@ async def websocket_endpoint(websocket: WebSocket):
     # For now, use a simple user identification scheme
     # In production, you'd extract this from authentication headers/tokens
     user_id = websocket.query_params.get("user_id", "anonymous")
+    session_id = websocket.query_params.get("session_id")
     
     logger.info(f"WebSocket connection established: {connection_id} for user {user_id}")
+    
+    # Log connection establishment to audit trail
+    if audit_manager:
+        from .sync.audit import AuditEventType
+        audit_manager.log_connection_event(
+            user_id=user_id,
+            connection_id=connection_id,
+            event_type=AuditEventType.CONNECTION_ESTABLISHED,
+            session_id=session_id,
+            details={
+                "websocket_endpoint": "/ws",
+                "query_params": dict(websocket.query_params)
+            }
+        )
     
     try:
         # Import sync models
@@ -488,6 +592,17 @@ async def websocket_endpoint(websocket: WebSocket):
                     
             except WebSocketDisconnect:
                 logger.info(f"WebSocket client {connection_id} disconnected normally")
+                
+                # Log normal disconnection to audit trail
+                if audit_manager:
+                    from .sync.audit import AuditEventType
+                    audit_manager.log_connection_event(
+                        user_id=user_id,
+                        connection_id=connection_id,
+                        event_type=AuditEventType.CONNECTION_LOST,
+                        session_id=session_id,
+                        details={"disconnect_reason": "normal"}
+                    )
                 break
             except Exception as e:
                 logger.error(f"Error handling WebSocket message from {connection_id}: {e}")
@@ -505,8 +620,33 @@ async def websocket_endpoint(websocket: WebSocket):
                     
     except WebSocketDisconnect:
         logger.info(f"WebSocket client {connection_id} disconnected during setup")
+        
+        # Log disconnection during setup to audit trail
+        if audit_manager:
+            from .sync.audit import AuditEventType
+            audit_manager.log_connection_event(
+                user_id=user_id,
+                connection_id=connection_id,
+                event_type=AuditEventType.CONNECTION_LOST,
+                session_id=session_id,
+                details={"disconnect_reason": "setup_failure"}
+            )
     except Exception as e:
         logger.error(f"Error in WebSocket connection {connection_id}: {e}", exc_info=True)
+        
+        # Log connection error to audit trail
+        if audit_manager:
+            from .sync.audit import AuditEventType, AuditSeverity
+            audit_manager.log_system_error(
+                error_message=str(e),
+                error_type="websocket_connection_error",
+                details={
+                    "connection_id": connection_id,
+                    "user_id": user_id,
+                    "session_id": session_id
+                },
+                severity=AuditSeverity.ERROR
+            )
     finally:
         # Clean up connection
         if websocket_manager:
@@ -522,6 +662,297 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.error(f"Error unsubscribing WebSocket client {connection_id}: {e}")
         
         logger.info(f"WebSocket connection {connection_id} cleanup complete")
+
+
+@app.get("/api/audit/events")
+async def get_audit_events(
+    request: Request,
+    start_time: Optional[str] = None,
+    end_time: Optional[str] = None,
+    user_id: Optional[str] = None,
+    event_types: Optional[str] = None,
+    record_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    severity: Optional[str] = None,
+    success: Optional[bool] = None,
+    limit: int = 100,
+    offset: int = 0
+):
+    """
+    Query audit events with filtering options.
+    
+    Args:
+        request: FastAPI request object
+        start_time: Filter events after this time (ISO format)
+        end_time: Filter events before this time (ISO format)
+        user_id: Filter by user ID
+        event_types: Comma-separated list of event types
+        record_id: Filter by record ID
+        session_id: Filter by session ID
+        severity: Filter by severity level
+        success: Filter by success status
+        limit: Maximum number of results (max 1000)
+        offset: Number of results to skip
+        
+    Returns:
+        JSON response with audit events
+    """
+    if not audit_manager:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit trail system is not available"
+        )
+    
+    try:
+        # Parse datetime parameters
+        start_dt = None
+        end_dt = None
+        
+        if start_time:
+            try:
+                start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid start_time format")
+        
+        if end_time:
+            try:
+                end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid end_time format")
+        
+        # Parse event types
+        event_type_list = None
+        if event_types:
+            from .sync.audit import AuditEventType
+            try:
+                event_type_list = [AuditEventType(et.strip()) for et in event_types.split(",")]
+            except ValueError as e:
+                raise HTTPException(status_code=400, detail=f"Invalid event type: {e}")
+        
+        # Parse severity
+        severity_enum = None
+        if severity:
+            from .sync.audit import AuditSeverity
+            try:
+                severity_enum = AuditSeverity(severity)
+            except ValueError:
+                raise HTTPException(status_code=400, detail=f"Invalid severity: {severity}")
+        
+        # Limit the maximum number of results
+        limit = min(limit, 1000)
+        
+        # Query audit events
+        events = audit_manager.query_audit_events(
+            start_time=start_dt,
+            end_time=end_dt,
+            user_id=user_id,
+            event_types=event_type_list,
+            record_id=record_id,
+            session_id=session_id,
+            severity=severity_enum,
+            success=success,
+            limit=limit,
+            offset=offset
+        )
+        
+        # Convert events to JSON-serializable format
+        events_data = []
+        for event in events:
+            event_dict = {
+                "event_id": event.event_id,
+                "event_type": event.event_type.value,
+                "severity": event.severity.value,
+                "timestamp": event.timestamp.isoformat(),
+                "user_id": event.user_id,
+                "session_id": event.session_id,
+                "connection_id": event.connection_id,
+                "record_id": event.record_id,
+                "action": event.action,
+                "details": event.details,
+                "ip_address": event.ip_address,
+                "user_agent": event.user_agent,
+                "duration_ms": event.duration_ms,
+                "success": event.success,
+                "error_message": event.error_message,
+                "before_state": event.before_state,
+                "after_state": event.after_state
+            }
+            events_data.append(event_dict)
+        
+        return {
+            "events": events_data,
+            "count": len(events_data),
+            "limit": limit,
+            "offset": offset,
+            "has_more": len(events_data) == limit
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error querying audit events: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to query audit events")
+
+
+@app.get("/api/audit/report")
+async def get_audit_report(
+    request: Request,
+    start_time: str,
+    end_time: str,
+    group_by: str = "user_id"
+):
+    """
+    Generate an audit report for a time period.
+    
+    Args:
+        request: FastAPI request object
+        start_time: Report start time (ISO format)
+        end_time: Report end time (ISO format)
+        group_by: Field to group by (user_id, event_type, severity)
+        
+    Returns:
+        JSON response with audit report
+    """
+    if not audit_manager:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit trail system is not available"
+        )
+    
+    try:
+        # Parse datetime parameters
+        try:
+            start_dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            end_dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid datetime format")
+        
+        # Validate group_by parameter
+        if group_by not in ["user_id", "event_type", "severity"]:
+            raise HTTPException(status_code=400, detail="Invalid group_by parameter")
+        
+        # Generate report
+        report = audit_manager.generate_audit_report(
+            start_time=start_dt,
+            end_time=end_dt,
+            group_by=group_by
+        )
+        
+        return report
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating audit report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate audit report")
+
+
+@app.get("/api/audit/sessions")
+async def get_session_activity(
+    request: Request,
+    hours: int = 24
+):
+    """
+    Get session activity report for the last N hours.
+    
+    Args:
+        request: FastAPI request object
+        hours: Number of hours to look back (max 168 = 1 week)
+        
+    Returns:
+        JSON response with session activity report
+    """
+    if not audit_manager:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit trail system is not available"
+        )
+    
+    try:
+        # Limit hours to reasonable range
+        hours = min(max(hours, 1), 168)  # 1 hour to 1 week
+        
+        # Generate session activity report
+        report = audit_manager.get_session_activity_report(hours=hours)
+        
+        return report
+        
+    except Exception as e:
+        logger.error(f"Error generating session activity report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to generate session activity report")
+
+
+@app.get("/api/audit/cleanup/preview")
+async def get_audit_cleanup_preview(request: Request):
+    """
+    Get a preview of what would be cleaned up in audit trail cleanup.
+    
+    Returns:
+        JSON response with cleanup preview statistics
+    """
+    if not audit_scheduler:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit scheduler is not available"
+        )
+    
+    try:
+        preview = await audit_scheduler.get_cleanup_preview()
+        return preview
+        
+    except Exception as e:
+        logger.error(f"Error getting audit cleanup preview: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get cleanup preview")
+
+
+@app.post("/api/audit/cleanup")
+async def run_audit_cleanup(request: Request, dry_run: bool = False):
+    """
+    Run audit trail cleanup manually.
+    
+    Args:
+        request: FastAPI request object
+        dry_run: If True, only show what would be cleaned up
+        
+    Returns:
+        JSON response with cleanup statistics
+    """
+    if not audit_scheduler:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit scheduler is not available"
+        )
+    
+    try:
+        stats = await audit_scheduler.run_manual_cleanup(dry_run=dry_run)
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error running audit cleanup: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to run audit cleanup")
+
+
+@app.get("/api/audit/scheduler/status")
+async def get_audit_scheduler_status(request: Request):
+    """
+    Get current audit scheduler status.
+    
+    Returns:
+        JSON response with scheduler status information
+    """
+    if not audit_scheduler:
+        raise HTTPException(
+            status_code=503,
+            detail="Audit scheduler is not available"
+        )
+    
+    try:
+        status = audit_scheduler.get_status()
+        return status
+        
+    except Exception as e:
+        logger.error(f"Error getting audit scheduler status: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to get scheduler status")
 
 
 @app.get("/api/sync/status")

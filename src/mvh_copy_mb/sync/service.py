@@ -13,6 +13,8 @@ from .logging_config import (
     get_logger, log_sync_event, log_connection_event, log_conflict_event,
     log_performance_metrics, log_batch_metrics, PerformanceTimer
 )
+from .audit_manager import AuditTrailManager
+from .audit import AuditEventType, AuditSeverity
 from ..database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
 
@@ -27,6 +29,7 @@ class SyncServiceImpl(SyncService):
                  lock_manager: LockManager,
                  connection_manager: ConnectionManager,
                  database: MeldebestaetigungDatabase,
+                 audit_manager: Optional[AuditTrailManager] = None,
                  change_buffer_size: int = 1000,
                  change_buffer_ttl_hours: int = 24):
         """Initialize the sync service.
@@ -36,6 +39,7 @@ class SyncServiceImpl(SyncService):
             lock_manager: Record locking system
             connection_manager: WebSocket connection management
             database: Database instance for change detection
+            audit_manager: Audit trail manager for comprehensive logging
             change_buffer_size: Maximum number of changes to buffer per client
             change_buffer_ttl_hours: Hours to keep changes in buffer
         """
@@ -43,6 +47,7 @@ class SyncServiceImpl(SyncService):
         self._lock_manager = lock_manager
         self._connection_manager = connection_manager
         self._database = database
+        self._audit_manager = audit_manager
         self._change_buffer_size = change_buffer_size
         self._change_buffer_ttl = timedelta(hours=change_buffer_ttl_hours)
         
@@ -116,6 +121,22 @@ class SyncServiceImpl(SyncService):
                         resolution_time_ms=conflict_resolution_time,
                         conflict_severity="medium"
                     )
+                    
+                    # Log to audit trail
+                    if self._audit_manager:
+                        self._audit_manager.log_sync_conflict(
+                            record_id=record_id,
+                            involved_users=[user_id],
+                            conflict_type="version_conflict",
+                            resolution="rejected_update",
+                            details={
+                                "expected_version": version - 1,
+                                "attempted_version": version,
+                                "conflict_severity": "medium"
+                            },
+                            resolution_time_ms=conflict_resolution_time
+                        )
+                    
                     raise ValueError(f"Version conflict for record {record_id}")
                 
                 # Create sync event
@@ -135,6 +156,20 @@ class SyncServiceImpl(SyncService):
                     version=version,
                     data_keys=list(data.keys()) if isinstance(data, dict) else None
                 )
+                
+                # Log to audit trail
+                if self._audit_manager:
+                    self._audit_manager.log_sync_event(
+                        user_id=user_id,
+                        action=f"Record update broadcast: {record_id}",
+                        event_type=AuditEventType.SYNC_EVENT_BROADCAST,
+                        record_id=record_id,
+                        details={
+                            "version": version,
+                            "data_keys": list(data.keys()) if isinstance(data, dict) else None,
+                            "event_type": event.event_type
+                        }
+                    )
                 
                 # Update known records for change detection
                 async with self._lock:
@@ -260,6 +295,21 @@ class SyncServiceImpl(SyncService):
                 record_count=len(events),
                 skipped_count=len(updates) - len(events)
             )
+            
+            # Log to audit trail
+            if self._audit_manager:
+                self._audit_manager.log_bulk_operation(
+                    user_id=user_id,
+                    operation_type="bulk_status_change",
+                    record_count=len(updates),
+                    success_count=success_count,
+                    failure_count=failure_count,
+                    duration_ms=total_processing_time,
+                    details={
+                        "conflicts": len(conflicts),
+                        "broadcast_time_ms": broadcast_time
+                    }
+                )
             
             logger.info(f"Bulk update handled: {len(events)} records by user {user_id}")
             
