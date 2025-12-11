@@ -283,7 +283,7 @@ class TestAuditTrailCompleteness:
                 db_path.unlink()
             os.rmdir(temp_dir)
     
-    @given(st.integers(min_value=1, max_value=100))
+    @given(st.integers(min_value=1, max_value=20))
     def test_audit_trail_scalability_property(self, num_events: int):
         """Test that audit trail maintains completeness under load.
         

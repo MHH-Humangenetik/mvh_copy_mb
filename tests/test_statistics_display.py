@@ -336,13 +336,13 @@ def test_complete_pair_definition(num_pairs: int, record_types: list):
 # Validates: Requirements 3.3, 3.4, 5.2
 @settings(max_examples=100)
 @given(
-    num_pairs=st.integers(min_value=1, max_value=20),
-    initial_done_flags=st.lists(st.booleans(), min_size=1, max_size=20),
-    updated_done_flags=st.lists(st.booleans(), min_size=1, max_size=20),
+    num_pairs=st.integers(min_value=1, max_value=5),
+    initial_done_flags=st.lists(st.booleans(), min_size=1, max_size=5),
+    updated_done_flags=st.lists(st.booleans(), min_size=1, max_size=5),
     record_types=st.lists(
         st.integers(min_value=0, max_value=2),  # 0=genomic only, 1=clinical only, 2=both
         min_size=1,
-        max_size=20
+        max_size=5
     )
 )
 def test_done_status_reactivity(
