@@ -365,7 +365,6 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
     if gepado_client:
         try:
             gepado_client.close()
-            logger.info("Closed gepado database connection")
         except Exception as e:
             logger.warning(f"Error closing gepado connection: {e}")
 
