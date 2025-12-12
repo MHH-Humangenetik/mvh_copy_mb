@@ -73,12 +73,13 @@ class TestGepadoClient:
         assert connection == mock_connection
         assert client._connection == mock_connection
         mock_connect.assert_called_once_with(
-            server="host",
+            host="host",
             database="db",
             user="user",
             password="pass",
             timeout=30,
-            login_timeout=30
+            login_timeout=30,
+            server="."
         )
     
     @patch('mvh_copy_mb.gepado.pymssql.connect')
