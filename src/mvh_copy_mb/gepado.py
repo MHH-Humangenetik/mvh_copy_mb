@@ -180,7 +180,7 @@ class GepadoClient:
             guid_ordermanagement = guid_row[0]
             rows_affected = 0
             
-            # Map field names to their corresponding fieldname values in av2_ordermanagement_addfields
+            # Map field names to their corresponding column names in the base table [transact].[t_case_addFieldsExt]
             field_mapping = {
                 'vng': 'MV_VNg',
                 'vnk': 'MV_VNk', 
@@ -194,30 +194,33 @@ class GepadoClient:
                     logger.error(f"Invalid field name for update: {field_name}")
                     return False
                 
-                fieldname = field_mapping[field_name]
+                column_name = field_mapping[field_name]
                 
-                # Use MERGE or INSERT/UPDATE pattern for av2_ordermanagement_addfields
-                update_query = """
-                    IF EXISTS (SELECT 1 FROM av2_ordermanagement_addfields 
-                              WHERE masterguid = %s AND fieldname = %s)
+                # Update the underlying base table [transact].[t_case_addFieldsExt] directly
+                # The av2_ordermanagement_addfields view is read-only due to UNION statements
+                # Use MERGE pattern to handle both INSERT and UPDATE cases
+                merge_query = """
+                    IF EXISTS (SELECT 1 FROM [transact].[t_case_addFieldsExt] WHERE masterGuid = %s)
                     BEGIN
-                        UPDATE av2_ordermanagement_addfields 
-                        SET value = %s 
-                        WHERE masterguid = %s AND fieldname = %s
+                        UPDATE [transact].[t_case_addFieldsExt]
+                        SET {} = %s
+                        WHERE masterGuid = %s
                     END
                     ELSE
                     BEGIN
-                        INSERT INTO av2_ordermanagement_addfields (masterguid, fieldname, value)
-                        VALUES (%s, %s, %s)
+                        INSERT INTO [transact].[t_case_addFieldsExt] (masterGuid, {})
+                        VALUES (%s, %s)
                     END
-                """
+                """.format(column_name, column_name)
                 
-                cursor.execute(update_query, (
-                    guid_ordermanagement, fieldname,  # EXISTS check
-                    value, guid_ordermanagement, fieldname,  # UPDATE
-                    guid_ordermanagement, fieldname, value  # INSERT
+                cursor.execute(merge_query, (
+                    guid_ordermanagement,  # EXISTS check
+                    value, guid_ordermanagement,  # UPDATE
+                    guid_ordermanagement, value  # INSERT
                 ))
                 rows_affected += cursor.rowcount
+                
+                logger.info(f"Updated/inserted {column_name} in base table for masterGuid {guid_ordermanagement}")
             
             if rows_affected > 0:
                 self._connection.commit()
