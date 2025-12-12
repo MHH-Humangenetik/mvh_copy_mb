@@ -20,24 +20,24 @@
     - **Property 6: HL7 Pattern Handling Edge Cases**
     - **Validates: Requirements 3.3, 3.4, 3.5**
 
-- [ ] 3. Create gepado database client module
-  - [ ] 3.1 Implement GepadoRecord data class
+- [x] 3. Create gepado database client module
+  - [x] 3.1 Implement GepadoRecord data class
     - Create dataclass with hl7_case_id, vng, vnk, ibe_g, ibe_k fields
     - Add type hints and optional field handling
     - _Requirements: 4.3, 4.4, 4.5, 4.6_
 
-  - [ ] 3.2 Implement GepadoClient class
+  - [x] 3.2 Implement GepadoClient class
     - Create client class with MSSQL connection management
     - Implement query_record method with parameterized SQL query
     - Implement update_record method for field updates
     - Add proper connection lifecycle management
     - _Requirements: 1.1, 2.1, 2.2, 2.3, 2.4, 2.5_
 
-  - [ ] 3.3 Write property test for environment configuration usage
+  - [x] 3.3 Write property test for environment configuration usage
     - **Property 2: Environment Configuration Usage**
     - **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 2.5**
 
-  - [ ] 3.4 Write unit tests for GepadoClient with mocked connections
+  - [x] 3.4 Write unit tests for GepadoClient with mocked connections
     - Test client initialization with various configuration combinations
     - Test query and update operations with mocked database responses
     - Test error handling for connection and query failures
