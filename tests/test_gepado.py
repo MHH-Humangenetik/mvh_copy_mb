@@ -200,6 +200,29 @@ class TestGepadoClient:
         assert result is True
     
     @patch('mvh_copy_mb.gepado.pymssql.connect')
+    def test_update_record_database_error(self, mock_connect):
+        """Test update_record handles database errors without raising exceptions."""
+        import pymssql
+        mock_connection = Mock()
+        mock_cursor = Mock()
+        mock_connection.cursor.return_value = mock_cursor
+        # Mock guid found
+        mock_cursor.fetchone.return_value = ("test-guid-123",)
+        # Mock database error during update execution
+        mock_cursor.execute.side_effect = [None, pymssql.Error("Database error")]
+        mock_connect.return_value = mock_connection
+        
+        client = GepadoClient("host", "db", "user", "pass")
+        updates = {"vng": "NEW_VNG"}
+        result = client.update_record("12345", updates)
+        
+        # Should return False instead of raising exception
+        assert result is False
+        # Should call rollback on error
+        mock_connection.rollback.assert_called_once()
+        mock_cursor.close.assert_called_once()
+    
+    @patch('mvh_copy_mb.gepado.pymssql.connect')
     def test_close_connection(self, mock_connect):
         """Test closing database connection."""
         mock_connection = Mock()
@@ -670,3 +693,22 @@ class TestValidateAndUpdateRecord:
         assert result is False
         mock_client.query_record.assert_called_once_with("hl7_123")
         mock_client.update_record.assert_not_called()
+    
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_handles_update_failure_without_duplicate_logging(self, mock_client_class):
+        """Test that update failures don't cause duplicate error logging."""
+        mock_client = Mock()
+        
+        # Mock an empty gepado record that needs updates
+        mock_record = GepadoRecord(hl7_case_id="hl7_123", vng=None, ibe_g=None)
+        mock_client.query_record.return_value = mock_record
+        # Mock update failure (returns False, error already logged in update_record)
+        mock_client.update_record.return_value = False
+        
+        result = validate_and_update_record(
+            mock_client, "hl7_123", "VN123", "IBE123", "G", "1", "0"
+        )
+        
+        assert result is False
+        mock_client.query_record.assert_called_once_with("hl7_123")
+        mock_client.update_record.assert_called_once_with("hl7_123", {'vng': 'VN123', 'ibe_g': 'IBE123'})

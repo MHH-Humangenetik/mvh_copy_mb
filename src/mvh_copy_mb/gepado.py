@@ -231,7 +231,7 @@ class GepadoClient:
             logger.error(f"Failed to update gepado record for HL7 case ID {hl7_case_id}: {e}")
             if self._connection:
                 self._connection.rollback()
-            raise
+            return False
         finally:
             if cursor:
                 cursor.close()
@@ -401,7 +401,7 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
                 logger.info(f"Successfully updated gepado record for HL7 case ID {hl7_case_id}: {updates_needed}")
                 return True
             else:
-                logger.error(f"Failed to update gepado record for HL7 case ID {hl7_case_id}")
+                # Error already logged in update_record(), just return False
                 return False
         else:
             logger.info(f"No updates needed for gepado record with HL7 case ID {hl7_case_id}")
