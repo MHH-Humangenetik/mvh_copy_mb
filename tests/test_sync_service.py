@@ -797,10 +797,11 @@ class TestMissedUpdateSynchronization:
                     ]
                     
                     if first_record_events:
-                        # Should have kept the higher version
+                        # Should have kept the higher version (original + 10)
                         kept_event = first_record_events[0]
-                        assert kept_event.version > updates[0]['version'], (
-                            f"Should have kept higher version, got {kept_event.version}"
+                        expected_higher_version = updates[0]['version'] + 10
+                        assert kept_event.version >= expected_higher_version, (
+                            f"Should have kept higher version {expected_higher_version}, got {kept_event.version}"
                         )
                 
             finally:
