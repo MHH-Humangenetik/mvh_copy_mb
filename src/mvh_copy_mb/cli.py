@@ -212,13 +212,13 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                 # Continue processing even if database storage fails
         
         # Update gepado database if enabled and client is available
-        if update_gepado and gepado_client:
+        if update_gepado and gepado_client and case_id:
             try:
-                # Extract HL7 case ID from Meldebestaetigung
-                hl7_case_id = extract_hl7_case_id(meldebestaetigung)
+                # Extract HL7 case ID from GPAS-resolved case_id (which contains HUMGEN pattern)
+                hl7_case_id = extract_hl7_case_id(case_id)
                 
                 if hl7_case_id:
-                    logger.info(f"Extracted HL7 case ID: {hl7_case_id} from Meldebestaetigung")
+                    logger.info(f"Extracted HL7 case ID: {hl7_case_id} from GPAS-resolved case ID: {case_id}")
                     
                     # Update gepado record with validation
                     success = validate_and_update_record(
@@ -236,11 +236,13 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                     else:
                         logger.warning(f"Gepado update was skipped or failed for HL7 case ID: {hl7_case_id}")
                 else:
-                    logger.warning(f"Could not extract HL7 case ID from Meldebestaetigung: {meldebestaetigung}")
+                    logger.warning(f"Could not extract HL7 case ID from GPAS-resolved case ID: {case_id}")
                     
             except Exception as e:
                 logger.error(f"Error during gepado processing for vorgangsnummer {vorgangsnummer_str}: {e}")
                 # Continue processing even if gepado update fails
+        elif update_gepado and gepado_client and not case_id:
+            logger.warning(f"Gepado update skipped - no case ID resolved from GPAS for vorgangsnummer: {vorgangsnummer_str}")
         
         if case_id:
             # Requirement: "Files should be named by their case id then."

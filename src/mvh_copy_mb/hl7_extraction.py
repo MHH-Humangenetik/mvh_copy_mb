@@ -12,27 +12,26 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Pattern to match HUMGEN identifiers: HUMGEN_<letter>_<numeric_id>
-HUMGEN_PATTERN = re.compile(r'HUMGEN_\w_(\d+)')
+HUMGEN_PATTERN = re.compile(r'HUMGEN_\w+_(\d+).*')
 
 
 def extract_hl7_case_id(meldebestaetigung: str) -> Optional[str]:
     """
-    Extract HL7 case ID from Meldebestätigung string containing HUMGEN pattern.
+    Extract HL7 case ID from string containing HUMGEN pattern.
     
-    Searches for HUMGEN_<letter>_<numeric_id> pattern and extracts the numeric portion.
+    Searches for HUMGEN_<letters>_<numeric_id> pattern and extracts the numeric portion.
     If multiple patterns exist, returns the first valid numeric ID found.
     
     Args:
-        meldebestaetigung: The Meldebestätigung string to search
+        meldebestaetigung: The string to search for HUMGEN pattern
         
     Returns:
         The extracted numeric HL7 case ID as string, or None if no valid pattern found
         
     Examples:
-        >>> extract_hl7_case_id("Some text HUMGEN_A_12345 more text")
+        >>> extract_hl7_case_id("Some text HUMGEN_SE_12345 more text")
         '12345'
-        >>> extract_hl7_case_id("HUMGEN_B_67890 and HUMGEN_C_11111")
+        >>> extract_hl7_case_id("HUMGEN_FBREK_67890 and HUMGEN_SE_11111")
         '67890'
         >>> extract_hl7_case_id("No pattern here")
         None
