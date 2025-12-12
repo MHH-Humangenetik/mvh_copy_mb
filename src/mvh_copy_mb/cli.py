@@ -14,6 +14,8 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
+from mvh_copy_mb.hl7_extraction import extract_hl7_case_id
+from mvh_copy_mb.gepado import create_gepado_client_from_env, validate_and_update_record
 
 # Load environment variables
 load_dotenv()
@@ -132,7 +134,7 @@ def parse_meldebestaetigung(mb_string: str) -> dict:
         logger.error(f"Error parsing Meldebestaetigung '{mb_string}': {e}")
         return {}
 
-def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None):
+def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None):
     try:
         # Extract Vorgangsnummer directly
         vorgangsnummer = row.get('Vorgangsnummer')
@@ -209,6 +211,37 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                 logger.error(f"Failed to store record in database for vorgangsnummer {vorgangsnummer_str}: {e}")
                 # Continue processing even if database storage fails
         
+        # Update gepado database if enabled and client is available
+        if update_gepado and gepado_client:
+            try:
+                # Extract HL7 case ID from Meldebestaetigung
+                hl7_case_id = extract_hl7_case_id(meldebestaetigung)
+                
+                if hl7_case_id:
+                    logger.info(f"Extracted HL7 case ID: {hl7_case_id} from Meldebestaetigung")
+                    
+                    # Update gepado record with validation
+                    success = validate_and_update_record(
+                        gepado_client,
+                        hl7_case_id,
+                        vorgangsnummer_str,
+                        meldebestaetigung,  # Using meldebestaetigung as IBE string
+                        art_der_daten_str,
+                        ergebnis_qc,
+                        typ_der_meldung
+                    )
+                    
+                    if success:
+                        logger.info(f"Successfully processed gepado update for HL7 case ID: {hl7_case_id}")
+                    else:
+                        logger.warning(f"Gepado update was skipped or failed for HL7 case ID: {hl7_case_id}")
+                else:
+                    logger.warning(f"Could not extract HL7 case ID from Meldebestaetigung: {meldebestaetigung}")
+                    
+            except Exception as e:
+                logger.error(f"Error during gepado processing for vorgangsnummer {vorgangsnummer_str}: {e}")
+                # Continue processing even if gepado update fails
+        
         if case_id:
             # Requirement: "Files should be named by their case id then."
             # We copy the source CSV file and rename it to {prefix}{case_id}.csv
@@ -229,7 +262,7 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
     except Exception as e:
         logger.error(f"Error processing row: {e}")
 
-def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None):
+def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None):
     try:
         # Detect delimiter - assuming ';' for German CSVs usually, but let's try to be robust
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -246,7 +279,7 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, d
             reader = csv.DictReader(f, dialect=dialect)
             
             for row in reader:
-                process_row(row, file_path, root_dir, gpas_client, db)
+                process_row(row, file_path, root_dir, gpas_client, db, update_gepado, gepado_client)
                 
     except Exception as e:
         logger.error(f"Failed to process file {file_path}: {e}")
@@ -263,7 +296,8 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, d
 @click.option('--log-file', envvar='LOG_FILE', default='mvh_copy_mb.log', show_default=True, help='Log file path')
 @click.option('--archive-dir', envvar='ARCHIVE_DIR', type=click.Path(file_okay=False), help='Directory to move processed files to')
 @click.option('--db-path', envvar='DB_PATH', type=click.Path(), help='Path to DuckDB database file')
-def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl, log_level, log_file, archive_dir, db_path):
+@click.option('--update-gepado', envvar='UPDATE_GEPADO', is_flag=True, default=False, help='Enable gepado database updates with extracted HL7 case IDs')
+def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl, log_level, log_file, archive_dir, db_path, update_gepado):
     """
     Process MVH Meldebestaetigung CSV files and organize them based on metadata, resolving pseudonyms via gPAS.
     """
@@ -295,13 +329,23 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
     # Create parent directory if it doesn't exist
     db_path.parent.mkdir(parents=True, exist_ok=True)
     
+    # Initialize gepado client if update_gepado is enabled
+    gepado_client = None
+    if update_gepado:
+        gepado_client = create_gepado_client_from_env()
+        if gepado_client:
+            logger.info("Successfully initialized gepado client")
+        else:
+            logger.error("Failed to initialize gepado client - missing environment variables")
+            raise click.ClickException("Failed to initialize gepado client. Please check MSSQL environment variables.")
+    
     csv_files = list(input_path.glob('*.csv'))
     
     # Use context manager for automatic database cleanup
     with MeldebestaetigungDatabase(db_path) as db:
         for csv_file in tqdm(csv_files, desc="Processing CSV files", unit="file", ncols=80):
             logger.info(f"Processing file: {csv_file.name}")
-            process_csv_file(csv_file, input_path, gpas_client, db)
+            process_csv_file(csv_file, input_path, gpas_client, db, update_gepado, gepado_client)
 
             if archive_dir:
                 try:
@@ -314,6 +358,14 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
                 except Exception as e:
                     logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
                     raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+    
+    # Clean up gepado client connection
+    if gepado_client:
+        try:
+            gepado_client.close()
+            logger.info("Closed gepado database connection")
+        except Exception as e:
+            logger.warning(f"Error closing gepado connection: {e}")
 
 if __name__ == '__main__':
     main()

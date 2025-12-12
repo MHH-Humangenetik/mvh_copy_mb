@@ -247,6 +247,170 @@ class GepadoClient:
                 self._connection = None
 
 
+def map_data_type_to_fields(art_der_daten: str) -> tuple[str, str]:
+    """
+    Map Art der Daten value to corresponding VN and IBE field names.
+    
+    Args:
+        art_der_daten: Type of data ('G' for genomic, 'C' for clinical)
+        
+    Returns:
+        Tuple of (vn_field_name, ibe_field_name) for the data type
+        
+    Raises:
+        ValueError: If art_der_daten is not 'G' or 'C'
+    """
+    art_der_daten_normalized = art_der_daten.upper().strip()
+    
+    if art_der_daten_normalized == 'G':
+        return ('vng', 'ibe_g')
+    elif art_der_daten_normalized == 'C':
+        return ('vnk', 'ibe_k')
+    else:
+        raise ValueError(f"Invalid Art der Daten value: {art_der_daten}. Must be 'G' (genomic) or 'C' (clinical)")
+
+
+
+def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_string: str, art_der_daten: str) -> tuple[Dict[str, str], Dict[str, tuple[str, str]]]:
+    """
+    Compare existing gepado data with Meldebestätigung data and determine updates needed.
+    
+    Args:
+        existing_record: Current gepado record
+        vorgangsnummer: Vorgangsnummer from Meldebestätigung
+        ibe_string: IBE string from Meldebestätigung
+        art_der_daten: Type of data ('G' or 'C')
+        
+    Returns:
+        Tuple of (updates_needed, mismatches_found)
+        - updates_needed: Dict of field_name -> new_value for empty fields
+        - mismatches_found: Dict of field_name -> (existing_value, new_value) for conflicts
+        
+    Raises:
+        ValueError: If art_der_daten is invalid
+    """
+    vn_field, ibe_field = map_data_type_to_fields(art_der_daten)
+    
+    updates_needed = {}
+    mismatches_found = {}
+    
+    # Get current values from the record
+    current_vn = getattr(existing_record, vn_field)
+    current_ibe = getattr(existing_record, ibe_field)
+    
+    # Check VN field - strip whitespace but preserve case
+    if current_vn is None or current_vn.strip() == '':
+        # Field is empty, can be updated
+        updates_needed[vn_field] = vorgangsnummer
+        logger.info(f"Will update empty {vn_field} field with: {vorgangsnummer}")
+    elif current_vn != vorgangsnummer:
+        # Field has different value, log mismatch
+        mismatches_found[vn_field] = (current_vn, vorgangsnummer)
+        logger.error(f"Data mismatch in {vn_field}: existing='{current_vn}', new='{vorgangsnummer}'")
+    else:
+        # Field matches, log successful validation
+        logger.info(f"Validated {vn_field} field: {current_vn}")
+    
+    # Check IBE field - strip whitespace but preserve case
+    if current_ibe is None or current_ibe.strip() == '':
+        # Field is empty, can be updated
+        updates_needed[ibe_field] = ibe_string
+        logger.info(f"Will update empty {ibe_field} field with: {ibe_string}")
+    elif current_ibe != ibe_string:
+        # Field has different value, log mismatch
+        mismatches_found[ibe_field] = (current_ibe, ibe_string)
+        logger.error(f"Data mismatch in {ibe_field}: existing='{current_ibe}', new='{ibe_string}'")
+    else:
+        # Field matches, log successful validation
+        logger.info(f"Validated {ibe_field} field: {current_ibe}")
+    
+    return updates_needed, mismatches_found
+
+
+def should_process_record_for_gepado(ergebnis_qc: str, typ_der_meldung: str) -> bool:
+    """
+    Check if a record should be processed for gepado updates based on QC and message type.
+    
+    Args:
+        ergebnis_qc: QC result value from Meldebestätigung
+        typ_der_meldung: Type of report value from Meldebestätigung
+        
+    Returns:
+        True if record should be processed (QC=1 and Typ=0), False otherwise
+    """
+    should_process = ergebnis_qc == '1' and typ_der_meldung == '0'
+    
+    if not should_process:
+        logger.warning(f"Skipping gepado processing: QC={ergebnis_qc}, Typ={typ_der_meldung} (requires QC=1, Typ=0)")
+    else:
+        logger.info(f"Record passes gepado processing filter: QC={ergebnis_qc}, Typ={typ_der_meldung}")
+    
+    return should_process
+
+
+def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsnummer: str, ibe_string: str, art_der_daten: str, ergebnis_qc: str, typ_der_meldung: str) -> bool:
+    """
+    Validate record processing criteria and update gepado record if appropriate.
+    
+    Args:
+        client: GepadoClient instance
+        hl7_case_id: HL7 case ID to update
+        vorgangsnummer: Vorgangsnummer from Meldebestätigung
+        ibe_string: IBE string from Meldebestätigung
+        art_der_daten: Type of data ('G' or 'C')
+        ergebnis_qc: QC result value
+        typ_der_meldung: Type of report value
+        
+    Returns:
+        True if processing was successful, False otherwise
+    """
+    # Check if record should be processed
+    if not should_process_record_for_gepado(ergebnis_qc, typ_der_meldung):
+        logger.warning(f"Skipping gepado update for HL7 case ID {hl7_case_id}")
+        return False
+    
+    # Validate data type
+    try:
+        map_data_type_to_fields(art_der_daten)
+    except ValueError:
+        logger.error(f"Invalid Art der Daten '{art_der_daten}' for HL7 case ID {hl7_case_id}")
+        return False
+    
+    try:
+        # Query existing record
+        existing_record = client.query_record(hl7_case_id)
+        if not existing_record:
+            logger.warning(f"No gepado record found for HL7 case ID: {hl7_case_id}")
+            return False
+        
+        # Compare data and determine updates
+        updates_needed, mismatches_found = compare_record_data(
+            existing_record, vorgangsnummer, ibe_string, art_der_daten
+        )
+        
+        # Log any mismatches
+        if mismatches_found:
+            for field, (existing, new) in mismatches_found.items():
+                logger.error(f"Data mismatch detected for HL7 case ID {hl7_case_id}, field {field}: existing='{existing}', new='{new}'")
+        
+        # Perform updates if needed
+        if updates_needed:
+            success = client.update_record(hl7_case_id, updates_needed)
+            if success:
+                logger.info(f"Successfully updated gepado record for HL7 case ID {hl7_case_id}: {updates_needed}")
+                return True
+            else:
+                logger.error(f"Failed to update gepado record for HL7 case ID {hl7_case_id}")
+                return False
+        else:
+            logger.info(f"No updates needed for gepado record with HL7 case ID {hl7_case_id}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error processing gepado record for HL7 case ID {hl7_case_id}: {e}")
+        return False
+
+
 def create_gepado_client_from_env() -> Optional[GepadoClient]:
     """
     Create a GepadoClient instance using environment variables.

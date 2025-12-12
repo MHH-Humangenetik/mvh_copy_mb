@@ -43,55 +43,55 @@
     - Test error handling for connection and query failures
     - _Requirements: 1.1, 1.4, 1.5_
 
-- [ ] 4. Implement data validation and update logic
-  - [ ] 4.1 Create data field mapping functions
+- [x] 4. Implement data validation and update logic
+  - [x] 4.1 Create data field mapping functions
     - Implement logic to map Art der Daten to correct VN and IBE field names
     - Add validation for genomic vs clinical data type handling
     - _Requirements: 4.3, 4.4, 4.5, 4.6_
 
-  - [ ] 4.2 Implement record validation and update logic
+  - [x] 4.2 Implement record validation and update logic
     - Create functions to compare existing gepado data with Meldebestätigung data
     - Implement conditional update logic for empty fields only
     - Add data mismatch detection and logging
     - _Requirements: 4.3, 4.4, 4.5, 4.6, 4.7_
 
-  - [ ] 4.3 Write property test for data field mapping and updates
+  - [x] 4.3 Write property test for data field mapping and updates
     - **Property 4: Data Field Mapping and Updates**
     - **Validates: Requirements 4.3, 4.4, 4.5, 4.6**
 
-  - [ ] 4.4 Write property test for update operation idempotence
+  - [x] 4.4 Write property test for update operation idempotence
     - **Property 5: Update Operation Idempotence**
     - **Validates: Requirements 4.3, 4.4, 4.5, 4.6**
 
-- [ ] 5. Add record processing filter
-  - [ ] 5.1 Implement QC and Typ der Meldung validation
+- [x] 5. Add record processing filter
+  - [x] 5.1 Implement QC and Typ der Meldung validation
     - Add filtering logic to check Ergebnis QC = 1 and Typ der Meldung = 0
     - Ensure gepado processing is skipped for invalid records
     - _Requirements: 4.1, 4.2_
 
-  - [ ] 5.2 Write property test for record processing filter
+  - [x] 5.2 Write property test for record processing filter
     - **Property 3: Record Processing Filter**
     - **Validates: Requirements 4.1, 4.2**
 
-- [ ] 6. Integrate gepado functionality into CLI
-  - [ ] 6.1 Add --update-gepado CLI parameter
+- [x] 6. Integrate gepado functionality into CLI
+  - [x] 6.1 Add --update-gepado CLI parameter
     - Extend existing CLI with new optional boolean parameter
     - Update help text and parameter documentation
     - _Requirements: 1.1_
 
-  - [ ] 6.2 Modify process_row function for gepado integration
+  - [x] 6.2 Modify process_row function for gepado integration
     - Add conditional gepado processing based on --update-gepado flag
     - Integrate HL7 ID extraction, record querying, and updating
     - Ensure existing functionality remains unchanged when flag is not used
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-  - [ ] 6.3 Add comprehensive logging throughout gepado operations
+  - [x] 6.3 Add comprehensive logging throughout gepado operations
     - Implement detailed logging for all gepado operations
     - Include HL7 case IDs, field names, and operation results in log messages
     - Add error logging with sanitized exception details
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-  - [ ] 6.4 Write property test for comprehensive logging behavior
+  - [x] 6.4 Write property test for comprehensive logging behavior
     - **Property 7: Comprehensive Logging Behavior**
     - **Validates: Requirements 1.4, 1.5, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5**
 
