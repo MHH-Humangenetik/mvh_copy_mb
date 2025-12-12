@@ -69,12 +69,13 @@ class GepadoClient:
         """
         try:
             self._connection = pymssql.connect(
-                server=self.host,
+                host=self.host,
                 database=self.database,
                 user=self.username,
                 password=self.password,
                 timeout=30,
-                login_timeout=30
+                login_timeout=30,
+                server="."
             )
             logger.info(f"Successfully connected to gepado database at {self.host}")
             return self._connection
