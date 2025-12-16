@@ -17,6 +17,7 @@
     <td>{{ pair.genomic.indikationsbereich }}</td>
     <td>{{ pair.genomic.ergebnis_qc }}</td>
     <td>{{ pair.genomic.source_file }}</td>
+    <td class="output-date-cell">{{ pair.genomic.output_date.strftime('%Y-%m-%d') if pair.genomic.output_date else '' }}</td>
     <td>
         <span class="complete-indicator {{ 'yes' if pair.is_complete else 'no' }}"></span>
     </td>
@@ -52,6 +53,7 @@
     <td>{{ pair.clinical.indikationsbereich }}</td>
     <td>{{ pair.clinical.ergebnis_qc }}</td>
     <td>{{ pair.clinical.source_file }}</td>
+    <td class="output-date-cell">{{ pair.clinical.output_date.strftime('%Y-%m-%d') if pair.clinical.output_date else '' }}</td>
     <td>
         <span class="complete-indicator {{ 'yes' if pair.is_complete else 'no' }}"></span>
     </td>
@@ -77,6 +79,7 @@
     <td>{{ pair.genomic.indikationsbereich }}</td>
     <td>{{ pair.genomic.ergebnis_qc }}</td>
     <td>{{ pair.genomic.source_file }}</td>
+    <td class="output-date-cell">{{ pair.genomic.output_date.strftime('%Y-%m-%d') if pair.genomic.output_date else '' }}</td>
     <td>
         <span class="complete-indicator {{ 'yes' if pair.is_complete else 'no' }}"></span>
     </td>
@@ -105,6 +108,7 @@
     <td>{{ pair.clinical.indikationsbereich }}</td>
     <td>{{ pair.clinical.ergebnis_qc }}</td>
     <td>{{ pair.clinical.source_file }}</td>
+    <td class="output-date-cell">{{ pair.clinical.output_date.strftime('%Y-%m-%d') if pair.clinical.output_date else '' }}</td>
     <td>
         <span class="complete-indicator {{ 'yes' if pair.is_complete else 'no' }}"></span>
     </td>

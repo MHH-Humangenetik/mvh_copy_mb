@@ -25,8 +25,15 @@ def render_pair_to_html(pair) -> str:
     """
     html_parts = []
     
+    # Helper function to format output_date
+    def format_output_date(output_date):
+        if output_date is None:
+            return ""  # Empty cell for NULL dates
+        return output_date.strftime('%Y-%m-%d')
+    
     # Genomic row
     if pair.genomic:
+        genomic_output_date = format_output_date(pair.genomic.output_date)
         genomic_row = f"""
         <tr class="pair-row genomic priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             <td rowspan="{'2' if pair.is_complete else '1'}" class="case-id-cell">{pair.case_id}</td>
@@ -37,6 +44,7 @@ def render_pair_to_html(pair) -> str:
             <td>{pair.genomic.indikationsbereich}</td>
             <td>{pair.genomic.ergebnis_qc}</td>
             <td>{pair.genomic.source_file}</td>
+            <td class="output-date-cell">{genomic_output_date}</td>
             <td rowspan="{'2' if pair.is_complete else '1'}">
                 <span class="complete-indicator {'yes' if pair.is_complete else 'no'}"></span>
             </td>
@@ -52,6 +60,7 @@ def render_pair_to_html(pair) -> str:
     
     # Clinical row
     if pair.clinical:
+        clinical_output_date = format_output_date(pair.clinical.output_date)
         clinical_row = f"""
         <tr class="pair-row clinical priority-group-{pair.priority_group}" data-case-id="{pair.case_id}">
             {'<td rowspan="1" class="case-id-cell">' + pair.case_id + '</td>' if not pair.genomic else ''}
@@ -62,6 +71,7 @@ def render_pair_to_html(pair) -> str:
             <td>{pair.clinical.indikationsbereich}</td>
             <td>{pair.clinical.ergebnis_qc}</td>
             <td>{pair.clinical.source_file}</td>
+            <td class="output-date-cell">{clinical_output_date}</td>
             {'<td rowspan="1"><span class="complete-indicator ' + ('yes' if pair.is_complete else 'no') + '"></span></td>' if not pair.genomic else ''}
             {'<td rowspan="1"><span class="valid-indicator ' + ('yes' if pair.is_valid else 'no') + '"></span></td>' if not pair.genomic else ''}
             {'<td rowspan="1" class="done-cell">' + ('<input type="checkbox" ' + ('checked' if pair.is_done else '') + '>' if pair.is_complete else '') + '</td>' if not pair.genomic else ''}
@@ -927,3 +937,116 @@ def test_filtering_and_sorting_preserve_pair_grouping(
             if pair.is_complete:
                 assert pair.genomic is not None and pair.clinical is not None, \
                     f"Complete pair {pair.case_id} should have both records"
+
+
+# Feature: leistungsdatum-integration, Property 14: Web display formatting
+# Validates: Requirements 4.1
+@settings(max_examples=100)
+@given(
+    num_pairs=st.integers(min_value=1, max_value=10),
+    output_dates=st.lists(
+        st.one_of(
+            st.none(),
+            st.dates(min_value=datetime(2020, 1, 1).date(), max_value=datetime(2030, 12, 31).date())
+        ),
+        min_size=1,
+        max_size=10
+    )
+)
+def test_property_web_display_formatting(num_pairs: int, output_dates: list):
+    """
+    **Feature: leistungsdatum-integration, Property 14: Web display formatting**
+    
+    For any record with output_date, the web interface should display it with 
+    appropriate date formatting.
+    **Validates: Requirements 4.1**
+    
+    This test verifies that:
+    1. Records with valid output_date display the date in proper format
+    2. Records with NULL output_date display empty cell or placeholder
+    3. Date formatting is consistent across all records
+    """
+    # Ensure we have enough output dates
+    while len(output_dates) < num_pairs:
+        output_dates.append(None)
+    
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records with varying output_date values
+        with MeldebestaetigungDatabase(db_path) as db:
+            for i in range(num_pairs):
+                case_id = f"CASE_{i:03d}"
+                output_date = output_dates[i]
+                
+                # Create genomic record
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{i}",
+                    meldebestaetigung=f"mb_genomic_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="G",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False,
+                    output_date=output_date
+                )
+                db.upsert_record(genomic_record)
+                
+                # Create clinical record
+                clinical_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_C_{i}",
+                    meldebestaetigung=f"mb_clinical_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="C",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False,
+                    output_date=output_date
+                )
+                db.upsert_record(clinical_record)
+        
+        # Get pairs from service
+        service = WebDatabaseService(db_path)
+        pairs = service.get_all_records_grouped()
+        
+        # Verify output_date formatting for each pair
+        for pair in pairs:
+            html = render_pair_to_html(pair)
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # Check genomic record output_date display
+            if pair.genomic and pair.genomic.output_date:
+                # Should contain formatted date string (YYYY-MM-DD format)
+                expected_date_str = pair.genomic.output_date.strftime('%Y-%m-%d')
+                assert expected_date_str in html, \
+                    f"Genomic record output_date {pair.genomic.output_date} should be formatted as {expected_date_str}"
+            elif pair.genomic and pair.genomic.output_date is None:
+                # Should handle NULL gracefully (empty cell or placeholder)
+                # We verify this by ensuring no invalid date strings appear
+                invalid_patterns = ['None', 'null', 'undefined']
+                for pattern in invalid_patterns:
+                    assert pattern not in html.lower(), \
+                        f"NULL output_date should not display as '{pattern}'"
+            
+            # Check clinical record output_date display
+            if pair.clinical and pair.clinical.output_date:
+                # Should contain formatted date string (YYYY-MM-DD format)
+                expected_date_str = pair.clinical.output_date.strftime('%Y-%m-%d')
+                assert expected_date_str in html, \
+                    f"Clinical record output_date {pair.clinical.output_date} should be formatted as {expected_date_str}"
+            elif pair.clinical and pair.clinical.output_date is None:
+                # Should handle NULL gracefully (empty cell or placeholder)
+                # We verify this by ensuring no invalid date strings appear
+                invalid_patterns = ['None', 'null', 'undefined']
+                for pattern in invalid_patterns:
+                    assert pattern not in html.lower(), \
+                        f"NULL output_date should not display as '{pattern}'"

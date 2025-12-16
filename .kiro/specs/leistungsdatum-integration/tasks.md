@@ -92,23 +92,23 @@
   - **Property 23: Missing field resilience**
   - **Validates: Requirements 6.4**
 
-- [ ] 5. Update web interface models and endpoints for output_date
+- [x] 5. Update web interface models and endpoints for output_date
   - Add output_date field to RecordResponse and PairResponse models
   - Update web database queries to include output_date field
   - Modify API endpoints to return output_date in responses
   - _Requirements: 4.1, 4.5, 5.2, 6.5_
 
-- [ ] 5.1 Write property test for API compatibility
+- [x] 5.1 Write property test for API compatibility
   - **Property 24: API compatibility**
   - **Validates: Requirements 6.5**
 
-- [ ] 6. Implement web frontend display for output_date column
+- [x] 6. Implement web frontend display for output_date column
   - Add output_date column to web table template
   - Implement date formatting for display
   - Add NULL value handling with appropriate placeholder text
   - _Requirements: 4.1, 4.2_
 
-- [ ] 6.1 Write property test for web display formatting
+- [x] 6.1 Write property test for web display formatting
   - **Property 14: Web display formatting**
   - **Validates: Requirements 4.1**
 

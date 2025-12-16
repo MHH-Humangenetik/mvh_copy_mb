@@ -117,6 +117,13 @@
                                 <span x-show="sortDirection === 'desc'">▼</span>
                             </span>
                         </th>
+                        <th @click="sortBy('output_date')" class="sortable">
+                            Output Date
+                            <span x-show="sortColumn === 'output_date'">
+                                <span x-show="sortDirection === 'asc'">▲</span>
+                                <span x-show="sortDirection === 'desc'">▼</span>
+                            </span>
+                        </th>
                         <th>Complete</th>
                         <th>Valid</th>
                         <th>Done</th>
@@ -186,6 +193,12 @@
                             </template>
                             <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
                                 <td x-text="row.pair.clinical.source_file"></td>
+                            </template>
+                            <template x-if="row.type === 'genomic' || row.type === 'genomic-only'">
+                                <td class="output-date-cell" x-text="formatOutputDate(row.pair.genomic.output_date)"></td>
+                            </template>
+                            <template x-if="row.type === 'clinical' || row.type === 'clinical-only'">
+                                <td class="output-date-cell" x-text="formatOutputDate(row.pair.clinical.output_date)"></td>
                             </template>
                             <td>
                                 <span class="complete-indicator" :class="row.pair.is_complete ? 'yes' : 'no'"></span>
@@ -349,7 +362,8 @@
                                             safeString(pair.genomic.typ_der_meldung).includes(searchStr) ||
                                             safeString(pair.genomic.indikationsbereich).includes(searchStr) ||
                                             safeString(pair.genomic.ergebnis_qc).includes(searchStr) ||
-                                            safeString(pair.genomic.source_file).includes(searchStr)
+                                            safeString(pair.genomic.source_file).includes(searchStr) ||
+                                            safeString(pair.genomic.output_date).includes(searchStr)
                                         )) ||
                                         (pair.clinical && (
                                             safeString(pair.clinical.vorgangsnummer).includes(searchStr) ||
@@ -357,7 +371,8 @@
                                             safeString(pair.clinical.typ_der_meldung).includes(searchStr) ||
                                             safeString(pair.clinical.indikationsbereich).includes(searchStr) ||
                                             safeString(pair.clinical.ergebnis_qc).includes(searchStr) ||
-                                            safeString(pair.clinical.source_file).includes(searchStr)
+                                            safeString(pair.clinical.source_file).includes(searchStr) ||
+                                            safeString(pair.clinical.output_date).includes(searchStr)
                                         ))
                                     );
                                 } catch (filterError) {
@@ -458,6 +473,10 @@
                         if (!record || typeof record !== 'object') return '';
                         
                         const value = record[column];
+                        if (column === 'output_date') {
+                            // Handle date values specially
+                            return value || '';
+                        }
                         return value && typeof value === 'string' ? value : '';
                     } catch (error) {
                         console.error('Error getting column value:', pair, column, error);
@@ -492,6 +511,14 @@
 
                 isHtmxManaged(caseId) {
                     return this.htmxManagedPairs.has(caseId);
+                },
+
+                formatOutputDate(outputDate) {
+                    if (!outputDate) {
+                        return ''; // Empty string for NULL dates
+                    }
+                    // outputDate is already in ISO format (YYYY-MM-DD) from the server
+                    return outputDate;
                 }
             }
         }
