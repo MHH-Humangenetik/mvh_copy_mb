@@ -1608,3 +1608,124 @@ class TestValidateAndUpdateRecord:
         
         # Should not attempt any updates since all fields match and output_date is None
         mock_client.update_record.assert_not_called()
+
+
+class TestHL7CaseIdCorrectionIntegration:
+    """Test cases for HL7 case ID correction integration with GEPADO operations."""
+    
+    @patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado')
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_uses_corrected_case_id_for_gepado_operations(self, mock_client_class, mock_correction):
+        """Test that corrected case ID is used for GEPADO operations while preserving original for logging."""
+        mock_client = Mock()
+        original_case_id = "CASE_123"
+        corrected_case_id = "CORRECTED_456"
+        
+        # Mock the correction function to return a different case ID
+        mock_correction.return_value = corrected_case_id
+        
+        # Mock successful record query and update with corrected case ID
+        mock_record = GepadoRecord(hl7_case_id=corrected_case_id, vng=None, ibe_g=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Call validate_and_update_record with original case ID
+        result = validate_and_update_record(
+            mock_client, original_case_id, "VN123", "IBE123", "G", "1", "0"
+        )
+        
+        # Should return True
+        assert result is True
+        
+        # Verify correction function was called with original case ID
+        mock_correction.assert_called_once_with(mock_client, original_case_id)
+        
+        # Verify GEPADO operations used corrected case ID
+        mock_client.query_record.assert_called_once_with(corrected_case_id)
+        mock_client.update_record.assert_called_once_with(corrected_case_id, {'vng': 'VN123', 'ibe_g': 'IBE123'})
+    
+    @patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado')
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_uses_original_case_id_when_no_correction_needed(self, mock_client_class, mock_correction):
+        """Test that original case ID is used when no correction is needed."""
+        mock_client = Mock()
+        case_id = "CASE_123"
+        
+        # Mock the correction function to return the same case ID (no correction needed)
+        mock_correction.return_value = case_id
+        
+        # Mock successful record query and update
+        mock_record = GepadoRecord(hl7_case_id=case_id, vng=None, ibe_g=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Call validate_and_update_record
+        result = validate_and_update_record(
+            mock_client, case_id, "VN123", "IBE123", "G", "1", "0"
+        )
+        
+        # Should return True
+        assert result is True
+        
+        # Verify correction function was called
+        mock_correction.assert_called_once_with(mock_client, case_id)
+        
+        # Verify GEPADO operations used original case ID
+        mock_client.query_record.assert_called_once_with(case_id)
+        mock_client.update_record.assert_called_once_with(case_id, {'vng': 'VN123', 'ibe_g': 'IBE123'})
+    
+    @patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado')
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_handles_correction_system_errors_gracefully(self, mock_client_class, mock_correction):
+        """Test that errors in correction system are handled gracefully."""
+        mock_client = Mock()
+        case_id = "CASE_123"
+        
+        # Mock the correction function to raise an exception
+        mock_correction.side_effect = Exception("Database connection failed")
+        
+        # Call validate_and_update_record
+        result = validate_and_update_record(
+            mock_client, case_id, "VN123", "IBE123", "G", "1", "0"
+        )
+        
+        # Should return False due to error
+        assert result is False
+        
+        # Verify correction function was called
+        mock_correction.assert_called_once_with(mock_client, case_id)
+        
+        # Verify no GEPADO operations were attempted after error
+        mock_client.query_record.assert_not_called()
+        mock_client.update_record.assert_not_called()
+    
+    @patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado')
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_handles_missing_corrected_record(self, mock_client_class, mock_correction):
+        """Test handling when corrected case ID doesn't exist in GEPADO."""
+        mock_client = Mock()
+        original_case_id = "CASE_123"
+        corrected_case_id = "CORRECTED_456"
+        
+        # Mock the correction function to return a different case ID
+        mock_correction.return_value = corrected_case_id
+        
+        # Mock query_record to return None (record not found)
+        mock_client.query_record.return_value = None
+        
+        # Call validate_and_update_record
+        result = validate_and_update_record(
+            mock_client, original_case_id, "VN123", "IBE123", "G", "1", "0"
+        )
+        
+        # Should return False due to missing record
+        assert result is False
+        
+        # Verify correction function was called
+        mock_correction.assert_called_once_with(mock_client, original_case_id)
+        
+        # Verify query was attempted with corrected case ID
+        mock_client.query_record.assert_called_once_with(corrected_case_id)
+        
+        # Verify no update was attempted
+        mock_client.update_record.assert_not_called()

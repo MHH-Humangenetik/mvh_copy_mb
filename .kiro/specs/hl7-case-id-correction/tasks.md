@@ -59,7 +59,7 @@
   - **Property 10: Multiple candidates logging**
   - **Validates: Requirements 3.2**
 
-- [ ] 4. Integrate correction system with GEPADO operations
+- [x] 4. Integrate correction system with GEPADO operations
   - Create main correction orchestrator function that combines validation and search
   - Update GEPADO integration to use corrected hl7_case_id for updates only
   - Ensure local database storage and file naming continue using original hl7_case_id
@@ -77,21 +77,6 @@
 - [ ]* 4.3 Write property test for GEPADO update correction
   - **Property 13: GEPADO update correction**
   - **Validates: Requirements 4.3**
-
-- [ ] 5. Implement robust error handling and resilience
-  - Add retry logic with exponential backoff for database connection issues
-  - Implement graceful handling of SQL query errors and unexpected results
-  - Create timeout handling for long-running correction queries
-  - Add resource constraint handling for memory and connection pool limits
-  - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
-
-- [ ]* 5.1 Write property test for database error resilience
-  - **Property 14: Database error resilience**
-  - **Validates: Requirements 5.1**
-
-- [ ]* 5.2 Write property test for query error handling
-  - **Property 15: Query error handling**
-  - **Validates: Requirements 5.2**
 
 - [ ] 6. Update existing GEPADO integration to use correction system
   - Modify validate_and_update_record function to use corrected hl7_case_id

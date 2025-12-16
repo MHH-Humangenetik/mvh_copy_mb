@@ -411,9 +411,14 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
     """
     Validate record processing criteria and update gepado record if appropriate.
     
+    This function integrates the HL7 case ID correction system to ensure GEPADO
+    operations target the correct genomic sequencing cases. The original hl7_case_id
+    is preserved for logging and error reporting, while the corrected case ID is
+    used for all GEPADO database operations.
+    
     Args:
         client: GepadoClient instance
-        hl7_case_id: HL7 case ID to update
+        hl7_case_id: Original HL7 case ID from Meldebestätigung (used for local storage/file naming)
         vorgangsnummer: Vorgangsnummer from Meldebestätigung
         ibe_string: IBE string from Meldebestätigung
         art_der_daten: Type of data ('G' or 'C')
@@ -437,10 +442,19 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
         return False
     
     try:
-        # Query existing record
-        existing_record = client.query_record(hl7_case_id)
+        # Apply HL7 case ID correction for GEPADO operations
+        # Import inside function to avoid circular import
+        from .hl7_case_id_correction import correct_hl7_case_id_for_gepado
+        corrected_case_id = correct_hl7_case_id_for_gepado(client, hl7_case_id)
+        
+        # Log when corrected case ID is being used for GEPADO operations
+        if corrected_case_id != hl7_case_id:
+            logger.info(f"Using corrected HL7 case ID for GEPADO operations: {hl7_case_id} -> {corrected_case_id}")
+        
+        # Query existing record using corrected case ID
+        existing_record = client.query_record(corrected_case_id)
         if not existing_record:
-            logger.warning(f"No gepado record found for HL7 case ID: {hl7_case_id}")
+            logger.warning(f"No gepado record found for corrected HL7 case ID: {corrected_case_id} (original: {hl7_case_id})")
             return False
         
         # Compare data and determine updates (including output_date)
@@ -448,22 +462,31 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
             existing_record, vorgangsnummer, ibe_string, art_der_daten, output_date
         )
         
-        # Log any mismatches
+        # Log any mismatches (reference original case ID for clarity)
         if mismatches_found:
             for field, (existing, new) in mismatches_found.items():
-                logger.error(f"Data mismatch detected for HL7 case ID {hl7_case_id}, field {field}: existing='{existing}', new='{new}'")
+                if corrected_case_id != hl7_case_id:
+                    logger.error(f"Data mismatch detected for corrected HL7 case ID {corrected_case_id} (original: {hl7_case_id}), field {field}: existing='{existing}', new='{new}'")
+                else:
+                    logger.error(f"Data mismatch detected for HL7 case ID {hl7_case_id}, field {field}: existing='{existing}', new='{new}'")
         
-        # Perform updates if needed
+        # Perform updates if needed using corrected case ID
         success = True
         if updates_needed:
-            success = client.update_record(hl7_case_id, updates_needed)
+            success = client.update_record(corrected_case_id, updates_needed)
             if success:
-                logger.info(f"Successfully updated gepado record for HL7 case ID {hl7_case_id}: {updates_needed}")
+                if corrected_case_id != hl7_case_id:
+                    logger.info(f"Successfully updated gepado record for corrected HL7 case ID {corrected_case_id} (original: {hl7_case_id}): {updates_needed}")
+                else:
+                    logger.info(f"Successfully updated gepado record for HL7 case ID {hl7_case_id}: {updates_needed}")
             else:
                 # Error already logged in update_record(), just return False
                 return False
         else:
-            logger.info(f"No updates needed for gepado record with HL7 case ID {hl7_case_id}")
+            if corrected_case_id != hl7_case_id:
+                logger.info(f"No updates needed for gepado record with corrected HL7 case ID {corrected_case_id} (original: {hl7_case_id})")
+            else:
+                logger.info(f"No updates needed for gepado record with HL7 case ID {hl7_case_id}")
         
         return success
             
