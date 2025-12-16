@@ -60,7 +60,7 @@ The correction system integrates into the existing GEPADO processing pipeline:
 - **Purpose**: Find correct genomic sequencing case for a patient
 - **Input**: Patient GUID, GEPADO database connection
 - **Output**: Corrected hl7_case_id or None if correction fails
-- **Interface**: `find_correct_genomic_case(client: GepadoClient, patient_guid: str) -> Optional[str]`
+- **Interface**: `find_correct_genomic_case(client: GepadoClient, patient_guid: str, original_case_id: str = None) -> Optional[str]`
 
 ### HL7 Case ID Corrector (Main Component)
 - **Purpose**: Orchestrate the complete validation and correction process

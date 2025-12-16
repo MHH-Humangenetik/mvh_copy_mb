@@ -18,7 +18,7 @@
   - **Property 3: Incorrect case detection**
   - **Validates: Requirements 1.3**
 
-- [ ] 2. Implement patient GUID extraction and case search
+- [x] 2. Implement patient GUID extraction and case search
   - Create function to extract guid_patient from av_ordermanagement for given hl7_case_id
   - Implement search logic to find all cases with same patient GUID and sapVisitingType 'GS'
   - Add handling for multiple, single, or no matching cases
@@ -44,7 +44,7 @@
   - **Property 8: No cases warning handling**
   - **Validates: Requirements 2.5**
 
-- [ ] 3. Create comprehensive logging system for corrections
+- [x] 3. Create comprehensive logging system for corrections
   - Implement detailed logging for successful corrections with original and corrected IDs
   - Add logging for multiple candidate cases with all case IDs
   - Create warning logs for cases with no correction candidates

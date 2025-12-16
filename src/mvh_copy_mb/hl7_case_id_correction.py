@@ -71,10 +71,9 @@ def validate_hl7_case_sapvisitingtype(client: GepadoClient, hl7_case_id: str) ->
             sap_visiting_type = row[0]
             is_valid = sap_visiting_type == 'GS'
             
-            if is_valid:
-                logger.info(f"HL7 case ID {hl7_case_id} has correct sapVisitingType: {sap_visiting_type}")
-            else:
-                logger.warning(f"HL7 case ID {hl7_case_id} has incorrect sapVisitingType: {sap_visiting_type} (expected 'GS')")
+            # Only log at debug level here to avoid duplicate logging
+            # Main logging will be done in the orchestrator function
+            logger.debug(f"HL7 case ID {hl7_case_id} sapVisitingType: {sap_visiting_type} (valid: {is_valid})")
             
             return is_valid
         else:
@@ -121,10 +120,11 @@ def get_patient_guid_for_case(client: GepadoClient, hl7_case_id: str) -> Optiona
         
         if row:
             patient_guid = row[0]
-            logger.info(f"Found patient GUID {patient_guid} for HL7 case ID {hl7_case_id}")
+            # Don't log here - let the orchestrator handle logging to avoid duplicates
             return patient_guid
         else:
-            logger.warning(f"No patient GUID found for HL7 case ID {hl7_case_id}")
+            # Don't log here - let the orchestrator function handle the logging
+            # to avoid duplicate warnings
             return None
             
     except Exception as e:
@@ -135,13 +135,14 @@ def get_patient_guid_for_case(client: GepadoClient, hl7_case_id: str) -> Optiona
             cursor.close()
 
 
-def find_correct_genomic_case(client: GepadoClient, patient_guid: str) -> Optional[str]:
+def find_correct_genomic_case(client: GepadoClient, patient_guid: str, original_case_id: str = None) -> Optional[str]:
     """
     Find correct genomic sequencing case for a patient.
     
     Args:
         client: GepadoClient instance for database access
         patient_guid: The patient GUID to search for
+        original_case_id: Original case ID for enhanced logging (optional)
         
     Returns:
         Corrected hl7_case_id if exactly one correct case found, None otherwise
@@ -166,16 +167,25 @@ def find_correct_genomic_case(client: GepadoClient, patient_guid: str) -> Option
         rows = cursor.fetchall()
         
         if len(rows) == 0:
-            logger.warning(f"No genomic sequencing cases found for patient GUID {patient_guid}")
+            # Enhanced logging: Include patient GUID and original case ID when no correct cases exist
+            if original_case_id:
+                logger.warning(f"No genomic sequencing cases found for patient GUID {patient_guid} (original case ID: {original_case_id})")
+            else:
+                logger.warning(f"No genomic sequencing cases found for patient GUID {patient_guid}")
             return None
         elif len(rows) == 1:
             corrected_case_id = rows[0][0]
             logger.info(f"Found single correct genomic case {corrected_case_id} for patient GUID {patient_guid}")
             return corrected_case_id
         else:
-            # Multiple cases found - log all candidates for manual review
+            # Enhanced logging: Log all candidate case IDs for manual review
             case_ids = [row[0] for row in rows]
-            logger.error(f"Multiple genomic sequencing cases found for patient GUID {patient_guid}: {case_ids}")
+            if original_case_id:
+                logger.error(f"Multiple genomic sequencing cases found for patient GUID {patient_guid} (original case ID: {original_case_id}). "
+                           f"Manual review required for candidates: {', '.join(case_ids)}")
+            else:
+                logger.error(f"Multiple genomic sequencing cases found for patient GUID {patient_guid}. "
+                           f"Manual review required for candidates: {', '.join(case_ids)}")
             return None
             
     except Exception as e:
@@ -202,33 +212,39 @@ def correct_hl7_case_id_for_gepado(client: GepadoClient, hl7_case_id: str) -> st
         is_valid = validate_hl7_case_sapvisitingtype(client, hl7_case_id)
         
         if is_valid:
-            # Case is already correct, no correction needed
-            logger.info(f"HL7 case ID {hl7_case_id} validation passed, no correction needed")
+            # Consolidated logging: Single message for successful validation
+            logger.info(f"HL7 case ID validation PASSED for {hl7_case_id} - sapVisitingType is 'GS', no correction needed")
             return hl7_case_id
+        else:
+            # Log the validation failure with specific reason
+            logger.warning(f"HL7 case ID validation FAILED for {hl7_case_id} - sapVisitingType is not 'GS', attempting correction")
         
         # Step 2: Get patient GUID for incorrect case
         patient_guid = get_patient_guid_for_case(client, hl7_case_id)
         
         if not patient_guid:
-            logger.error(f"Cannot correct HL7 case ID {hl7_case_id}: patient GUID not found")
+            logger.error(f"Cannot correct HL7 case ID {hl7_case_id}: patient GUID not found in av_ordermanagement")
             return hl7_case_id
         
-        # Step 3: Find correct genomic case for this patient
-        corrected_case_id = find_correct_genomic_case(client, patient_guid)
+        logger.info(f"Found patient GUID {patient_guid} for HL7 case ID {hl7_case_id}, searching for correct genomic case")
+        
+        # Step 3: Find correct genomic case for this patient (pass original case ID for enhanced logging)
+        corrected_case_id = find_correct_genomic_case(client, patient_guid, hl7_case_id)
         
         if corrected_case_id:
-            logger.info(f"Successfully corrected HL7 case ID: {hl7_case_id} -> {corrected_case_id}")
+            # Enhanced logging: Detailed successful correction with both original and corrected IDs
+            logger.info(f"HL7 case ID correction SUCCESSFUL: {hl7_case_id} -> {corrected_case_id} (patient GUID: {patient_guid})")
             return corrected_case_id
         else:
-            logger.warning(f"Cannot correct HL7 case ID {hl7_case_id}: no unique correct case found")
+            # The specific reason for failure is already logged in find_correct_genomic_case
+            # Just log the final outcome here
+            logger.warning(f"HL7 case ID correction FAILED for {hl7_case_id}: returning original case ID")
             return hl7_case_id
             
     except Exception as e:
-        if "pymssql" in str(type(e)):
-            logger.error(f"Database error during HL7 case ID correction for {hl7_case_id}: {e}")
+        # Enhanced error logging with more detailed information
+        if "pymssql" in str(type(e)) or "database" in str(e).lower():
+            logger.error(f"Database connection/query error during HL7 case ID correction for {hl7_case_id}: {type(e).__name__}: {e}")
         else:
-            logger.error(f"Unexpected error during HL7 case ID correction for {hl7_case_id}: {e}")
-        return hl7_case_id
-    except Exception as e:
-        logger.error(f"Unexpected error during HL7 case ID correction for {hl7_case_id}: {e}")
+            logger.error(f"Unexpected error during HL7 case ID correction for {hl7_case_id}: {type(e).__name__}: {e}")
         return hl7_case_id

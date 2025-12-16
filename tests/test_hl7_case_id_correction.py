@@ -282,7 +282,7 @@ class TestCorrectHL7CaseIdForGepado:
         assert result == "corrected_case_456"
         mock_validate.assert_called_once_with(client, "incorrect_case_123")
         mock_get_guid.assert_called_once_with(client, "incorrect_case_123")
-        mock_find_case.assert_called_once_with(client, "patient-guid-123")
+        mock_find_case.assert_called_once_with(client, "patient-guid-123", "incorrect_case_123")
     
     @patch('mvh_copy_mb.hl7_case_id_correction.get_patient_guid_for_case')
     @patch('mvh_copy_mb.hl7_case_id_correction.validate_hl7_case_sapvisitingtype')
@@ -313,7 +313,7 @@ class TestCorrectHL7CaseIdForGepado:
         assert result == "incorrect_case_123"
         mock_validate.assert_called_once_with(client, "incorrect_case_123")
         mock_get_guid.assert_called_once_with(client, "incorrect_case_123")
-        mock_find_case.assert_called_once_with(client, "patient-guid-123")
+        mock_find_case.assert_called_once_with(client, "patient-guid-123", "incorrect_case_123")
     
     @patch('mvh_copy_mb.hl7_case_id_correction.validate_hl7_case_sapvisitingtype')
     def test_correction_handles_database_error(self, mock_validate):
