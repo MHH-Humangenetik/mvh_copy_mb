@@ -1073,6 +1073,160 @@ def test_null_storage_for_unparseable_dates(
             assert result[0] is None  # output_date should be NULL in database
 
 
+# Feature: leistungsdatum-integration, Property 16: Migration data preservation
+# Validates: Requirements 5.5
+@settings(max_examples=100)
+@given(
+    records_data=st.lists(
+        st.tuples(
+            st.text(min_size=1, max_size=100),  # vorgangsnummer
+            st.text(min_size=1, max_size=500),  # meldebestaetigung
+            st.text(min_size=1, max_size=100),  # source_file
+            st.text(min_size=1, max_size=50),   # typ_der_meldung
+            st.text(min_size=1, max_size=50),   # indikationsbereich
+            st.text(min_size=1, max_size=50),   # art_der_daten
+            st.text(min_size=1, max_size=50),   # ergebnis_qc
+            st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # case_id
+            st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # gpas_domain
+            st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),  # processed_at
+            st.booleans(),  # is_done
+            st.one_of(
+                st.none(),
+                st.dates(min_value=pytest.importorskip("datetime").date(2020, 1, 1), 
+                        max_value=pytest.importorskip("datetime").date(2030, 12, 31))
+            )  # output_date
+        ),
+        min_size=1, max_size=10, unique_by=lambda x: x[0]  # Unique by vorgangsnummer
+    )
+)
+def test_migration_data_preservation(records_data):
+    """
+    **Feature: leistungsdatum-integration, Property 16: Migration data preservation**
+    
+    For any existing record during migration, existing output_date values should be preserved.
+    **Validates: Requirements 5.5**
+    """
+    from mvh_copy_mb.database import MeldebestaetigungRecord
+    import duckdb
+    
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records from the generated data
+        records = []
+        for data in records_data:
+            record = MeldebestaetigungRecord(
+                vorgangsnummer=data[0],
+                meldebestaetigung=data[1],
+                source_file=data[2],
+                typ_der_meldung=data[3],
+                indikationsbereich=data[4],
+                art_der_daten=data[5],
+                ergebnis_qc=data[6],
+                case_id=data[7],
+                gpas_domain=data[8],
+                processed_at=data[9],
+                is_done=data[10],
+                output_date=data[11]
+            )
+            records.append(record)
+        
+        # Step 1: Create a database with the old schema (without output_date column)
+        conn = duckdb.connect(str(db_path))
+        
+        # Create table without output_date column (simulating old schema)
+        old_schema_sql = """
+        CREATE TABLE meldebestaetigungen (
+            vorgangsnummer VARCHAR NOT NULL PRIMARY KEY,
+            source_file VARCHAR NOT NULL,
+            meldebestaetigung VARCHAR NOT NULL,
+            typ_der_meldung VARCHAR NOT NULL,
+            indikationsbereich VARCHAR NOT NULL,
+            art_der_daten VARCHAR NOT NULL,
+            ergebnis_qc VARCHAR NOT NULL,
+            case_id VARCHAR,
+            gpas_domain VARCHAR,
+            processed_at TIMESTAMP NOT NULL,
+            is_done BOOLEAN DEFAULT FALSE
+        )
+        """
+        conn.execute(old_schema_sql)
+        
+        # Insert records without output_date (simulating existing data)
+        for record in records:
+            insert_sql = """
+            INSERT INTO meldebestaetigungen (
+                vorgangsnummer, source_file, meldebestaetigung, typ_der_meldung,
+                indikationsbereich, art_der_daten, ergebnis_qc, case_id,
+                gpas_domain, processed_at, is_done
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """
+            conn.execute(insert_sql, [
+                record.vorgangsnummer, record.source_file, record.meldebestaetigung,
+                record.typ_der_meldung, record.indikationsbereich, record.art_der_daten,
+                record.ergebnis_qc, record.case_id, record.gpas_domain,
+                record.processed_at, record.is_done
+            ])
+        
+        conn.commit()
+        conn.close()
+        
+        # Step 2: Open database with new schema (triggers migration)
+        with MeldebestaetigungDatabase(db_path) as db:
+            # Verify migration occurred by checking column exists
+            column_check_sql = """
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'meldebestaetigungen' 
+            AND column_name = 'output_date'
+            """
+            result = db.conn.execute(column_check_sql).fetchall()
+            assert len(result) == 1, "output_date column should exist after migration"
+            
+            # Step 3: Verify all existing data is preserved
+            for original_record in records:
+                retrieved_record = db.get_record(original_record.vorgangsnummer)
+                assert retrieved_record is not None
+                
+                # Verify all original fields are preserved
+                assert retrieved_record.vorgangsnummer == original_record.vorgangsnummer
+                assert retrieved_record.meldebestaetigung == original_record.meldebestaetigung
+                assert retrieved_record.source_file == original_record.source_file
+                assert retrieved_record.typ_der_meldung == original_record.typ_der_meldung
+                assert retrieved_record.indikationsbereich == original_record.indikationsbereich
+                assert retrieved_record.art_der_daten == original_record.art_der_daten
+                assert retrieved_record.ergebnis_qc == original_record.ergebnis_qc
+                assert retrieved_record.case_id == original_record.case_id
+                assert retrieved_record.gpas_domain == original_record.gpas_domain
+                assert retrieved_record.processed_at == original_record.processed_at
+                assert retrieved_record.is_done == original_record.is_done
+                
+                # Verify output_date is NULL for migrated records (since old schema didn't have it)
+                assert retrieved_record.output_date is None
+            
+            # Step 4: Verify we can still insert new records with output_date
+            new_record = MeldebestaetigungRecord(
+                vorgangsnummer="NEW_RECORD_AFTER_MIGRATION",
+                meldebestaetigung="test_mb_new",
+                source_file="test_new.csv",
+                typ_der_meldung="0",
+                indikationsbereich="test",
+                art_der_daten="test",
+                ergebnis_qc="1",
+                case_id="NEW_CASE",
+                gpas_domain="test_domain",
+                processed_at=pytest.importorskip("datetime").datetime(2023, 1, 1),
+                is_done=False,
+                output_date=pytest.importorskip("datetime").date(2023, 1, 15)
+            )
+            
+            db.upsert_record(new_record)
+            retrieved_new = db.get_record("NEW_RECORD_AFTER_MIGRATION")
+            assert retrieved_new is not None
+            assert retrieved_new.output_date == pytest.importorskip("datetime").date(2023, 1, 15)
+
+
 # Feature: web-frontend, Property 11: Done status changes persist to database
 # Validates: Requirements 6.3
 @settings(max_examples=100)
