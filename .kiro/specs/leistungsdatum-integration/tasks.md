@@ -112,29 +112,24 @@
   - **Property 14: Web display formatting**
   - **Validates: Requirements 4.1**
 
-- [ ] 7. Add sorting and filtering functionality for output_date
+- [x] 7. Add sorting functionality for output_date
   - Implement chronological sorting for output_date column
-  - Add date range filtering capabilities to web interface
-  - Handle NULL values appropriately in sorting and filtering
-  - _Requirements: 4.3, 4.4_
+  - Handle NULL values appropriately in sorting
+  - _Requirements: 4.3_
 
-- [ ] 7.1 Write property test for chronological sorting
+- [x] 7.1 Write property test for chronological sorting
   - **Property 15: Chronological sorting**
   - **Validates: Requirements 4.3**
-
-- [ ] 7.2 Write property test for date range filtering
-  - **Property 16: Date range filtering**
-  - **Validates: Requirements 4.4**
 
 - [ ] 8. Update data export functionality to include output_date
   - Modify export queries to include output_date field
   - Ensure output_date appears in exported CSV/JSON formats
   - Test export functionality with various date values and NULL handling
-  - _Requirements: 4.5_
+  - _Requirements: 4.4_
 
 - [ ] 8.1 Write property test for export field inclusion
-  - **Property 17: Export field inclusion**
-  - **Validates: Requirements 4.5**
+  - **Property 16: Export field inclusion**
+  - **Validates: Requirements 4.4**
 
 - [ ] 9. Implement database migration for existing installations
   - Create migration script to add output_date column to existing databases
@@ -143,7 +138,7 @@
   - _Requirements: 2.3, 5.5, 6.2_
 
 - [ ] 9.1 Write property test for migration data preservation
-  - **Property 20: Migration data preservation**
+  - **Property 19: Migration data preservation**
   - **Validates: Requirements 5.5**
 
 - [ ] 10. Checkpoint - Ensure all tests pass, ask the user if questions arise

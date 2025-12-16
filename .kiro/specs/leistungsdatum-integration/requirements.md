@@ -62,8 +62,7 @@ This feature adds the Leistungsdatum (service date) field to all data structures
 1. WHEN displaying records in the web table THEN the system SHALL show the output_date column with appropriate formatting
 2. WHEN the output_date is NULL THEN the system SHALL display an empty cell or placeholder text
 3. WHEN sorting by output_date THEN the system SHALL order records chronologically
-4. WHEN filtering records THEN the system SHALL support filtering by date ranges on the output_date field
-5. WHEN exporting data THEN the system SHALL include the output_date field in exported results
+4. WHEN exporting data THEN the system SHALL include the output_date field in exported results
 
 ### Requirement 5
 

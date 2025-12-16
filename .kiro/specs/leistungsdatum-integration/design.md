@@ -53,7 +53,7 @@ The integration follows the existing modular architecture of the system:
 - **Interface**: `sync_output_date_to_gepado(client: GepadoClient, hl7_case_id: str, output_date: date) -> bool`
 
 ### Web Interface Updates
-- **Purpose**: Display output_date in table and support filtering/sorting
+- **Purpose**: Display output_date in table and support sorting
 - **Input**: Database records with output_date field
 - **Output**: HTML table with formatted date column
 - **Interface**: Updated templates and API endpoints
@@ -179,39 +179,35 @@ Property 15: Chronological sorting
 *For any* set of records with output_date values, sorting by date should order them chronologically
 **Validates: Requirements 4.3**
 
-Property 16: Date range filtering
-*For any* date range filter, only records with output_date within the range should be returned
+Property 16: Export field inclusion
+*For any* data export operation, the output_date field should be included in the exported results
 **Validates: Requirements 4.4**
 
-Property 17: Export field inclusion
-*For any* data export operation, the output_date field should be included in the exported results
-**Validates: Requirements 4.5**
-
-Property 18: Meldebestätigung processing data flow
+Property 17: Meldebestätigung processing data flow
 *For any* Meldebestätigung processing, the Leistungsdatum should be extracted and passed to downstream components
 **Validates: Requirements 5.3**
 
-Property 19: GEPADO comparison validation
+Property 18: GEPADO comparison validation
 *For any* GEPADO record comparison, output_date validation logic should be included in the comparison
 **Validates: Requirements 5.4**
 
-Property 20: Migration data preservation
+Property 19: Migration data preservation
 *For any* existing record during migration, existing output_date values should be preserved
 **Validates: Requirements 5.5**
 
-Property 21: NULL value handling
+Property 20: NULL value handling
 *For any* record without output_date, the system should handle NULL values gracefully without errors
 **Validates: Requirements 6.1**
 
-Property 22: Legacy format handling
+Property 21: Legacy format handling
 *For any* old Meldebestätigung format, the system should attempt extraction but continue processing if it fails
 **Validates: Requirements 6.3**
 
-Property 23: Missing field resilience
+Property 22: Missing field resilience
 *For any* GEPADO record lacking MV_output_date field, the system should handle the missing field without errors
 **Validates: Requirements 6.4**
 
-Property 24: API compatibility
+Property 23: API compatibility
 *For any* API response, the output_date field should be included while maintaining compatibility with existing clients
 **Validates: Requirements 6.5**
 
@@ -235,7 +231,6 @@ Property 24: API compatibility
 ### Web Interface Errors
 - **NULL date display**: Show empty cell or configurable placeholder text
 - **Sorting with mixed NULL/valid dates**: Handle NULL values consistently (e.g., sort to end)
-- **Filter parsing errors**: Show user-friendly error message and reset filter
 
 ## Testing Strategy
 

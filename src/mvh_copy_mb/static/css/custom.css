@@ -111,6 +111,8 @@ h6 {
     outline: none;
 }
 
+
+
 /* Statistics container */
 .statistics-container {
     display: flex;
@@ -298,24 +300,30 @@ td:nth-child(7) {
 /* Source File */
 th:nth-child(8),
 td:nth-child(8) {
-    width: 15%;
+    width: 12%;
+}
+
+/* Output Date */
+th:nth-child(9),
+td:nth-child(9) {
+    width: 10%;
 }
 
 /* Complete */
-th:nth-child(9),
-td:nth-child(9) {
-    width: 5%;
-}
-
-/* Valid */
 th:nth-child(10),
 td:nth-child(10) {
     width: 5%;
 }
 
-/* Done */
+/* Valid */
 th:nth-child(11),
 td:nth-child(11) {
+    width: 5%;
+}
+
+/* Done */
+th:nth-child(12),
+td:nth-child(12) {
     width: 5%;
 }
 

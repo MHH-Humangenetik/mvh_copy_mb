@@ -346,6 +346,7 @@
                             pair && typeof pair === 'object' && pair.case_id
                         ) : [];
 
+                        // Apply text filter
                         let filtered = this.filter === ''
                             ? [...validPairs]  // Create a copy to avoid mutating original
                             : validPairs.filter(pair => {
@@ -381,6 +382,8 @@
                                 }
                             });
 
+
+
                         return filtered.sort((a, b) => {
                             try {
                                 // Ensure both objects are valid
@@ -409,6 +412,22 @@
                                 let aVal = this.getColumnValue(a, this.sortColumn);
                                 let bVal = this.getColumnValue(b, this.sortColumn);
 
+                                // Handle special sorting for output_date column
+                                if (this.sortColumn === 'output_date') {
+                                    // Handle NULL values - sort to end for ascending, beginning for descending
+                                    if (aVal === null && bVal === null) return 0;
+                                    if (aVal === null) return this.sortDirection === 'asc' ? 1 : -1;
+                                    if (bVal === null) return this.sortDirection === 'asc' ? -1 : 1;
+                                    
+                                    // Both are Date objects, compare chronologically
+                                    if (this.sortDirection === 'asc') {
+                                        return aVal.getTime() - bVal.getTime();
+                                    } else {
+                                        return bVal.getTime() - aVal.getTime();
+                                    }
+                                }
+
+                                // Default string comparison for other columns
                                 if (this.sortDirection === 'asc') {
                                     return aVal > bVal ? 1 : -1;
                                 } else {
@@ -474,8 +493,8 @@
                         
                         const value = record[column];
                         if (column === 'output_date') {
-                            // Handle date values specially
-                            return value || '';
+                            // Handle date values specially - return Date object for proper sorting
+                            return value ? new Date(value) : null;
                         }
                         return value && typeof value === 'string' ? value : '';
                     } catch (error) {

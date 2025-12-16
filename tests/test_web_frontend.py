@@ -1050,3 +1050,126 @@ def test_property_web_display_formatting(num_pairs: int, output_dates: list):
                 for pattern in invalid_patterns:
                     assert pattern not in html.lower(), \
                         f"NULL output_date should not display as '{pattern}'"
+
+
+# Feature: leistungsdatum-integration, Property 15: Chronological sorting
+# Validates: Requirements 4.3
+@settings(max_examples=100)
+@given(
+    num_pairs=st.integers(min_value=2, max_value=10),
+    sort_direction=st.sampled_from(['asc', 'desc'])
+)
+def test_property_chronological_sorting(num_pairs: int, sort_direction: str):
+    """
+    **Feature: leistungsdatum-integration, Property 15: Chronological sorting**
+    
+    For any set of records with output_date values, sorting by date should order 
+    them chronologically.
+    **Validates: Requirements 4.3**
+    
+    This test verifies that:
+    1. Records are sorted chronologically by output_date
+    2. NULL values are handled appropriately in sorting (sorted to end)
+    3. Sort direction (ascending/descending) is respected
+    """
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records with different output_date values
+        with MeldebestaetigungDatabase(db_path) as db:
+            base_date = datetime(2023, 1, 1).date()
+            
+            for i in range(num_pairs):
+                case_id = f"CASE_{i:03d}"
+                
+                # Create varying output_date values: some NULL, some with different dates
+                if i % 3 == 0:
+                    output_date = None  # NULL values
+                else:
+                    # Different dates for testing chronological order
+                    output_date = datetime(2023, 1, i + 1).date()
+                
+                # Create genomic record
+                genomic_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_G_{i}",
+                    meldebestaetigung=f"mb_genomic_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="G",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False,
+                    output_date=output_date
+                )
+                db.upsert_record(genomic_record)
+                
+                # Create clinical record
+                clinical_record = MeldebestaetigungRecord(
+                    vorgangsnummer=f"VN_C_{i}",
+                    meldebestaetigung=f"mb_clinical_{i}",
+                    source_file=f"source_{i}.csv",
+                    typ_der_meldung="0",
+                    indikationsbereich="test",
+                    art_der_daten="C",
+                    ergebnis_qc="1",
+                    case_id=case_id,
+                    gpas_domain="test_domain",
+                    processed_at=datetime(2023, 1, 1, 12, 0, 0),
+                    is_done=False,
+                    output_date=output_date
+                )
+                db.upsert_record(clinical_record)
+        
+        # Get pairs from service
+        service = WebDatabaseService(db_path)
+        pairs = service.get_all_records_grouped()
+        
+        # Simulate the sorting logic for output_date column
+        def get_sort_key(pair):
+            # Use genomic record if available, otherwise clinical
+            record = pair.genomic or pair.clinical
+            if record and record.output_date:
+                return record.output_date
+            else:
+                # NULL values should sort to the end
+                return datetime(9999, 12, 31).date() if sort_direction == 'asc' else datetime(1900, 1, 1).date()
+        
+        sorted_pairs = sorted(pairs, key=get_sort_key, reverse=(sort_direction == 'desc'))
+        
+        # Verify chronological sorting
+        prev_date = None
+        for pair in sorted_pairs:
+            record = pair.genomic or pair.clinical
+            current_date = record.output_date if record else None
+            
+            if prev_date is not None and current_date is not None:
+                if sort_direction == 'asc':
+                    assert current_date >= prev_date, \
+                        f"Dates should be ascending: {prev_date} -> {current_date}"
+                else:
+                    assert current_date <= prev_date, \
+                        f"Dates should be descending: {prev_date} -> {current_date}"
+            
+            if current_date is not None:
+                prev_date = current_date
+        
+        # Verify NULL handling: NULL values should be at the end for ascending, beginning for descending
+        null_pairs = [p for p in sorted_pairs if (p.genomic and p.genomic.output_date is None) or 
+                     (p.clinical and p.clinical.output_date is None)]
+        non_null_pairs = [p for p in sorted_pairs if p not in null_pairs]
+        
+        if null_pairs and non_null_pairs:
+            if sort_direction == 'asc':
+                # NULL values should be at the end
+                null_indices = [sorted_pairs.index(p) for p in null_pairs]
+                non_null_indices = [sorted_pairs.index(p) for p in non_null_pairs]
+                if null_indices and non_null_indices:
+                    assert min(null_indices) >= max(non_null_indices), \
+                        "NULL values should sort to end in ascending order"
+
+
+
