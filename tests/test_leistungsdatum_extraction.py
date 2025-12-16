@@ -311,3 +311,158 @@ class TestLeistungsdatumExtractionProperties:
             except Exception as e:
                 # Should not raise exceptions
                 assert False, f"Function crashed with edge case '{case}': {e}"
+    
+    @given(
+        meldebestaetigung_code=st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", min_size=10, max_size=10),
+        remaining_fields=st.lists(
+            st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", min_size=1, max_size=10),
+            min_size=9, max_size=9
+        )
+    )
+    def test_null_value_handling(self, meldebestaetigung_code, remaining_fields):
+        """
+        **Feature: leistungsdatum-integration, Property 21: NULL value handling**
+        
+        For any record without output_date, the system should handle NULL values 
+        gracefully without errors.
+        **Validates: Requirements 6.1**
+        """
+        # Test cases that should result in NULL/None output_date
+        null_cases = [
+            # Empty Leistungsdatum field
+            "",
+            # Invalid length fields
+            "123",
+            "12345678901234567890",
+            # Non-digit fields
+            "abcdefghijk",
+            "202407010AB",
+            # Invalid date values
+            "20241301001",  # Invalid month
+            "20240732001",  # Invalid day
+            "20230229001",  # Feb 29 in non-leap year
+        ]
+        
+        for null_case in null_cases:
+            # Construct hash string with problematic Leistungsdatum field
+            all_fields = [meldebestaetigung_code, null_case] + remaining_fields
+            hash_string = "&".join(all_fields)
+            
+            # Parse should return None gracefully
+            try:
+                result = parse_leistungsdatum(hash_string)
+                assert result is None, f"Expected None for null case '{null_case}', got {result}"
+            except Exception as e:
+                assert False, f"Function should handle NULL case gracefully, but crashed with '{null_case}': {e}"
+        
+        # Test None input handling
+        try:
+            result = parse_leistungsdatum(None)
+            assert result is None, "Expected None for None input"
+        except Exception as e:
+            assert False, f"Function should handle None input gracefully, but crashed: {e}"
+        
+        # Test empty string handling
+        try:
+            result = parse_leistungsdatum("")
+            assert result is None, "Expected None for empty string input"
+        except Exception as e:
+            assert False, f"Function should handle empty string gracefully, but crashed: {e}"
+        
+        # Test hash string with missing second field
+        incomplete_hash = meldebestaetigung_code  # No & separator
+        try:
+            result = parse_leistungsdatum(incomplete_hash)
+            assert result is None, "Expected None for hash string without second field"
+        except Exception as e:
+            assert False, f"Function should handle incomplete hash gracefully, but crashed: {e}"
+    
+    @given(
+        meldebestaetigung_code=st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", min_size=10, max_size=10),
+        year=st.integers(min_value=2020, max_value=2030),
+        month=st.integers(min_value=1, max_value=12),
+        day=st.integers(min_value=1, max_value=28),
+        counter=st.integers(min_value=1, max_value=999),
+        remaining_fields=st.lists(
+            st.text(alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", min_size=1, max_size=10),
+            min_size=9, max_size=9
+        )
+    )
+    def test_legacy_format_handling(self, meldebestaetigung_code, year, month, day, counter, remaining_fields):
+        """
+        **Feature: leistungsdatum-integration, Property 22: Legacy format handling**
+        
+        For any old Meldebestätigung format, the system should attempt extraction 
+        but continue processing if it fails.
+        **Validates: Requirements 6.3**
+        """
+        # Test various legacy format scenarios
+        
+        # 1. Standard current format (should work)
+        current_leistungsdatum = f"{year:04d}{month:02d}{day:02d}{counter:03d}"
+        current_fields = [meldebestaetigung_code, current_leistungsdatum] + remaining_fields
+        current_hash = "&".join(current_fields)
+        
+        try:
+            current_result = parse_leistungsdatum(current_hash)
+            assert current_result == date(year, month, day), "Current format should parse successfully"
+        except Exception as e:
+            assert False, f"Current format should not crash: {e}"
+        
+        # 2. Legacy format with fewer fields (should fail gracefully)
+        legacy_short_fields = [meldebestaetigung_code]  # Missing Leistungsdatum field
+        legacy_short_hash = "&".join(legacy_short_fields)
+        
+        try:
+            legacy_result = parse_leistungsdatum(legacy_short_hash)
+            assert legacy_result is None, "Legacy format with missing fields should return None"
+        except Exception as e:
+            assert False, f"Legacy format should not crash: {e}"
+        
+        # 3. Legacy format with different field structure (should fail gracefully)
+        legacy_different_fields = [meldebestaetigung_code, "LEGACY_FORMAT"] + remaining_fields[:3]
+        legacy_different_hash = "&".join(legacy_different_fields)
+        
+        try:
+            legacy_result2 = parse_leistungsdatum(legacy_different_hash)
+            assert legacy_result2 is None, "Legacy format with different structure should return None"
+        except Exception as e:
+            assert False, f"Legacy format should not crash: {e}"
+        
+        # 4. Legacy format with old date format (should fail gracefully)
+        legacy_date_formats = [
+            "2024-07-01",  # ISO format instead of JJJJMMTTZZZ
+            "01/07/2024",  # US format
+            "01.07.2024",  # German format
+            "20240701",    # Missing counter (only 8 digits)
+            "240701001",   # 2-digit year (only 9 digits)
+        ]
+        
+        for legacy_date in legacy_date_formats:
+            legacy_fields = [meldebestaetigung_code, legacy_date] + remaining_fields
+            legacy_hash = "&".join(legacy_fields)
+            
+            try:
+                legacy_result3 = parse_leistungsdatum(legacy_hash)
+                assert legacy_result3 is None, f"Legacy date format '{legacy_date}' should return None"
+            except Exception as e:
+                assert False, f"Legacy date format '{legacy_date}' should not crash: {e}"
+        
+        # 5. Test that processing continues despite extraction failure
+        # This is more of a conceptual test - the function should not raise exceptions
+        problematic_inputs = [
+            "",  # Empty
+            "SINGLE_FIELD",  # No separators
+            "FIELD1&INVALID_DATE&FIELD3",  # Invalid date format
+            "FIELD1&&FIELD3",  # Empty second field
+            "FIELD1&12345&FIELD3",  # Too short date
+            "FIELD1&123456789012345&FIELD3",  # Too long date
+        ]
+        
+        for problematic_input in problematic_inputs:
+            try:
+                result = parse_leistungsdatum(problematic_input)
+                # Should return None but not crash
+                assert result is None, f"Problematic input '{problematic_input}' should return None"
+            except Exception as e:
+                assert False, f"Processing should continue despite failure with '{problematic_input}': {e}"

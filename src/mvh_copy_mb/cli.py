@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 from mvh_copy_mb.hl7_extraction import extract_hl7_case_id
 from mvh_copy_mb.gepado import create_gepado_client_from_env, validate_and_update_record
+from mvh_copy_mb.leistungsdatum_extraction import parse_leistungsdatum
 
 # Load environment variables
 load_dotenv()
@@ -124,11 +125,23 @@ def parse_meldebestaetigung(mb_string: str) -> dict:
             logger.warning(f"Invalid Hash-String format (not enough '&' segments): {hash_string}")
             return {}
 
+        # Extract Leistungsdatum from hash string
+        output_date = None
+        try:
+            output_date = parse_leistungsdatum(hash_string)
+            if output_date:
+                logger.debug(f"Successfully extracted Leistungsdatum: {output_date} from hash string")
+            else:
+                logger.debug(f"Could not extract valid Leistungsdatum from hash string: {hash_string}")
+        except Exception as e:
+            logger.warning(f"Error extracting Leistungsdatum from hash string '{hash_string}': {e}")
+
         return {
             'Typ der Meldung': hash_parts[4],
             'Indikationsbereich': hash_parts[5],
             'Art der Daten': hash_parts[8],
-            'Ergebnis QC': hash_parts[10]
+            'Ergebnis QC': hash_parts[10],
+            'output_date': output_date
         }
     except Exception as e:
         logger.error(f"Error parsing Meldebestaetigung '{mb_string}': {e}")
@@ -151,10 +164,17 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         art_der_daten = mb_data.get('Art der Daten')
         typ_der_meldung = mb_data.get('Typ der Meldung')
         ergebnis_qc = mb_data.get('Ergebnis QC')
+        output_date = mb_data.get('output_date')
 
         if not all([indikationsbereich, art_der_daten, typ_der_meldung, ergebnis_qc]):
             logger.warning(f"Could not extract all required fields from Meldebestaetigung: {meldebestaetigung}")
             return
+
+        # Log Leistungsdatum extraction status
+        if output_date:
+            logger.debug(f"Extracted output_date {output_date} for vorgangsnummer {vorgangsnummer}")
+        else:
+            logger.debug(f"No valid output_date extracted for vorgangsnummer {vorgangsnummer} - will store NULL")
 
         # Cast to string to satisfy type checker
         vorgangsnummer_str = cast(str, vorgangsnummer)
@@ -203,7 +223,8 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                     ergebnis_qc=ergebnis_qc,
                     case_id=case_id,
                     gpas_domain=gpas_domain,
-                    processed_at=datetime.now()
+                    processed_at=datetime.now(),
+                    output_date=output_date
                 )
                 db.upsert_record(record)
                 logger.debug(f"Stored record in database for vorgangsnummer: {vorgangsnummer_str}")
