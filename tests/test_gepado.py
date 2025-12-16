@@ -20,7 +20,8 @@ class TestGepadoRecord:
     def test_gepado_record_creation(self):
         """Test basic GepadoRecord creation with all fields."""
         from datetime import date
-        test_date = date(2024, 7, 1)
+        test_date_k = date(2024, 7, 1)
+        test_date_g = date(2024, 7, 2)
         
         record = GepadoRecord(
             hl7_case_id="12345",
@@ -28,7 +29,8 @@ class TestGepadoRecord:
             vnk="VNK_001", 
             ibe_g="IBE_G_001",
             ibe_k="IBE_K_001",
-            mv_output_date=test_date
+            mv_servicedate_k=test_date_k,
+            mv_servicedate_g=test_date_g
         )
         
         assert record.hl7_case_id == "12345"
@@ -36,7 +38,8 @@ class TestGepadoRecord:
         assert record.vnk == "VNK_001"
         assert record.ibe_g == "IBE_G_001"
         assert record.ibe_k == "IBE_K_001"
-        assert record.mv_output_date == test_date
+        assert record.mv_servicedate_k == test_date_k
+        assert record.mv_servicedate_g == test_date_g
     
     def test_gepado_record_optional_fields(self):
         """Test GepadoRecord creation with optional fields as None."""
@@ -47,7 +50,8 @@ class TestGepadoRecord:
         assert record.vnk is None
         assert record.ibe_g is None
         assert record.ibe_k is None
-        assert record.mv_output_date is None
+        assert record.mv_servicedate_k is None
+        assert record.mv_servicedate_g is None
 
 
 class TestGepadoClient:
@@ -106,7 +110,7 @@ class TestGepadoClient:
         mock_connection = Mock()
         mock_cursor = Mock()
         mock_connection.cursor.return_value = mock_cursor
-        mock_cursor.fetchone.return_value = ("12345", "VNG_001", "VNK_001", "IBE_G_001", "IBE_K_001", "2024-07-01")
+        mock_cursor.fetchone.return_value = ("12345", "VNG_001", "VNK_001", "IBE_G_001", "IBE_K_001", "2024-07-01", "2024-07-02")
         mock_connect.return_value = mock_connection
         
         client = GepadoClient("host", "db", "user", "pass")
@@ -118,7 +122,8 @@ class TestGepadoClient:
         assert record.vnk == "VNK_001"
         assert record.ibe_g == "IBE_G_001"
         assert record.ibe_k == "IBE_K_001"
-        assert record.mv_output_date == date(2024, 7, 1)
+        assert record.mv_servicedate_k == date(2024, 7, 1)
+        assert record.mv_servicedate_g == date(2024, 7, 2)
         
         mock_cursor.execute.assert_called_once()
         mock_cursor.close.assert_called_once()
@@ -313,26 +318,30 @@ class TestDataFieldMapping:
     
     def test_map_data_type_genomic(self):
         """Test mapping genomic data type to correct fields."""
-        vn_field, ibe_field = map_data_type_to_fields('G')
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields('G')
         assert vn_field == 'vng'
         assert ibe_field == 'ibe_g'
+        assert servicedate_field == 'mv_servicedate_g'
     
     def test_map_data_type_clinical(self):
         """Test mapping clinical data type to correct fields."""
-        vn_field, ibe_field = map_data_type_to_fields('C')
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields('C')
         assert vn_field == 'vnk'
         assert ibe_field == 'ibe_k'
+        assert servicedate_field == 'mv_servicedate_k'
     
     def test_map_data_type_case_insensitive(self):
         """Test that mapping is case insensitive."""
         # Test lowercase
-        vn_field, ibe_field = map_data_type_to_fields('g')
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields('g')
         assert vn_field == 'vng'
         assert ibe_field == 'ibe_g'
+        assert servicedate_field == 'mv_servicedate_g'
         
-        vn_field, ibe_field = map_data_type_to_fields('c')
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields('c')
         assert vn_field == 'vnk'
         assert ibe_field == 'ibe_k'
+        assert servicedate_field == 'mv_servicedate_k'
     
     def test_map_data_type_invalid(self):
         """Test mapping invalid data type raises ValueError."""
@@ -346,7 +355,7 @@ class TestDataFieldMapping:
     
     def test_compare_record_data_empty_fields(self):
         """Test comparison when gepado fields are empty."""
-        record = GepadoRecord(hl7_case_id="12345", vng=None, ibe_g=None)
+        record = GepadoRecord(hl7_case_id="12345", vng=None, ibe_g=None, mv_servicedate_g=None)
         updates, mismatches = compare_record_data(record, "VN123", "IBE123", "G")
         
         assert updates == {'vng': 'VN123', 'ibe_g': 'IBE123'}
@@ -354,7 +363,7 @@ class TestDataFieldMapping:
     
     def test_compare_record_data_matching_fields(self):
         """Test comparison when gepado fields match."""
-        record = GepadoRecord(hl7_case_id="12345", vng="VN123", ibe_g="IBE123")
+        record = GepadoRecord(hl7_case_id="12345", vng="VN123", ibe_g="IBE123", mv_servicedate_g=None)
         updates, mismatches = compare_record_data(record, "VN123", "IBE123", "G")
         
         assert updates == {}
@@ -362,7 +371,7 @@ class TestDataFieldMapping:
     
     def test_compare_record_data_mismatched_fields(self):
         """Test comparison when gepado fields don't match."""
-        record = GepadoRecord(hl7_case_id="12345", vng="OLD_VN", ibe_g="OLD_IBE")
+        record = GepadoRecord(hl7_case_id="12345", vng="OLD_VN", ibe_g="OLD_IBE", mv_servicedate_g=None)
         updates, mismatches = compare_record_data(record, "NEW_VN", "NEW_IBE", "G")
         
         assert updates == {}
@@ -370,7 +379,7 @@ class TestDataFieldMapping:
     
     def test_compare_record_data_clinical_type(self):
         """Test comparison for clinical data type."""
-        record = GepadoRecord(hl7_case_id="12345", vnk=None, ibe_k=None)
+        record = GepadoRecord(hl7_case_id="12345", vnk=None, ibe_k=None, mv_servicedate_k=None)
         updates, mismatches = compare_record_data(record, "VN123", "IBE123", "C")
         
         assert updates == {'vnk': 'VN123', 'ibe_k': 'IBE123'}
@@ -394,15 +403,17 @@ class TestDataFieldMapping:
         **Validates: Requirements 4.3, 4.4, 4.5, 4.6**
         """
         # Test field mapping consistency
-        vn_field, ibe_field = map_data_type_to_fields(art_der_daten)
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields(art_der_daten)
         
         # Verify correct mapping based on data type
         if art_der_daten.upper() == 'G':
             assert vn_field == 'vng'
             assert ibe_field == 'ibe_g'
+            assert servicedate_field == 'mv_servicedate_g'
         else:  # 'C'
             assert vn_field == 'vnk'
             assert ibe_field == 'ibe_k'
+            assert servicedate_field == 'mv_servicedate_k'
         
         # Test with empty gepado record
         empty_record = GepadoRecord(hl7_case_id="test_id")
@@ -447,7 +458,7 @@ class TestDataFieldMapping:
         updates1, mismatches1 = compare_record_data(empty_record, vorgangsnummer, ibe_string, art_der_daten)
         
         # Apply the updates to create a populated record
-        vn_field, ibe_field = map_data_type_to_fields(art_der_daten)
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields(art_der_daten)
         populated_record = GepadoRecord(hl7_case_id="test_id")
         setattr(populated_record, vn_field, vorgangsnummer)
         setattr(populated_record, ibe_field, ibe_string)
@@ -625,8 +636,148 @@ class TestComprehensiveLogging:
             handler.close()
 
 
-class TestGepadoOutputDateIntegration:
-    """Test cases for GEPADO output_date integration functionality."""
+class TestGepadoServiceDateIntegration:
+    """Test cases for GEPADO service date integration functionality."""
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_clinical_data_update_inclusion(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 9: GEPADO clinical data update inclusion**
+        
+        For any GEPADO update operation for clinical data, the MV_servicedate_k field should be included 
+        when a valid date is available.
+        
+        **Validates: Requirements 3.1**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock an empty gepado record that needs updates for clinical data
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vnk=None, ibe_k=None, mv_servicedate_k=None, mv_servicedate_g=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test validate_and_update_record function with clinical data type and output_date
+        result = validate_and_update_record(
+            mock_client, hl7_case_id, "VN123", "IBE123", "C", "1", "0", output_date
+        )
+        
+        # Should successfully update the record including MV_servicedate_k field for clinical data
+        assert result is True
+        
+        # Verify that query_record was called
+        mock_client.query_record.assert_called_once_with(hl7_case_id)
+        
+        # Verify that update_record was called with the MV_servicedate_k field included for clinical data
+        expected_date_str = output_date.strftime('%Y-%m-%d')
+        expected_updates = {'vnk': 'VN123', 'ibe_k': 'IBE123', 'mv_servicedate_k': expected_date_str}
+        mock_client.update_record.assert_called_once_with(hl7_case_id, expected_updates)
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_genetic_data_update_inclusion(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 10: GEPADO genetic data update inclusion**
+        
+        For any GEPADO update operation for genetic data, the MV_servicedate_g field should be included 
+        when a valid date is available.
+        
+        **Validates: Requirements 3.2**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock an empty gepado record that needs updates for genetic data
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng=None, ibe_g=None, mv_servicedate_k=None, mv_servicedate_g=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test validate_and_update_record function with genetic data type and output_date
+        result = validate_and_update_record(
+            mock_client, hl7_case_id, "VN123", "IBE123", "G", "1", "0", output_date
+        )
+        
+        # Should successfully update the record including MV_servicedate_g field for genetic data
+        assert result is True
+        
+        # Verify that query_record was called
+        mock_client.query_record.assert_called_once_with(hl7_case_id)
+        
+        # Verify that update_record was called with the MV_servicedate_g field included for genetic data
+        expected_date_str = output_date.strftime('%Y-%m-%d')
+        expected_updates = {'vng': 'VN123', 'ibe_g': 'IBE123', 'mv_servicedate_g': expected_date_str}
+        mock_client.update_record.assert_called_once_with(hl7_case_id, expected_updates)
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_clinical_empty_field_updates(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 11: GEPADO clinical empty field updates**
+        
+        For any GEPADO record with empty MV_servicedate_k for clinical data, the system should update it 
+        with the extracted Leistungsdatum.
+        
+        **Validates: Requirements 3.3**
+        """
+        from unittest.mock import Mock
+        
+        # Mock an existing gepado record with populated VN/IBE but empty MV_servicedate_k for clinical data
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vnk="VN123", ibe_k="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
+        
+        # Test compare_record_data function directly for clinical data
+        updates_needed, mismatches_found = compare_record_data(
+            mock_record, "VN123", "IBE123", "C", output_date
+        )
+        
+        # Should identify that MV_servicedate_k needs to be updated for clinical data
+        expected_date_str = output_date.strftime('%Y-%m-%d')
+        assert 'mv_servicedate_k' in updates_needed
+        assert updates_needed['mv_servicedate_k'] == expected_date_str
+        
+        # Should not have any mismatches since existing fields match
+        assert len(mismatches_found) == 0
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_genetic_empty_field_updates(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 12: GEPADO genetic empty field updates**
+        
+        For any GEPADO record with empty MV_servicedate_g for genetic data, the system should update it 
+        with the extracted Leistungsdatum.
+        
+        **Validates: Requirements 3.4**
+        """
+        from unittest.mock import Mock
+        
+        # Mock an existing gepado record with populated VN/IBE but empty MV_servicedate_g for genetic data
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
+        
+        # Test compare_record_data function directly for genetic data
+        updates_needed, mismatches_found = compare_record_data(
+            mock_record, "VN123", "IBE123", "G", output_date
+        )
+        
+        # Should identify that MV_servicedate_g needs to be updated for genetic data
+        expected_date_str = output_date.strftime('%Y-%m-%d')
+        assert 'mv_servicedate_g' in updates_needed
+        assert updates_needed['mv_servicedate_g'] == expected_date_str
+        
+        # Should not have any mismatches since existing fields match
+        assert len(mismatches_found) == 0
     
     @given(
         hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
@@ -647,7 +798,7 @@ class TestGepadoOutputDateIntegration:
         mock_client = Mock()
         
         # Mock an empty gepado record that needs updates
-        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng=None, ibe_g=None, mv_output_date=None)
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng=None, ibe_g=None, mv_servicedate_k=None, mv_servicedate_g=None)
         mock_client.query_record.return_value = mock_record
         mock_client.update_record.return_value = True
         
@@ -664,7 +815,7 @@ class TestGepadoOutputDateIntegration:
         
         # Verify that update_record was called with the output_date included
         expected_date_str = output_date.strftime('%Y-%m-%d')
-        expected_updates = {'vng': 'VN123', 'ibe_g': 'IBE123', 'mv_output_date': expected_date_str}
+        expected_updates = {'vng': 'VN123', 'ibe_g': 'IBE123', 'mv_servicedate_g': expected_date_str}
         mock_client.update_record.assert_called_once_with(hl7_case_id, expected_updates)
     
     @given(
@@ -682,20 +833,21 @@ class TestGepadoOutputDateIntegration:
         """
         from unittest.mock import Mock
         
-        # Mock an existing gepado record with populated VN/IBE but empty MV_output_date
-        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_output_date=None)
+        # Mock an existing gepado record with populated VN/IBE but empty MV_servicedate_g
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
         
         # Test compare_record_data function directly
         updates_needed, mismatches_found = compare_record_data(
             mock_record, "VN123", "IBE123", "G", output_date
         )
         
-        # Should identify that MV_output_date needs to be updated
+        # Should identify that MV_servicedate_g needs to be updated
         expected_date_str = output_date.strftime('%Y-%m-%d')
-        assert 'mv_output_date' in updates_needed
-        assert updates_needed['mv_output_date'] == expected_date_str
+        assert 'mv_servicedate_g' in updates_needed
+        assert updates_needed['mv_servicedate_g'] == expected_date_str
         
         # Should not have any mismatches since existing fields match
+        assert len(mismatches_found) == 0
         assert len(mismatches_found) == 0
     
     @given(
@@ -731,20 +883,20 @@ class TestGepadoOutputDateIntegration:
         gepado_logger.addHandler(handler)
         
         try:
-            # Mock a gepado record with existing MV_output_date and populated fields
-            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_output_date=existing_date)
+            # Mock a gepado record with existing MV_servicedate_g and populated fields
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=existing_date)
             
             # Test compare_record_data function with different date
             updates_needed, mismatches_found = compare_record_data(
                 mock_record, "VN123", "IBE123", "G", new_date
             )
             
-            # Should detect mismatch in mv_output_date
-            assert 'mv_output_date' in mismatches_found
-            assert mismatches_found['mv_output_date'] == (existing_date, new_date)
+            # Should detect mismatch in mv_servicedate_g
+            assert 'mv_servicedate_g' in mismatches_found
+            assert mismatches_found['mv_servicedate_g'] == (existing_date, new_date)
             
             # Should not need any updates since there's a mismatch
-            assert 'mv_output_date' not in updates_needed
+            assert 'mv_servicedate_g' not in updates_needed
             
             # Should log the mismatch error
             log_output = log_capture.getvalue()
@@ -785,8 +937,8 @@ class TestGepadoOutputDateIntegration:
         gepado_logger.addHandler(handler)
         
         try:
-            # Mock a gepado record with matching MV_output_date and populated fields
-            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_output_date=output_date)
+            # Mock a gepado record with matching MV_servicedate_g and populated fields
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=output_date)
             
             # Test compare_record_data function with same date
             updates_needed, mismatches_found = compare_record_data(
@@ -794,10 +946,10 @@ class TestGepadoOutputDateIntegration:
             )
             
             # Should not need any updates since dates match
-            assert 'mv_output_date' not in updates_needed
+            assert 'mv_servicedate_g' not in updates_needed
             
             # Should not have any mismatches since dates match
-            assert 'mv_output_date' not in mismatches_found
+            assert 'mv_servicedate_g' not in mismatches_found
             
             # Should log successful validation
             log_output = log_capture.getvalue()
@@ -841,7 +993,7 @@ class TestGepadoOutputDateIntegration:
             mock_client = Mock()
             
             # Mock an empty gepado record that needs updates
-            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng=None, ibe_g=None, mv_output_date=None)
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng=None, ibe_g=None, mv_servicedate_k=None, mv_servicedate_g=None)
             mock_client.query_record.return_value = mock_record
             
             # Mock update failure
@@ -857,7 +1009,7 @@ class TestGepadoOutputDateIntegration:
             
             # Should have attempted the update including output_date
             expected_date_str = output_date.strftime('%Y-%m-%d')
-            expected_updates = {'vng': 'VN123', 'ibe_g': 'IBE123', 'mv_output_date': expected_date_str}
+            expected_updates = {'vng': 'VN123', 'ibe_g': 'IBE123', 'mv_servicedate_g': expected_date_str}
             mock_client.update_record.assert_called_once_with(hl7_case_id, expected_updates)
             
             # The error logging is handled in update_record method, so we don't need to check specific log messages here
@@ -889,8 +1041,8 @@ class TestGepadoOutputDateIntegration:
         mock_client = Mock()
         
         # Mock an empty gepado record
-        vn_field, ibe_field = map_data_type_to_fields(art_der_daten)
-        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=None)
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields(art_der_daten)
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_servicedate_k=None, mv_servicedate_g=None)
         setattr(mock_record, vn_field, None)
         setattr(mock_record, ibe_field, None)
         
@@ -913,7 +1065,7 @@ class TestGepadoOutputDateIntegration:
         expected_updates = {vn_field: vorgangsnummer, ibe_field: ibe_string}
         
         if output_date is not None:
-            expected_updates['mv_output_date'] = output_date.strftime('%Y-%m-%d')
+            expected_updates[servicedate_field] = output_date.strftime('%Y-%m-%d')
         
         # Should have made exactly one update call with all fields
         mock_client.update_record.assert_called_once_with(hl7_case_id, expected_updates)
@@ -935,8 +1087,8 @@ class TestGepadoOutputDateIntegration:
         # Mock a gepado client
         mock_client = Mock()
         
-        # Mock a gepado record without MV_output_date field (None) but with other fields populated
-        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_output_date=None)
+        # Mock a gepado record without MV_servicedate fields (None) but with other fields populated
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
         mock_client.query_record.return_value = mock_record
         mock_client.update_record.return_value = True
         
@@ -1006,7 +1158,7 @@ class TestValidateAndUpdateRecord:
         mock_client = Mock()
         
         # Mock an empty gepado record that needs updates
-        mock_record = GepadoRecord(hl7_case_id="hl7_123", vng=None, ibe_g=None)
+        mock_record = GepadoRecord(hl7_case_id="hl7_123", vng=None, ibe_g=None, mv_servicedate_k=None, mv_servicedate_g=None)
         mock_client.query_record.return_value = mock_record
         mock_client.update_record.return_value = True
         
@@ -1038,7 +1190,7 @@ class TestValidateAndUpdateRecord:
         mock_client = Mock()
         
         # Mock an empty gepado record that needs updates
-        mock_record = GepadoRecord(hl7_case_id="hl7_123", vng=None, ibe_g=None)
+        mock_record = GepadoRecord(hl7_case_id="hl7_123", vng=None, ibe_g=None, mv_servicedate_k=None, mv_servicedate_g=None)
         mock_client.query_record.return_value = mock_record
         # Mock update failure (returns False, error already logged in update_record)
         mock_client.update_record.return_value = False
@@ -1050,3 +1202,409 @@ class TestValidateAndUpdateRecord:
         assert result is False
         mock_client.query_record.assert_called_once_with("hl7_123")
         mock_client.update_record.assert_called_once_with("hl7_123", {'vng': 'VN123', 'ibe_g': 'IBE123'})
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        existing_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31)),
+        new_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_clinical_conflict_detection(self, hl7_case_id, existing_date, new_date):
+        """
+        **Feature: leistungsdatum-integration, Property 13: GEPADO clinical conflict detection**
+        
+        For any GEPADO record with different MV_servicedate_k value for clinical data, the system should 
+        log a data mismatch error.
+        
+        **Validates: Requirements 3.5**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Only test when dates are actually different
+        if existing_date == new_date:
+            return
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado record with existing MV_servicedate_k and populated fields for clinical data
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vnk="VN123", ibe_k="IBE123", mv_servicedate_k=existing_date, mv_servicedate_g=None)
+            
+            # Test compare_record_data function with different date for clinical data
+            updates_needed, mismatches_found = compare_record_data(
+                mock_record, "VN123", "IBE123", "C", new_date
+            )
+            
+            # Should detect mismatch in mv_servicedate_k
+            assert 'mv_servicedate_k' in mismatches_found
+            assert mismatches_found['mv_servicedate_k'] == (existing_date, new_date)
+            
+            # Should not need any updates since there's a mismatch
+            assert 'mv_servicedate_k' not in updates_needed
+            
+            # Should log the mismatch error
+            log_output = log_capture.getvalue()
+            assert 'mismatch' in log_output.lower()
+            assert str(existing_date) in log_output
+            assert str(new_date) in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        existing_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31)),
+        new_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_genetic_conflict_detection(self, hl7_case_id, existing_date, new_date):
+        """
+        **Feature: leistungsdatum-integration, Property 14: GEPADO genetic conflict detection**
+        
+        For any GEPADO record with different MV_servicedate_g value for genetic data, the system should 
+        log a data mismatch error.
+        
+        **Validates: Requirements 3.6**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Only test when dates are actually different
+        if existing_date == new_date:
+            return
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado record with existing MV_servicedate_g and populated fields for genetic data
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=existing_date)
+            
+            # Test compare_record_data function with different date for genetic data
+            updates_needed, mismatches_found = compare_record_data(
+                mock_record, "VN123", "IBE123", "G", new_date
+            )
+            
+            # Should detect mismatch in mv_servicedate_g
+            assert 'mv_servicedate_g' in mismatches_found
+            assert mismatches_found['mv_servicedate_g'] == (existing_date, new_date)
+            
+            # Should not need any updates since there's a mismatch
+            assert 'mv_servicedate_g' not in updates_needed
+            
+            # Should log the mismatch error
+            log_output = log_capture.getvalue()
+            assert 'mismatch' in log_output.lower()
+            assert str(existing_date) in log_output
+            assert str(new_date) in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_clinical_validation_logging(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 15: GEPADO clinical validation logging**
+        
+        For any GEPADO record with matching MV_servicedate_k value for clinical data, the system should 
+        log successful validation.
+        
+        **Validates: Requirements 3.7**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado record with matching MV_servicedate_k and populated fields for clinical data
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vnk="VN123", ibe_k="IBE123", mv_servicedate_k=output_date, mv_servicedate_g=None)
+            
+            # Test compare_record_data function with same date for clinical data
+            updates_needed, mismatches_found = compare_record_data(
+                mock_record, "VN123", "IBE123", "C", output_date
+            )
+            
+            # Should not need any updates since dates match
+            assert 'mv_servicedate_k' not in updates_needed
+            
+            # Should not have any mismatches since dates match
+            assert 'mv_servicedate_k' not in mismatches_found
+            
+            # Should log successful validation
+            log_output = log_capture.getvalue()
+            assert 'validated' in log_output.lower()
+            assert str(output_date) in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_genetic_validation_logging(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 16: GEPADO genetic validation logging**
+        
+        For any GEPADO record with matching MV_servicedate_g value for genetic data, the system should 
+        log successful validation.
+        
+        **Validates: Requirements 3.8**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado record with matching MV_servicedate_g and populated fields for genetic data
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=output_date)
+            
+            # Test compare_record_data function with same date for genetic data
+            updates_needed, mismatches_found = compare_record_data(
+                mock_record, "VN123", "IBE123", "G", output_date
+            )
+            
+            # Should not need any updates since dates match
+            assert 'mv_servicedate_g' not in updates_needed
+            
+            # Should not have any mismatches since dates match
+            assert 'mv_servicedate_g' not in mismatches_found
+            
+            # Should log successful validation
+            log_output = log_capture.getvalue()
+            assert 'validated' in log_output.lower()
+            assert str(output_date) in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31)),
+        art_der_daten=st.sampled_from(['G', 'C'])
+    )
+    def test_property_gepado_error_resilience(self, hl7_case_id, output_date, art_der_daten):
+        """
+        **Feature: leistungsdatum-integration, Property 17: GEPADO error resilience**
+        
+        For any GEPADO update failure, the system should log the error and continue 
+        processing other records.
+        
+        **Validates: Requirements 3.9**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado client
+            mock_client = Mock()
+            
+            # Mock an empty gepado record that needs updates
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng=None, vnk=None, ibe_g=None, ibe_k=None, mv_servicedate_k=None, mv_servicedate_g=None)
+            mock_client.query_record.return_value = mock_record
+            
+            # Mock update failure
+            mock_client.update_record.return_value = False
+            
+            # Test validate_and_update_record function with output_date
+            result = validate_and_update_record(
+                mock_client, hl7_case_id, "VN123", "IBE123", art_der_daten, "1", "0", output_date
+            )
+            
+            # Should return False due to update failure
+            assert result is False
+            
+            # Should have attempted the update including appropriate service date field
+            vn_field, ibe_field, servicedate_field = map_data_type_to_fields(art_der_daten)
+            expected_date_str = output_date.strftime('%Y-%m-%d')
+            expected_updates = {vn_field: 'VN123', ibe_field: 'IBE123', servicedate_field: expected_date_str}
+            mock_client.update_record.assert_called_once_with(hl7_case_id, expected_updates)
+            
+            # The error logging is handled in update_record method, so we don't need to check specific log messages here
+            # The important thing is that the function returns False and doesn't raise an exception
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        vorgangsnummer=st.text(min_size=1, max_size=50, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])).filter(lambda x: x.strip() != ''),
+        ibe_string=st.text(min_size=1, max_size=50, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])).filter(lambda x: x.strip() != ''),
+        art_der_daten=st.sampled_from(['G', 'C']),
+        output_date=st.one_of(st.none(), st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31)))
+    )
+    def test_property_gepado_comparison_validation(self, hl7_case_id, vorgangsnummer, ibe_string, art_der_daten, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 21: GEPADO comparison validation**
+        
+        For any GEPADO record comparison, output_date validation logic should be 
+        included in the comparison for both clinical and genetic data fields.
+        
+        **Validates: Requirements 5.4**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock an empty gepado record
+        vn_field, ibe_field, servicedate_field = map_data_type_to_fields(art_der_daten)
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_servicedate_k=None, mv_servicedate_g=None)
+        setattr(mock_record, vn_field, None)
+        setattr(mock_record, ibe_field, None)
+        
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test validate_and_update_record function with output_date
+        result = validate_and_update_record(
+            mock_client, hl7_case_id, vorgangsnummer, ibe_string, 
+            art_der_daten, "1", "0", output_date
+        )
+        
+        # Should return True for successful processing
+        assert result is True
+        
+        # Should have queried the record
+        mock_client.query_record.assert_called_with(hl7_case_id)
+        
+        # Should have called update_record with all fields including appropriate service date field if provided
+        expected_updates = {vn_field: vorgangsnummer, ibe_field: ibe_string}
+        
+        if output_date is not None:
+            expected_updates[servicedate_field] = output_date.strftime('%Y-%m-%d')
+        
+        # Should have made exactly one update call with all fields
+        mock_client.update_record.assert_called_once_with(hl7_case_id, expected_updates)
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00']))
+    )
+    def test_property_missing_clinical_field_resilience(self, hl7_case_id):
+        """
+        **Feature: leistungsdatum-integration, Property 25: Missing clinical field resilience**
+        
+        For any GEPADO record lacking MV_servicedate_k field, the system should handle 
+        the missing field without errors.
+        
+        **Validates: Requirements 6.4**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock a gepado record without MV_servicedate_k field (None) but with other fields populated for clinical data
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vnk="VN123", ibe_k="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test validate_and_update_record function with None output_date for clinical data
+        result = validate_and_update_record(
+            mock_client, hl7_case_id, "VN123", "IBE123", "C", "1", "0", None
+        )
+        
+        # Should return True and handle gracefully
+        assert result is True
+        
+        # Should have queried the record
+        mock_client.query_record.assert_called_once_with(hl7_case_id)
+        
+        # Should not attempt any updates since all fields match and output_date is None
+        mock_client.update_record.assert_not_called()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00']))
+    )
+    def test_property_missing_genetic_field_resilience(self, hl7_case_id):
+        """
+        **Feature: leistungsdatum-integration, Property 26: Missing genetic field resilience**
+        
+        For any GEPADO record lacking MV_servicedate_g field, the system should handle 
+        the missing field without errors.
+        
+        **Validates: Requirements 6.5**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock a gepado record without MV_servicedate_g field (None) but with other fields populated for genetic data
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test validate_and_update_record function with None output_date for genetic data
+        result = validate_and_update_record(
+            mock_client, hl7_case_id, "VN123", "IBE123", "G", "1", "0", None
+        )
+        
+        # Should return True and handle gracefully
+        assert result is True
+        
+        # Should have queried the record
+        mock_client.query_record.assert_called_once_with(hl7_case_id)
+        
+        # Should not attempt any updates since all fields match and output_date is None
+        mock_client.update_record.assert_not_called()

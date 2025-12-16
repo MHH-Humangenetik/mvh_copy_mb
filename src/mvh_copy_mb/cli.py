@@ -249,7 +249,8 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                         meldebestaetigung,  # Using meldebestaetigung as IBE string
                         art_der_daten_str,
                         ergebnis_qc,
-                        typ_der_meldung
+                        typ_der_meldung,
+                        output_date  # Pass the extracted Leistungsdatum
                     )
                     
                     if success:

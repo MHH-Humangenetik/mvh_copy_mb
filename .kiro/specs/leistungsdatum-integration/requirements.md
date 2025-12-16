@@ -10,7 +10,8 @@ This feature adds the Leistungsdatum (service date) field to all data structures
 - **Hash-String**: The structured metadata portion of a Meldebestaetigung containing fields separated by '&' characters, which includes the Leistungsdatum
 - **DuckDB**: The embedded analytical database system used for local data storage
 - **GEPADO**: The laboratory information system with MSSQL database backend
-- **MV_output_date**: The SQL field name used in GEPADO for storing the output date
+- **MV_servicedate_k**: The SQL field name used in GEPADO for storing the service date for clinical data Meldebestätigungen
+- **MV_servicedate_g**: The SQL field name used in GEPADO for storing the service date for genetic data Meldebestätigungen
 - **output_date**: The simplified field name used in DuckDB for storing the service date
 - **Meldebestaetigung**: A confirmation message containing metadata about medical data submissions
 - **Hash String Processing**: The process of parsing and extracting fields from Meldebestätigung hash strings
@@ -47,11 +48,15 @@ This feature adds the Leistungsdatum (service date) field to all data structures
 
 #### Acceptance Criteria
 
-1. WHEN updating GEPADO records THEN the system SHALL include the MV_output_date field in update operations
-2. WHEN the GEPADO record has an empty MV_output_date field THEN the system SHALL update it with the extracted Leistungsdatum
-3. WHEN the GEPADO record has a different MV_output_date value THEN the system SHALL log a data mismatch error
-4. WHEN the GEPADO record has the same MV_output_date value THEN the system SHALL log successful validation
-5. WHEN GEPADO updates fail THEN the system SHALL log the error and continue processing other records
+1. WHEN updating GEPADO records for clinical data THEN the system SHALL include the MV_servicedate_k field in update operations
+2. WHEN updating GEPADO records for genetic data THEN the system SHALL include the MV_servicedate_g field in update operations
+3. WHEN the GEPADO record has an empty MV_servicedate_k field for clinical data THEN the system SHALL update it with the extracted Leistungsdatum
+4. WHEN the GEPADO record has an empty MV_servicedate_g field for genetic data THEN the system SHALL update it with the extracted Leistungsdatum
+5. WHEN the GEPADO record has a different MV_servicedate_k value for clinical data THEN the system SHALL log a data mismatch error
+6. WHEN the GEPADO record has a different MV_servicedate_g value for genetic data THEN the system SHALL log a data mismatch error
+7. WHEN the GEPADO record has the same MV_servicedate_k value for clinical data THEN the system SHALL log successful validation
+8. WHEN the GEPADO record has the same MV_servicedate_g value for genetic data THEN the system SHALL log successful validation
+9. WHEN GEPADO updates fail THEN the system SHALL log the error and continue processing other records
 
 ### Requirement 4
 
@@ -84,4 +89,5 @@ This feature adds the Leistungsdatum (service date) field to all data structures
 1. WHEN processing existing records without output_date THEN the system SHALL handle NULL values gracefully
 2. WHEN migrating the database schema THEN the system SHALL add the output_date column without breaking existing functionality
 3. WHEN old Meldebestätigung formats are encountered THEN the system SHALL attempt extraction but continue processing if it fails
-4. WHEN GEPADO records lack the MV_output_date field THEN the system SHALL handle the missing field without errors
+4. WHEN GEPADO records lack the MV_servicedate_k field THEN the system SHALL handle the missing field without errors
+5. WHEN GEPADO records lack the MV_servicedate_g field THEN the system SHALL handle the missing field without errors

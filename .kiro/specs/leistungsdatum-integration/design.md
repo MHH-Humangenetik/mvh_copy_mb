@@ -47,10 +47,10 @@ The integration follows the existing modular architecture of the system:
 - **Interface**: `migrate_schema_for_output_date(conn: DuckDBConnection) -> None`
 
 ### GEPADO Synchronization
-- **Purpose**: Update GEPADO records with MV_output_date field
-- **Input**: HL7 case ID, extracted Leistungsdatum, existing GEPADO client
+- **Purpose**: Update GEPADO records with MV_servicedate_k or MV_servicedate_g fields based on data type
+- **Input**: HL7 case ID, extracted Leistungsdatum, data type (clinical/genetic), existing GEPADO client
 - **Output**: Success/failure status and validation results
-- **Interface**: `sync_output_date_to_gepado(client: GepadoClient, hl7_case_id: str, output_date: date) -> bool`
+- **Interface**: `sync_output_date_to_gepado(client: GepadoClient, hl7_case_id: str, output_date: date, art_der_daten: str) -> bool`
 
 ### Web Interface Updates
 - **Purpose**: Display output_date in table and support sorting
@@ -103,7 +103,8 @@ class GepadoRecord:
     vnk: Optional[str] = None
     ibe_g: Optional[str] = None
     ibe_k: Optional[str] = None
-    mv_output_date: Optional[date] = None  # New field
+    mv_servicedate_k: Optional[date] = None  # Service date for clinical data
+    mv_servicedate_g: Optional[date] = None  # Service date for genetic data
 ```
 
 ### Database Schema Changes
@@ -112,8 +113,9 @@ class GepadoRecord:
 ALTER TABLE meldebestaetigungen ADD COLUMN output_date DATE;
 
 -- GEPADO field mapping
--- MV_output_date field in av2_ordermanagement_addfields view
--- Maps to base table [transact].[t_case_addFieldsExt].MV_output_date
+-- MV_servicedate_k field in av2_ordermanagement_addfields view for clinical data
+-- MV_servicedate_g field in av2_ordermanagement_addfields view for genetic data
+-- Maps to base table [transact].[t_case_addFieldsExt].MV_servicedate_k and MV_servicedate_g
 ```
 ## Correctness Properties
 
@@ -151,63 +153,81 @@ Property 8: NULL storage for unparseable dates
 *For any* unparseable Leistungsdatum, the database should store NULL in the output_date column
 **Validates: Requirements 2.5**
 
-Property 9: GEPADO update inclusion
-*For any* GEPADO update operation, the MV_output_date field should be included when a valid date is available
+Property 9: GEPADO clinical data update inclusion
+*For any* GEPADO update operation for clinical data, the MV_servicedate_k field should be included when a valid date is available
 **Validates: Requirements 3.1**
 
-Property 10: GEPADO empty field updates
-*For any* GEPADO record with empty MV_output_date, the system should update it with the extracted Leistungsdatum
+Property 10: GEPADO genetic data update inclusion
+*For any* GEPADO update operation for genetic data, the MV_servicedate_g field should be included when a valid date is available
 **Validates: Requirements 3.2**
 
-Property 11: GEPADO conflict detection
-*For any* GEPADO record with different MV_output_date value, the system should log a data mismatch error
+Property 11: GEPADO clinical empty field updates
+*For any* GEPADO record with empty MV_servicedate_k for clinical data, the system should update it with the extracted Leistungsdatum
 **Validates: Requirements 3.3**
 
-Property 12: GEPADO validation logging
-*For any* GEPADO record with matching MV_output_date value, the system should log successful validation
+Property 12: GEPADO genetic empty field updates
+*For any* GEPADO record with empty MV_servicedate_g for genetic data, the system should update it with the extracted Leistungsdatum
 **Validates: Requirements 3.4**
 
-Property 13: GEPADO error resilience
-*For any* GEPADO update failure, the system should log the error and continue processing other records
+Property 13: GEPADO clinical conflict detection
+*For any* GEPADO record with different MV_servicedate_k value for clinical data, the system should log a data mismatch error
 **Validates: Requirements 3.5**
 
-Property 14: Web display formatting
+Property 14: GEPADO genetic conflict detection
+*For any* GEPADO record with different MV_servicedate_g value for genetic data, the system should log a data mismatch error
+**Validates: Requirements 3.6**
+
+Property 15: GEPADO clinical validation logging
+*For any* GEPADO record with matching MV_servicedate_k value for clinical data, the system should log successful validation
+**Validates: Requirements 3.7**
+
+Property 16: GEPADO genetic validation logging
+*For any* GEPADO record with matching MV_servicedate_g value for genetic data, the system should log successful validation
+**Validates: Requirements 3.8**
+
+Property 17: GEPADO error resilience
+*For any* GEPADO update failure, the system should log the error and continue processing other records
+**Validates: Requirements 3.9**
+
+Property 18: Web display formatting
 *For any* record with output_date, the web interface should display it with appropriate date formatting
 **Validates: Requirements 4.1**
 
-Property 15: Chronological sorting
+Property 19: Chronological sorting
 *For any* set of records with output_date values, sorting by date should order them chronologically
 **Validates: Requirements 4.3**
 
-
-
-Property 17: Meldebestätigung processing data flow
+Property 20: Meldebestätigung processing data flow
 *For any* Meldebestätigung processing, the Leistungsdatum should be extracted and passed to downstream components
 **Validates: Requirements 5.3**
 
-Property 18: GEPADO comparison validation
-*For any* GEPADO record comparison, output_date validation logic should be included in the comparison
+Property 21: GEPADO comparison validation
+*For any* GEPADO record comparison, output_date validation logic should be included in the comparison for both clinical and genetic data fields
 **Validates: Requirements 5.4**
 
-Property 19: Migration data preservation
+Property 22: Migration data preservation
 *For any* existing record during migration, existing output_date values should be preserved
 **Validates: Requirements 5.5**
 
-Property 20: NULL value handling
+Property 23: NULL value handling
 *For any* record without output_date, the system should handle NULL values gracefully without errors
 **Validates: Requirements 6.1**
 
-Property 21: Legacy format handling
+Property 24: Legacy format handling
 *For any* old Meldebestätigung format, the system should attempt extraction but continue processing if it fails
 **Validates: Requirements 6.3**
 
-Property 22: Missing field resilience
-*For any* GEPADO record lacking MV_output_date field, the system should handle the missing field without errors
+Property 25: Missing clinical field resilience
+*For any* GEPADO record lacking MV_servicedate_k field, the system should handle the missing field without errors
 **Validates: Requirements 6.4**
 
-Property 23: API compatibility
-*For any* API response, the output_date field should be included while maintaining compatibility with existing clients
+Property 26: Missing genetic field resilience
+*For any* GEPADO record lacking MV_servicedate_g field, the system should handle the missing field without errors
 **Validates: Requirements 6.5**
+
+Property 27: API compatibility
+*For any* API response, the output_date field should be included while maintaining compatibility with existing clients
+**Validates: Requirements 4.1**
 
 ## Error Handling
 

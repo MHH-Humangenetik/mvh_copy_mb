@@ -26,14 +26,16 @@ class GepadoRecord:
         vnk: Vorgangsnummer for clinical data type (optional)
         ibe_g: IBE string for genomic data type (optional)
         ibe_k: IBE string for clinical data type (optional)
-        mv_output_date: MV_output_date field for Leistungsdatum (optional)
+        mv_servicedate_k: MV_servicedate_k field for clinical data Leistungsdatum (optional)
+        mv_servicedate_g: MV_servicedate_g field for genetic data Leistungsdatum (optional)
     """
     hl7_case_id: str
     vng: Optional[str] = None
     vnk: Optional[str] = None
     ibe_g: Optional[str] = None
     ibe_k: Optional[str] = None
-    mv_output_date: Optional[date] = None
+    mv_servicedate_k: Optional[date] = None
+    mv_servicedate_g: Optional[date] = None
 
 
 class GepadoClient:
@@ -112,13 +114,15 @@ class GepadoClient:
                        MV_VNk.value AS VNk,
                        MV_IBE.value AS IBE_g,
                        MV_IBE2.value AS IBE_k,
-                       MV_output_date.value AS MV_output_date
+                       MV_servicedate_k.value AS MV_servicedate_k,
+                       MV_servicedate_g.value AS MV_servicedate_g
                 FROM av_ordermanagement C
                 LEFT JOIN av2_ordermanagement_addfields MV_VNg ON MV_VNg.masterguid = C.guid_ordermanagement AND MV_VNg.fieldname = 'MV_VNg'
                 LEFT JOIN av2_ordermanagement_addfields MV_VNk ON MV_VNk.masterguid = C.guid_ordermanagement AND MV_VNk.fieldname = 'MV_VNk'
                 LEFT JOIN av2_ordermanagement_addfields MV_IBE ON MV_IBE.masterguid = C.guid_ordermanagement AND MV_IBE.fieldname = 'MV_IBE'
                 LEFT JOIN av2_ordermanagement_addfields MV_IBE2 ON MV_IBE2.masterguid = C.guid_ordermanagement AND MV_IBE2.fieldname = 'MV_IBE2'
-                LEFT JOIN av2_ordermanagement_addfields MV_output_date ON MV_output_date.masterguid = C.guid_ordermanagement AND MV_output_date.fieldname = 'MV_output_date'
+                LEFT JOIN av2_ordermanagement_addfields MV_servicedate_k ON MV_servicedate_k.masterguid = C.guid_ordermanagement AND MV_servicedate_k.fieldname = 'MV_servicedate_k'
+                LEFT JOIN av2_ordermanagement_addfields MV_servicedate_g ON MV_servicedate_g.masterguid = C.guid_ordermanagement AND MV_servicedate_g.fieldname = 'MV_servicedate_g'
                 WHERE C.hl7fallid LIKE %s
             """
             
@@ -127,16 +131,27 @@ class GepadoClient:
             
             if row:
                 logger.info(f"Found gepado record for HL7 case ID: {hl7_case_id}")
-                # Parse MV_output_date if present
-                mv_output_date = None
+                # Parse MV_servicedate_k if present
+                mv_servicedate_k = None
                 if row[5]:
                     try:
                         # Assume the date is stored as a string in YYYY-MM-DD format
                         from datetime import datetime
-                        mv_output_date = datetime.strptime(row[5], '%Y-%m-%d').date()
+                        mv_servicedate_k = datetime.strptime(row[5], '%Y-%m-%d').date()
                     except (ValueError, TypeError):
-                        logger.warning(f"Invalid MV_output_date format in GEPADO: {row[5]}")
-                        mv_output_date = None
+                        logger.warning(f"Invalid MV_servicedate_k format in GEPADO: {row[5]}")
+                        mv_servicedate_k = None
+                
+                # Parse MV_servicedate_g if present
+                mv_servicedate_g = None
+                if row[6]:
+                    try:
+                        # Assume the date is stored as a string in YYYY-MM-DD format
+                        from datetime import datetime
+                        mv_servicedate_g = datetime.strptime(row[6], '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid MV_servicedate_g format in GEPADO: {row[6]}")
+                        mv_servicedate_g = None
                 
                 return GepadoRecord(
                     hl7_case_id=row[0],
@@ -144,7 +159,8 @@ class GepadoClient:
                     vnk=row[2] if row[2] else None,
                     ibe_g=row[3] if row[3] else None,
                     ibe_k=row[4] if row[4] else None,
-                    mv_output_date=mv_output_date
+                    mv_servicedate_k=mv_servicedate_k,
+                    mv_servicedate_g=mv_servicedate_g
                 )
             else:
                 logger.warning(f"No gepado record found for HL7 case ID: {hl7_case_id}")
@@ -203,7 +219,8 @@ class GepadoClient:
                 'vnk': 'MV_VNk', 
                 'ibe_g': 'MV_IBE',
                 'ibe_k': 'MV_IBE2',
-                'mv_output_date': 'MV_output_date'
+                'mv_servicedate_k': 'MV_servicedate_k',
+                'mv_servicedate_g': 'MV_servicedate_g'
             }
             
             for field_name, value in updates.items():
@@ -269,15 +286,15 @@ class GepadoClient:
                 self._connection = None
 
 
-def map_data_type_to_fields(art_der_daten: str) -> tuple[str, str]:
+def map_data_type_to_fields(art_der_daten: str) -> tuple[str, str, str]:
     """
-    Map Art der Daten value to corresponding VN and IBE field names.
+    Map Art der Daten value to corresponding VN, IBE, and service date field names.
     
     Args:
         art_der_daten: Type of data ('G' for genomic, 'C' for clinical)
         
     Returns:
-        Tuple of (vn_field_name, ibe_field_name) for the data type
+        Tuple of (vn_field_name, ibe_field_name, servicedate_field_name) for the data type
         
     Raises:
         ValueError: If art_der_daten is not 'G' or 'C'
@@ -285,9 +302,9 @@ def map_data_type_to_fields(art_der_daten: str) -> tuple[str, str]:
     art_der_daten_normalized = art_der_daten.upper().strip()
     
     if art_der_daten_normalized == 'G':
-        return ('vng', 'ibe_g')
+        return ('vng', 'ibe_g', 'mv_servicedate_g')
     elif art_der_daten_normalized == 'C':
-        return ('vnk', 'ibe_k')
+        return ('vnk', 'ibe_k', 'mv_servicedate_k')
     else:
         raise ValueError(f"Invalid Art der Daten value: {art_der_daten}. Must be 'G' (genomic) or 'C' (clinical)")
 
@@ -312,7 +329,7 @@ def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_
     Raises:
         ValueError: If art_der_daten is invalid
     """
-    vn_field, ibe_field = map_data_type_to_fields(art_der_daten)
+    vn_field, ibe_field, servicedate_field = map_data_type_to_fields(art_der_daten)
     
     updates_needed = {}
     mismatches_found = {}
@@ -347,21 +364,23 @@ def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_
         # Field matches, log successful validation
         logger.info(f"Validated {ibe_field} field: {current_ibe}")
     
-    # Check MV_output_date field if output_date is provided
-    if output_date is not None:
-        current_mv_output_date = existing_record.mv_output_date
-        
-        if current_mv_output_date is None:
-            # Field is empty, can be updated
-            updates_needed['mv_output_date'] = output_date.strftime('%Y-%m-%d')
-            logger.info(f"Will update empty mv_output_date field with: {output_date}")
-        elif current_mv_output_date != output_date:
-            # Field has different value, log mismatch
-            mismatches_found['mv_output_date'] = (current_mv_output_date, output_date)
-            logger.error(f"Data mismatch in mv_output_date: existing='{current_mv_output_date}', new='{output_date}'")
-        else:
-            # Field matches, log successful validation
-            logger.info(f"Validated mv_output_date field: {current_mv_output_date}")
+    # Check appropriate service date field based on data type
+    current_servicedate = getattr(existing_record, servicedate_field)
+    
+    if output_date is None:
+        # No new output_date to compare - skip like we would with empty string input
+        logger.info("No output_date provided for comparison")
+    elif current_servicedate is None:
+        # Field is empty, can be updated
+        updates_needed[servicedate_field] = output_date.strftime('%Y-%m-%d')
+        logger.info(f"Will update empty {servicedate_field} field with: {output_date}")
+    elif current_servicedate != output_date:
+        # Field has different value, log mismatch
+        mismatches_found[servicedate_field] = (current_servicedate, output_date)
+        logger.error(f"Data mismatch in {servicedate_field}: existing='{current_servicedate}', new='{output_date}'")
+    else:
+        # Field matches, log successful validation
+        logger.info(f"Validated {servicedate_field} field: {current_servicedate}")
     
     return updates_needed, mismatches_found
 
