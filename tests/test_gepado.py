@@ -1729,3 +1729,193 @@ class TestHL7CaseIdCorrectionIntegration:
         
         # Verify no update was attempted
         mock_client.update_record.assert_not_called()
+    
+    @patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado')
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_backward_compatibility_with_existing_workflows(self, mock_client_class, mock_correction):
+        """Test that existing GEPADO workflows continue to work with correction system."""
+        mock_client = Mock()
+        case_id = "EXISTING_CASE"
+        
+        # Mock correction system returns same case ID (no correction needed)
+        mock_correction.return_value = case_id
+        
+        # Mock existing workflow: record exists and needs updates
+        mock_record = GepadoRecord(
+            hl7_case_id=case_id, 
+            vng=None, vnk="EXISTING_VNK", 
+            ibe_g=None, ibe_k="EXISTING_IBE_K",
+            mv_servicedate_k=None, mv_servicedate_g=None
+        )
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test genomic data update (should update vng and ibe_g, leave vnk and ibe_k unchanged)
+        result = validate_and_update_record(
+            mock_client, case_id, "NEW_VNG", "NEW_IBE_G", "G", "1", "0"
+        )
+        
+        # Should succeed
+        assert result is True
+        
+        # Verify correction was called
+        mock_correction.assert_called_once_with(mock_client, case_id)
+        
+        # Verify GEPADO operations used the same case ID
+        mock_client.query_record.assert_called_once_with(case_id)
+        mock_client.update_record.assert_called_once_with(case_id, {
+            'vng': 'NEW_VNG', 
+            'ibe_g': 'NEW_IBE_G'
+        })
+    
+    @patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado')
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_correction_with_leistungsdatum_integration(self, mock_client_class, mock_correction):
+        """Test that HL7 case ID correction works with Leistungsdatum integration."""
+        from datetime import date
+        
+        mock_client = Mock()
+        original_case_id = "WRONG_CASE"
+        corrected_case_id = "CORRECT_CASE"
+        test_date = date(2024, 7, 15)
+        
+        # Mock correction system returns different case ID
+        mock_correction.return_value = corrected_case_id
+        
+        # Mock corrected record exists and needs updates including service date
+        mock_record = GepadoRecord(
+            hl7_case_id=corrected_case_id,
+            vng=None, ibe_g=None, mv_servicedate_g=None
+        )
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test with Leistungsdatum
+        result = validate_and_update_record(
+            mock_client, original_case_id, "VN123", "IBE123", "G", "1", "0", test_date
+        )
+        
+        # Should succeed
+        assert result is True
+        
+        # Verify correction was applied
+        mock_correction.assert_called_once_with(mock_client, original_case_id)
+        
+        # Verify GEPADO operations used corrected case ID
+        mock_client.query_record.assert_called_once_with(corrected_case_id)
+        
+        # Verify update included all fields including service date
+        expected_updates = {
+            'vng': 'VN123',
+            'ibe_g': 'IBE123', 
+            'mv_servicedate_g': '2024-07-15'
+        }
+        mock_client.update_record.assert_called_once_with(corrected_case_id, expected_updates)
+    
+    @patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado')
+    @patch('mvh_copy_mb.gepado.GepadoClient')
+    def test_correction_preserves_local_storage_case_id(self, mock_client_class, mock_correction):
+        """Test that correction system preserves original case ID for local storage and file naming."""
+        import logging
+        from io import StringIO
+        
+        mock_client = Mock()
+        original_case_id = "LOCAL_CASE_123"
+        corrected_case_id = "GEPADO_CASE_456"
+        
+        # Set up logging to verify original case ID is preserved in logs
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.INFO)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.INFO)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock correction system
+            mock_correction.return_value = corrected_case_id
+            
+            # Mock successful GEPADO operations with corrected case ID
+            mock_record = GepadoRecord(hl7_case_id=corrected_case_id, vng=None, ibe_g=None)
+            mock_client.query_record.return_value = mock_record
+            mock_client.update_record.return_value = True
+            
+            # Call validate_and_update_record with original case ID
+            result = validate_and_update_record(
+                mock_client, original_case_id, "VN123", "IBE123", "G", "1", "0"
+            )
+            
+            # Should succeed
+            assert result is True
+            
+            # Verify GEPADO operations used corrected case ID
+            mock_client.query_record.assert_called_once_with(corrected_case_id)
+            mock_client.update_record.assert_called_once_with(corrected_case_id, {'vng': 'VN123', 'ibe_g': 'IBE123'})
+            
+            # Verify logging mentions both original and corrected case IDs
+            log_output = log_capture.getvalue()
+            assert original_case_id in log_output, "Original case ID should be preserved in logs"
+            assert corrected_case_id in log_output, "Corrected case ID should be mentioned in logs"
+            assert "Using corrected HL7 case ID for GEPADO operations" in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        original_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        corrected_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        vorgangsnummer=st.text(min_size=1, max_size=50, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])).filter(lambda x: x.strip() != ''),
+        ibe_string=st.text(min_size=1, max_size=50, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])).filter(lambda x: x.strip() != ''),
+        art_der_daten=st.sampled_from(['G', 'C'])
+    )
+    def test_property_correction_system_integration(self, original_case_id, corrected_case_id, vorgangsnummer, ibe_string, art_der_daten):
+        """
+        **Feature: hl7-case-id-correction, Property 11: Local storage preservation**
+        **Feature: hl7-case-id-correction, Property 13: GEPADO update correction**
+        
+        For any GEPADO update operation, the system should use corrected hl7_case_id for 
+        GEPADO operations while preserving original hl7_case_id for local storage and logging.
+        
+        **Validates: Requirements 4.1, 4.3**
+        """
+        from unittest.mock import Mock, patch
+        
+        # Only test when case IDs are different (correction scenario)
+        if original_case_id == corrected_case_id:
+            return
+        
+        with patch('mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado') as mock_correction:
+            mock_client = Mock()
+            
+            # Mock correction system returns different case ID
+            mock_correction.return_value = corrected_case_id
+            
+            # Mock successful GEPADO operations
+            vn_field, ibe_field, _ = map_data_type_to_fields(art_der_daten)
+            mock_record = GepadoRecord(hl7_case_id=corrected_case_id)
+            setattr(mock_record, vn_field, None)
+            setattr(mock_record, ibe_field, None)
+            
+            mock_client.query_record.return_value = mock_record
+            mock_client.update_record.return_value = True
+            
+            # Call validate_and_update_record with original case ID
+            result = validate_and_update_record(
+                mock_client, original_case_id, vorgangsnummer, ibe_string, art_der_daten, "1", "0"
+            )
+            
+            # Should succeed
+            assert result is True
+            
+            # Verify correction function was called with original case ID
+            mock_correction.assert_called_once_with(mock_client, original_case_id)
+            
+            # Verify GEPADO operations used corrected case ID
+            mock_client.query_record.assert_called_once_with(corrected_case_id)
+            
+            expected_updates = {vn_field: vorgangsnummer, ibe_field: ibe_string}
+            mock_client.update_record.assert_called_once_with(corrected_case_id, expected_updates)

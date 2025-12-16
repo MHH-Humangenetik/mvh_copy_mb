@@ -78,11 +78,11 @@
   - **Property 13: GEPADO update correction**
   - **Validates: Requirements 4.3**
 
-- [ ] 6. Update existing GEPADO integration to use correction system
+- [x] 5. Update existing GEPADO integration to use correction system
   - Modify validate_and_update_record function to use corrected hl7_case_id
   - Update all GEPADO query and update operations to use correction system
   - Ensure backward compatibility with existing GEPADO processing
   - Add integration tests to verify correction system works with existing workflows
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 4.3, 4.4_
 
-- [ ] 7. Checkpoint - Ensure all tests pass, ask the user if questions arise
+- [ ] 6. Checkpoint - Ensure all tests pass, ask the user if questions arise
