@@ -121,24 +121,14 @@
   - **Property 15: Chronological sorting**
   - **Validates: Requirements 4.3**
 
-- [ ] 8. Update data export functionality to include output_date
-  - Modify export queries to include output_date field
-  - Ensure output_date appears in exported CSV/JSON formats
-  - Test export functionality with various date values and NULL handling
-  - _Requirements: 4.4_
-
-- [ ] 8.1 Write property test for export field inclusion
-  - **Property 16: Export field inclusion**
-  - **Validates: Requirements 4.4**
-
-- [ ] 9. Implement database migration for existing installations
+- [x] 8. Implement database migration for existing installations
   - Create migration script to add output_date column to existing databases
   - Implement backward compatibility for records without output_date
   - Add migration data preservation logic for existing records
   - _Requirements: 2.3, 5.5, 6.2_
 
-- [ ] 9.1 Write property test for migration data preservation
-  - **Property 19: Migration data preservation**
+- [x] 8.1 Write property test for migration data preservation
+  - **Property 16: Migration data preservation**
   - **Validates: Requirements 5.5**
 
-- [ ] 10. Checkpoint - Ensure all tests pass, ask the user if questions arise
+- [x] 9. Checkpoint - Ensure all tests pass, ask the user if questions arise

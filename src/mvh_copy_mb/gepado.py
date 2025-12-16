@@ -293,7 +293,7 @@ def map_data_type_to_fields(art_der_daten: str) -> tuple[str, str]:
 
 
 
-def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_string: str, art_der_daten: str) -> tuple[Dict[str, str], Dict[str, tuple[str, str]]]:
+def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_string: str, art_der_daten: str, output_date: Optional[date] = None) -> tuple[Dict[str, str], Dict[str, tuple[str, str]]]:
     """
     Compare existing gepado data with Meldebestätigung data and determine updates needed.
     
@@ -302,6 +302,7 @@ def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_
         vorgangsnummer: Vorgangsnummer from Meldebestätigung
         ibe_string: IBE string from Meldebestätigung
         art_der_daten: Type of data ('G' or 'C')
+        output_date: Leistungsdatum from Meldebestätigung (optional)
         
     Returns:
         Tuple of (updates_needed, mismatches_found)
@@ -346,58 +347,24 @@ def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_
         # Field matches, log successful validation
         logger.info(f"Validated {ibe_field} field: {current_ibe}")
     
-    return updates_needed, mismatches_found
-
-
-def sync_output_date_to_gepado(client: GepadoClient, hl7_case_id: str, output_date: Optional[date]) -> bool:
-    """
-    Synchronize output_date with GEPADO MV_output_date field.
-    
-    Args:
-        client: GepadoClient instance
-        hl7_case_id: HL7 case ID to update
-        output_date: Leistungsdatum to synchronize (None if not available)
-        
-    Returns:
-        True if synchronization was successful, False otherwise
-    """
-    try:
-        # Query existing record
-        existing_record = client.query_record(hl7_case_id)
-        if not existing_record:
-            logger.warning(f"No gepado record found for HL7 case ID: {hl7_case_id}")
-            return False
-        
-        # Check if we have an output_date to sync
-        if output_date is None:
-            logger.info(f"No output_date to sync for HL7 case ID: {hl7_case_id}")
-            return True
-        
-        # Compare output_date with existing MV_output_date
+    # Check MV_output_date field if output_date is provided
+    if output_date is not None:
         current_mv_output_date = existing_record.mv_output_date
         
         if current_mv_output_date is None:
-            # Field is empty, update it
-            updates = {'mv_output_date': output_date.strftime('%Y-%m-%d')}
-            success = client.update_record(hl7_case_id, updates)
-            if success:
-                logger.info(f"Updated empty MV_output_date field for HL7 case ID {hl7_case_id} with: {output_date}")
-                return True
-            else:
-                logger.error(f"Failed to update MV_output_date field for HL7 case ID {hl7_case_id}")
-                return False
+            # Field is empty, can be updated
+            updates_needed['mv_output_date'] = output_date.strftime('%Y-%m-%d')
+            logger.info(f"Will update empty mv_output_date field with: {output_date}")
         elif current_mv_output_date != output_date:
             # Field has different value, log mismatch
-            logger.error(f"Data mismatch in MV_output_date for HL7 case ID {hl7_case_id}: existing='{current_mv_output_date}', new='{output_date}'")
-            return False
+            mismatches_found['mv_output_date'] = (current_mv_output_date, output_date)
+            logger.error(f"Data mismatch in mv_output_date: existing='{current_mv_output_date}', new='{output_date}'")
         else:
             # Field matches, log successful validation
-            logger.info(f"Validated MV_output_date field for HL7 case ID {hl7_case_id}: {current_mv_output_date}")
-            return True
-            
-    except Exception as e:
-        logger.error(f"Error synchronizing output_date for HL7 case ID {hl7_case_id}: {e}")
-        return False
+            logger.info(f"Validated mv_output_date field: {current_mv_output_date}")
+    
+    return updates_needed, mismatches_found
+
 
 
 def should_process_record_for_gepado(ergebnis_qc: str, typ_der_meldung: str) -> bool:
@@ -457,9 +424,9 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
             logger.warning(f"No gepado record found for HL7 case ID: {hl7_case_id}")
             return False
         
-        # Compare data and determine updates
+        # Compare data and determine updates (including output_date)
         updates_needed, mismatches_found = compare_record_data(
-            existing_record, vorgangsnummer, ibe_string, art_der_daten
+            existing_record, vorgangsnummer, ibe_string, art_der_daten, output_date
         )
         
         # Log any mismatches
@@ -478,11 +445,6 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
                 return False
         else:
             logger.info(f"No updates needed for gepado record with HL7 case ID {hl7_case_id}")
-        
-        # Synchronize output_date if provided
-        if output_date is not None:
-            output_date_success = sync_output_date_to_gepado(client, hl7_case_id, output_date)
-            success = success and output_date_success
         
         return success
             

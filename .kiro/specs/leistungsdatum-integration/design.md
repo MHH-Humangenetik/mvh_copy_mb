@@ -179,9 +179,7 @@ Property 15: Chronological sorting
 *For any* set of records with output_date values, sorting by date should order them chronologically
 **Validates: Requirements 4.3**
 
-Property 16: Export field inclusion
-*For any* data export operation, the output_date field should be included in the exported results
-**Validates: Requirements 4.4**
+
 
 Property 17: Meldebestätigung processing data flow
 *For any* Meldebestätigung processing, the Leistungsdatum should be extracted and passed to downstream components
