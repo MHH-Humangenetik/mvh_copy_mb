@@ -18,7 +18,7 @@ Never use `pip`, `poetry`, or other package managers directly.
 
 ## Testing
 
-Always run tests before commiting. Use `uv run pytest` for running tests.
+Always run tests before commiting. Use `uv run pytest` for running tests. Always mock the databases used, never create them for tests.
 
 ## Git
 
