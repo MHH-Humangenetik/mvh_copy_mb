@@ -79,7 +79,8 @@ class WebDatabaseService:
                 case_id,
                 gpas_domain,
                 processed_at,
-                is_done
+                is_done,
+                output_date
             FROM meldebestaetigungen
             ORDER BY case_id, art_der_daten
             """
@@ -100,7 +101,8 @@ class WebDatabaseService:
                     case_id=row[7],
                     gpas_domain=row[8],
                     processed_at=row[9],
-                    is_done=row[10]
+                    is_done=row[10],
+                    output_date=row[11]
                 )
                 
                 # Skip records without case_id
@@ -210,7 +212,8 @@ class WebDatabaseService:
                 case_id,
                 gpas_domain,
                 processed_at,
-                is_done
+                is_done,
+                output_date
             FROM meldebestaetigungen
             WHERE case_id = ?
             """
@@ -234,7 +237,8 @@ class WebDatabaseService:
                     case_id=row[7],
                     gpas_domain=row[8],
                     processed_at=row[9],
-                    is_done=row[10]
+                    is_done=row[10],
+                    output_date=row[11]
                 )
                 records.append(record)
             
@@ -280,7 +284,8 @@ class WebDatabaseService:
                 case_id,
                 gpas_domain,
                 processed_at,
-                is_done
+                is_done,
+                output_date
             FROM meldebestaetigungen
             WHERE case_id = ?
             """
@@ -306,7 +311,8 @@ class WebDatabaseService:
                     case_id=row[7],
                     gpas_domain=row[8],
                     processed_at=row[9],
-                    is_done=row[10]
+                    is_done=row[10],
+                    output_date=row[11]
                 )
                 
                 # Handle single-letter codes (G/C)
