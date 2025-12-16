@@ -26,69 +26,69 @@
   - **Property 5: Malformed input resilience**
   - **Validates: Requirements 1.5**
 
-- [ ] 2. Update database schema and models for output_date field
+- [x] 2. Update database schema and models for output_date field
   - Add output_date column to DuckDB meldebestaetigungen table schema
   - Update MeldebestaetigungRecord dataclass to include output_date field
   - Implement schema migration logic for existing databases
   - _Requirements: 2.1, 2.2, 2.3, 5.1_
 
-- [ ] 2.1 Write property test for database storage consistency
+- [x] 2.1 Write property test for database storage consistency
   - **Property 6: Database storage consistency**
   - **Validates: Requirements 2.2**
 
-- [ ] 2.2 Write property test for query result completeness
+- [x] 2.2 Write property test for query result completeness
   - **Property 7: Query result completeness**
   - **Validates: Requirements 2.4**
 
-- [ ] 2.3 Write property test for NULL storage handling
+- [x] 2.3 Write property test for NULL storage handling
   - **Property 8: NULL storage for unparseable dates**
   - **Validates: Requirements 2.5**
 
-- [ ] 3. Integrate Leistungsdatum extraction into main processing pipeline
+- [x] 3. Integrate Leistungsdatum extraction into main processing pipeline
   - Update CLI processing to extract Leistungsdatum from hash strings
   - Modify database upsert operations to include output_date field
   - Add error handling and logging for extraction failures
   - _Requirements: 2.4, 2.5, 5.3, 6.1, 6.3_
 
-- [ ] 3.1 Write property test for NULL value handling
+- [x] 3.1 Write property test for NULL value handling
   - **Property 21: NULL value handling**
   - **Validates: Requirements 6.1**
 
-- [ ] 3.2 Write property test for legacy format handling
+- [x] 3.2 Write property test for legacy format handling
   - **Property 22: Legacy format handling**
   - **Validates: Requirements 6.3**
 
-- [ ] 4. Update GEPADO integration for MV_output_date field
+- [x] 4. Update GEPADO integration for MV_output_date field
   - Add MV_output_date field to GepadoRecord dataclass
   - Update GEPADO query logic to retrieve MV_output_date field
   - Implement comparison and update logic for output_date synchronization
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 5.4_
 
-- [ ] 4.1 Write property test for GEPADO update inclusion
+- [x] 4.1 Write property test for GEPADO update inclusion
   - **Property 9: GEPADO update inclusion**
   - **Validates: Requirements 3.1**
 
-- [ ] 4.2 Write property test for GEPADO empty field updates
+- [x] 4.2 Write property test for GEPADO empty field updates
   - **Property 10: GEPADO empty field updates**
   - **Validates: Requirements 3.2**
 
-- [ ] 4.3 Write property test for GEPADO conflict detection
+- [x] 4.3 Write property test for GEPADO conflict detection
   - **Property 11: GEPADO conflict detection**
   - **Validates: Requirements 3.3**
 
-- [ ] 4.4 Write property test for GEPADO validation logging
+- [x] 4.4 Write property test for GEPADO validation logging
   - **Property 12: GEPADO validation logging**
   - **Validates: Requirements 3.4**
 
-- [ ] 4.5 Write property test for GEPADO error resilience
+- [x] 4.5 Write property test for GEPADO error resilience
   - **Property 13: GEPADO error resilience**
   - **Validates: Requirements 3.5**
 
-- [ ] 4.6 Write property test for GEPADO comparison validation
+- [x] 4.6 Write property test for GEPADO comparison validation
   - **Property 19: GEPADO comparison validation**
   - **Validates: Requirements 5.4**
 
-- [ ] 4.7 Write property test for missing field resilience
+- [x] 4.7 Write property test for missing field resilience
   - **Property 23: Missing field resilience**
   - **Validates: Requirements 6.4**
 

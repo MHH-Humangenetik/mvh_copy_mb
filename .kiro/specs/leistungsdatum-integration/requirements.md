@@ -13,7 +13,7 @@ This feature adds the Leistungsdatum (service date) field to all data structures
 - **MV_output_date**: The SQL field name used in GEPADO for storing the output date
 - **output_date**: The simplified field name used in DuckDB for storing the service date
 - **Meldebestaetigung**: A confirmation message containing metadata about medical data submissions
-- **HL7 Extraction**: The process of extracting HL7 case IDs from Meldebestätigung identifiers
+- **Hash String Processing**: The process of parsing and extracting fields from Meldebestätigung hash strings
 
 ## Requirements
 
@@ -73,7 +73,7 @@ This feature adds the Leistungsdatum (service date) field to all data structures
 
 1. WHEN defining the MeldebestaetigungRecord dataclass THEN the system SHALL include an output_date field of Optional[date] type
 2. WHEN defining API response models THEN the system SHALL include the output_date field in RecordResponse and related models
-3. WHEN processing HL7 extraction THEN the system SHALL extract and pass the Leistungsdatum to downstream components
+3. WHEN processing Meldebestätigung records THEN the system SHALL extract and pass the Leistungsdatum to downstream components
 4. WHEN creating GEPADO record comparisons THEN the system SHALL include output_date validation logic
 5. WHEN updating existing records THEN the system SHALL preserve existing output_date values during migrations
 
@@ -87,4 +87,3 @@ This feature adds the Leistungsdatum (service date) field to all data structures
 2. WHEN migrating the database schema THEN the system SHALL add the output_date column without breaking existing functionality
 3. WHEN old Meldebestätigung formats are encountered THEN the system SHALL attempt extraction but continue processing if it fails
 4. WHEN GEPADO records lack the MV_output_date field THEN the system SHALL handle the missing field without errors
-5. WHEN API clients request data THEN the system SHALL include output_date in responses while maintaining compatibility with existing clients

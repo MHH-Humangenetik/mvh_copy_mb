@@ -6,6 +6,7 @@ laboratory information system database.
 """
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Optional, Dict, Any
 import logging
 import pymssql
@@ -25,12 +26,14 @@ class GepadoRecord:
         vnk: Vorgangsnummer for clinical data type (optional)
         ibe_g: IBE string for genomic data type (optional)
         ibe_k: IBE string for clinical data type (optional)
+        mv_output_date: MV_output_date field for Leistungsdatum (optional)
     """
     hl7_case_id: str
     vng: Optional[str] = None
     vnk: Optional[str] = None
     ibe_g: Optional[str] = None
     ibe_k: Optional[str] = None
+    mv_output_date: Optional[date] = None
 
 
 class GepadoClient:
@@ -108,12 +111,14 @@ class GepadoClient:
                        MV_VNg.value AS VNg,
                        MV_VNk.value AS VNk,
                        MV_IBE.value AS IBE_g,
-                       MV_IBE2.value AS IBE_k
+                       MV_IBE2.value AS IBE_k,
+                       MV_output_date.value AS MV_output_date
                 FROM av_ordermanagement C
                 LEFT JOIN av2_ordermanagement_addfields MV_VNg ON MV_VNg.masterguid = C.guid_ordermanagement AND MV_VNg.fieldname = 'MV_VNg'
                 LEFT JOIN av2_ordermanagement_addfields MV_VNk ON MV_VNk.masterguid = C.guid_ordermanagement AND MV_VNk.fieldname = 'MV_VNk'
                 LEFT JOIN av2_ordermanagement_addfields MV_IBE ON MV_IBE.masterguid = C.guid_ordermanagement AND MV_IBE.fieldname = 'MV_IBE'
                 LEFT JOIN av2_ordermanagement_addfields MV_IBE2 ON MV_IBE2.masterguid = C.guid_ordermanagement AND MV_IBE2.fieldname = 'MV_IBE2'
+                LEFT JOIN av2_ordermanagement_addfields MV_output_date ON MV_output_date.masterguid = C.guid_ordermanagement AND MV_output_date.fieldname = 'MV_output_date'
                 WHERE C.hl7fallid LIKE %s
             """
             
@@ -122,12 +127,24 @@ class GepadoClient:
             
             if row:
                 logger.info(f"Found gepado record for HL7 case ID: {hl7_case_id}")
+                # Parse MV_output_date if present
+                mv_output_date = None
+                if row[5]:
+                    try:
+                        # Assume the date is stored as a string in YYYY-MM-DD format
+                        from datetime import datetime
+                        mv_output_date = datetime.strptime(row[5], '%Y-%m-%d').date()
+                    except (ValueError, TypeError):
+                        logger.warning(f"Invalid MV_output_date format in GEPADO: {row[5]}")
+                        mv_output_date = None
+                
                 return GepadoRecord(
                     hl7_case_id=row[0],
                     vng=row[1] if row[1] else None,
                     vnk=row[2] if row[2] else None,
                     ibe_g=row[3] if row[3] else None,
-                    ibe_k=row[4] if row[4] else None
+                    ibe_k=row[4] if row[4] else None,
+                    mv_output_date=mv_output_date
                 )
             else:
                 logger.warning(f"No gepado record found for HL7 case ID: {hl7_case_id}")
@@ -185,7 +202,8 @@ class GepadoClient:
                 'vng': 'MV_VNg',
                 'vnk': 'MV_VNk', 
                 'ibe_g': 'MV_IBE',
-                'ibe_k': 'MV_IBE2'
+                'ibe_k': 'MV_IBE2',
+                'mv_output_date': 'MV_output_date'
             }
             
             for field_name, value in updates.items():
@@ -331,6 +349,57 @@ def compare_record_data(existing_record: GepadoRecord, vorgangsnummer: str, ibe_
     return updates_needed, mismatches_found
 
 
+def sync_output_date_to_gepado(client: GepadoClient, hl7_case_id: str, output_date: Optional[date]) -> bool:
+    """
+    Synchronize output_date with GEPADO MV_output_date field.
+    
+    Args:
+        client: GepadoClient instance
+        hl7_case_id: HL7 case ID to update
+        output_date: Leistungsdatum to synchronize (None if not available)
+        
+    Returns:
+        True if synchronization was successful, False otherwise
+    """
+    try:
+        # Query existing record
+        existing_record = client.query_record(hl7_case_id)
+        if not existing_record:
+            logger.warning(f"No gepado record found for HL7 case ID: {hl7_case_id}")
+            return False
+        
+        # Check if we have an output_date to sync
+        if output_date is None:
+            logger.info(f"No output_date to sync for HL7 case ID: {hl7_case_id}")
+            return True
+        
+        # Compare output_date with existing MV_output_date
+        current_mv_output_date = existing_record.mv_output_date
+        
+        if current_mv_output_date is None:
+            # Field is empty, update it
+            updates = {'mv_output_date': output_date.strftime('%Y-%m-%d')}
+            success = client.update_record(hl7_case_id, updates)
+            if success:
+                logger.info(f"Updated empty MV_output_date field for HL7 case ID {hl7_case_id} with: {output_date}")
+                return True
+            else:
+                logger.error(f"Failed to update MV_output_date field for HL7 case ID {hl7_case_id}")
+                return False
+        elif current_mv_output_date != output_date:
+            # Field has different value, log mismatch
+            logger.error(f"Data mismatch in MV_output_date for HL7 case ID {hl7_case_id}: existing='{current_mv_output_date}', new='{output_date}'")
+            return False
+        else:
+            # Field matches, log successful validation
+            logger.info(f"Validated MV_output_date field for HL7 case ID {hl7_case_id}: {current_mv_output_date}")
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error synchronizing output_date for HL7 case ID {hl7_case_id}: {e}")
+        return False
+
+
 def should_process_record_for_gepado(ergebnis_qc: str, typ_der_meldung: str) -> bool:
     """
     Check if a record should be processed for gepado updates based on QC and message type.
@@ -352,7 +421,7 @@ def should_process_record_for_gepado(ergebnis_qc: str, typ_der_meldung: str) -> 
     return should_process
 
 
-def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsnummer: str, ibe_string: str, art_der_daten: str, ergebnis_qc: str, typ_der_meldung: str) -> bool:
+def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsnummer: str, ibe_string: str, art_der_daten: str, ergebnis_qc: str, typ_der_meldung: str, output_date: Optional[date] = None) -> bool:
     """
     Validate record processing criteria and update gepado record if appropriate.
     
@@ -364,6 +433,7 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
         art_der_daten: Type of data ('G' or 'C')
         ergebnis_qc: QC result value
         typ_der_meldung: Type of report value
+        output_date: Leistungsdatum from Meldebestätigung (optional)
         
     Returns:
         True if processing was successful, False otherwise
@@ -398,17 +468,23 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
                 logger.error(f"Data mismatch detected for HL7 case ID {hl7_case_id}, field {field}: existing='{existing}', new='{new}'")
         
         # Perform updates if needed
+        success = True
         if updates_needed:
             success = client.update_record(hl7_case_id, updates_needed)
             if success:
                 logger.info(f"Successfully updated gepado record for HL7 case ID {hl7_case_id}: {updates_needed}")
-                return True
             else:
                 # Error already logged in update_record(), just return False
                 return False
         else:
             logger.info(f"No updates needed for gepado record with HL7 case ID {hl7_case_id}")
-            return True
+        
+        # Synchronize output_date if provided
+        if output_date is not None:
+            output_date_success = sync_output_date_to_gepado(client, hl7_case_id, output_date)
+            success = success and output_date_success
+        
+        return success
             
     except Exception as e:
         logger.error(f"Error processing gepado record for HL7 case ID {hl7_case_id}: {e}")

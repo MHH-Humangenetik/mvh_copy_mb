@@ -2,6 +2,7 @@
 Tests for gepado database client functionality.
 """
 import os
+from datetime import date
 from unittest.mock import Mock, patch, MagicMock
 import pytest
 from hypothesis import given, strategies as st
@@ -9,7 +10,7 @@ from hypothesis import given, strategies as st
 from mvh_copy_mb.gepado import (
     GepadoClient, GepadoRecord, create_gepado_client_from_env,
     map_data_type_to_fields, compare_record_data, validate_and_update_record,
-    should_process_record_for_gepado
+    should_process_record_for_gepado, sync_output_date_to_gepado
 )
 
 
@@ -18,12 +19,16 @@ class TestGepadoRecord:
     
     def test_gepado_record_creation(self):
         """Test basic GepadoRecord creation with all fields."""
+        from datetime import date
+        test_date = date(2024, 7, 1)
+        
         record = GepadoRecord(
             hl7_case_id="12345",
             vng="VNG_001",
             vnk="VNK_001", 
             ibe_g="IBE_G_001",
-            ibe_k="IBE_K_001"
+            ibe_k="IBE_K_001",
+            mv_output_date=test_date
         )
         
         assert record.hl7_case_id == "12345"
@@ -31,6 +36,7 @@ class TestGepadoRecord:
         assert record.vnk == "VNK_001"
         assert record.ibe_g == "IBE_G_001"
         assert record.ibe_k == "IBE_K_001"
+        assert record.mv_output_date == test_date
     
     def test_gepado_record_optional_fields(self):
         """Test GepadoRecord creation with optional fields as None."""
@@ -41,6 +47,7 @@ class TestGepadoRecord:
         assert record.vnk is None
         assert record.ibe_g is None
         assert record.ibe_k is None
+        assert record.mv_output_date is None
 
 
 class TestGepadoClient:
@@ -99,7 +106,7 @@ class TestGepadoClient:
         mock_connection = Mock()
         mock_cursor = Mock()
         mock_connection.cursor.return_value = mock_cursor
-        mock_cursor.fetchone.return_value = ("12345", "VNG_001", "VNK_001", "IBE_G_001", "IBE_K_001")
+        mock_cursor.fetchone.return_value = ("12345", "VNG_001", "VNK_001", "IBE_G_001", "IBE_K_001", "2024-07-01")
         mock_connect.return_value = mock_connection
         
         client = GepadoClient("host", "db", "user", "pass")
@@ -111,6 +118,7 @@ class TestGepadoClient:
         assert record.vnk == "VNK_001"
         assert record.ibe_g == "IBE_G_001"
         assert record.ibe_k == "IBE_K_001"
+        assert record.mv_output_date == date(2024, 7, 1)
         
         mock_cursor.execute.assert_called_once()
         mock_cursor.close.assert_called_once()
@@ -615,6 +623,354 @@ class TestComprehensiveLogging:
             gepado_logger.removeHandler(handler)
             gepado_logger.setLevel(original_level)
             handler.close()
+
+
+class TestGepadoOutputDateIntegration:
+    """Test cases for GEPADO output_date integration functionality."""
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_update_inclusion(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 9: GEPADO update inclusion**
+        
+        For any GEPADO update operation, the MV_output_date field should be included 
+        when a valid date is available.
+        
+        **Validates: Requirements 3.1**
+        """
+        from unittest.mock import Mock, patch
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock an empty gepado record that needs updates
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test sync_output_date_to_gepado function
+        result = sync_output_date_to_gepado(mock_client, hl7_case_id, output_date)
+        
+        # Should successfully update the empty MV_output_date field
+        assert result is True
+        
+        # Verify that query_record was called
+        mock_client.query_record.assert_called_once_with(hl7_case_id)
+        
+        # Verify that update_record was called with the output_date
+        expected_date_str = output_date.strftime('%Y-%m-%d')
+        mock_client.update_record.assert_called_once_with(hl7_case_id, {'mv_output_date': expected_date_str})
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_empty_field_updates(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 10: GEPADO empty field updates**
+        
+        For any GEPADO record with empty MV_output_date, the system should update it 
+        with the extracted Leistungsdatum.
+        
+        **Validates: Requirements 3.2**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock an empty gepado record (MV_output_date is None)
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=None)
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test sync_output_date_to_gepado function
+        result = sync_output_date_to_gepado(mock_client, hl7_case_id, output_date)
+        
+        # Should successfully update the empty field
+        assert result is True
+        
+        # Verify that update_record was called with the correct date
+        expected_date_str = output_date.strftime('%Y-%m-%d')
+        mock_client.update_record.assert_called_once_with(hl7_case_id, {'mv_output_date': expected_date_str})
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        existing_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31)),
+        new_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_conflict_detection(self, hl7_case_id, existing_date, new_date):
+        """
+        **Feature: leistungsdatum-integration, Property 11: GEPADO conflict detection**
+        
+        For any GEPADO record with different MV_output_date value, the system should 
+        log a data mismatch error.
+        
+        **Validates: Requirements 3.3**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Only test when dates are actually different
+        if existing_date == new_date:
+            return
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado client
+            mock_client = Mock()
+            
+            # Mock a gepado record with existing MV_output_date
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=existing_date)
+            mock_client.query_record.return_value = mock_record
+            
+            # Test sync_output_date_to_gepado function with different date
+            result = sync_output_date_to_gepado(mock_client, hl7_case_id, new_date)
+            
+            # Should return False due to mismatch
+            assert result is False
+            
+            # Should not call update_record since there's a mismatch
+            mock_client.update_record.assert_not_called()
+            
+            # Should log the mismatch error
+            log_output = log_capture.getvalue()
+            assert 'mismatch' in log_output.lower()
+            assert hl7_case_id in log_output
+            assert str(existing_date) in log_output
+            assert str(new_date) in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_validation_logging(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 12: GEPADO validation logging**
+        
+        For any GEPADO record with matching MV_output_date value, the system should 
+        log successful validation.
+        
+        **Validates: Requirements 3.4**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado client
+            mock_client = Mock()
+            
+            # Mock a gepado record with matching MV_output_date
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=output_date)
+            mock_client.query_record.return_value = mock_record
+            
+            # Test sync_output_date_to_gepado function with same date
+            result = sync_output_date_to_gepado(mock_client, hl7_case_id, output_date)
+            
+            # Should return True since dates match
+            assert result is True
+            
+            # Should not call update_record since dates match
+            mock_client.update_record.assert_not_called()
+            
+            # Should log successful validation
+            log_output = log_capture.getvalue()
+            assert 'validated' in log_output.lower()
+            assert hl7_case_id in log_output
+            assert str(output_date) in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        output_date=st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31))
+    )
+    def test_property_gepado_error_resilience(self, hl7_case_id, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 13: GEPADO error resilience**
+        
+        For any GEPADO update failure, the system should log the error and continue 
+        processing other records.
+        
+        **Validates: Requirements 3.5**
+        """
+        from unittest.mock import Mock
+        import logging
+        from io import StringIO
+        
+        # Set up logging capture
+        log_capture = StringIO()
+        handler = logging.StreamHandler(log_capture)
+        handler.setLevel(logging.DEBUG)
+        
+        gepado_logger = logging.getLogger('mvh_copy_mb.gepado')
+        original_level = gepado_logger.level
+        gepado_logger.setLevel(logging.DEBUG)
+        gepado_logger.addHandler(handler)
+        
+        try:
+            # Mock a gepado client
+            mock_client = Mock()
+            
+            # Mock an empty gepado record
+            mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=None)
+            mock_client.query_record.return_value = mock_record
+            
+            # Mock update failure
+            mock_client.update_record.return_value = False
+            
+            # Test sync_output_date_to_gepado function
+            result = sync_output_date_to_gepado(mock_client, hl7_case_id, output_date)
+            
+            # Should return False due to update failure
+            assert result is False
+            
+            # Should have attempted the update
+            expected_date_str = output_date.strftime('%Y-%m-%d')
+            mock_client.update_record.assert_called_once_with(hl7_case_id, {'mv_output_date': expected_date_str})
+            
+            # Should log the error
+            log_output = log_capture.getvalue()
+            assert 'failed' in log_output.lower()
+            assert hl7_case_id in log_output
+            
+        finally:
+            gepado_logger.removeHandler(handler)
+            gepado_logger.setLevel(original_level)
+            handler.close()
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])),
+        vorgangsnummer=st.text(min_size=1, max_size=50, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])).filter(lambda x: x.strip() != ''),
+        ibe_string=st.text(min_size=1, max_size=50, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00'])).filter(lambda x: x.strip() != ''),
+        art_der_daten=st.sampled_from(['G', 'C']),
+        output_date=st.one_of(st.none(), st.dates(min_value=date(2020, 1, 1), max_value=date(2030, 12, 31)))
+    )
+    def test_property_gepado_comparison_validation(self, hl7_case_id, vorgangsnummer, ibe_string, art_der_daten, output_date):
+        """
+        **Feature: leistungsdatum-integration, Property 19: GEPADO comparison validation**
+        
+        For any GEPADO record comparison, output_date validation logic should be 
+        included in the comparison.
+        
+        **Validates: Requirements 5.4**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock an empty gepado record
+        vn_field, ibe_field = map_data_type_to_fields(art_der_daten)
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=None)
+        setattr(mock_record, vn_field, None)
+        setattr(mock_record, ibe_field, None)
+        
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+        
+        # Test validate_and_update_record function with output_date
+        result = validate_and_update_record(
+            mock_client, hl7_case_id, vorgangsnummer, ibe_string, 
+            art_der_daten, "1", "0", output_date
+        )
+        
+        # Should return True for successful processing
+        assert result is True
+        
+        # Should have queried the record
+        mock_client.query_record.assert_called_with(hl7_case_id)
+        
+        # Should have called update_record for VN/IBE fields
+        expected_updates = {vn_field: vorgangsnummer, ibe_field: ibe_string}
+        
+        # Check the calls made to update_record
+        update_calls = mock_client.update_record.call_args_list
+        
+        if output_date is not None:
+            # Should have made two update calls: one for VN/IBE, one for output_date
+            assert len(update_calls) == 2
+            
+            # First call should be for VN/IBE fields
+            first_call_args = update_calls[0][0]  # Get positional args
+            assert first_call_args[0] == hl7_case_id
+            assert first_call_args[1] == expected_updates
+            
+            # Second call should be for output_date
+            second_call_args = update_calls[1][0]
+            assert second_call_args[0] == hl7_case_id
+            assert second_call_args[1] == {'mv_output_date': output_date.strftime('%Y-%m-%d')}
+        else:
+            # Only one update call for VN/IBE fields
+            assert len(update_calls) == 1
+            first_call_args = update_calls[0][0]
+            assert first_call_args[0] == hl7_case_id
+            assert first_call_args[1] == expected_updates
+    
+    @given(
+        hl7_case_id=st.text(min_size=5, max_size=20, alphabet=st.characters(blacklist_categories=['Cs'], blacklist_characters=['\x00']))
+    )
+    def test_property_missing_field_resilience(self, hl7_case_id):
+        """
+        **Feature: leistungsdatum-integration, Property 23: Missing field resilience**
+        
+        For any GEPADO record lacking MV_output_date field, the system should handle 
+        the missing field without errors.
+        
+        **Validates: Requirements 6.4**
+        """
+        from unittest.mock import Mock
+        
+        # Mock a gepado client
+        mock_client = Mock()
+        
+        # Mock a gepado record without MV_output_date field (None)
+        mock_record = GepadoRecord(hl7_case_id=hl7_case_id, mv_output_date=None)
+        mock_client.query_record.return_value = mock_record
+        
+        # Test sync_output_date_to_gepado function with None output_date
+        result = sync_output_date_to_gepado(mock_client, hl7_case_id, None)
+        
+        # Should return True and handle gracefully
+        assert result is True
+        
+        # Should have queried the record
+        mock_client.query_record.assert_called_once_with(hl7_case_id)
+        
+        # Should not attempt any updates when output_date is None
+        mock_client.update_record.assert_not_called()
 
 
 class TestValidateAndUpdateRecord:
