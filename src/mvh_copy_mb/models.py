@@ -5,7 +5,7 @@ This module defines data models for FastAPI endpoints, providing
 type validation and serialization for web API interactions.
 """
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -39,6 +39,7 @@ class RecordResponse(BaseModel):
         source_file: Name of source CSV file
         processed_at: Timestamp when record was processed
         is_done: Whether the record has been reviewed
+        output_date: Leistungsdatum extracted from hash string (None if not parseable)
     """
     vorgangsnummer: str
     meldebestaetigung: str
@@ -50,6 +51,7 @@ class RecordResponse(BaseModel):
     source_file: str
     processed_at: datetime
     is_done: bool
+    output_date: Optional[date] = None
     
     class Config:
         """Pydantic configuration."""

@@ -7,7 +7,7 @@ including metadata and gPAS resolution results.
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import Optional
 
@@ -33,6 +33,7 @@ class MeldebestaetigungRecord:
         gpas_domain: gPAS domain that resolved the pseudonym (None if not found)
         processed_at: Timestamp when record was processed
         is_done: Whether the record has been reviewed and marked complete
+        output_date: Leistungsdatum extracted from hash string (None if not parseable)
     """
     vorgangsnummer: str
     meldebestaetigung: str
@@ -45,6 +46,7 @@ class MeldebestaetigungRecord:
     gpas_domain: Optional[str]
     processed_at: datetime
     is_done: bool = False
+    output_date: Optional[date] = None
 
 
 class MeldebestaetigungDatabase:
@@ -103,7 +105,7 @@ class MeldebestaetigungDatabase:
         Create the database schema if it doesn't exist.
         
         Creates the meldebestaetigungen table with all required columns
-        and constraints.
+        and constraints. Also handles migration for existing databases.
         
         Raises:
             RuntimeError: If database connection is not established
@@ -125,14 +127,55 @@ class MeldebestaetigungDatabase:
                 case_id VARCHAR,
                 gpas_domain VARCHAR,
                 processed_at TIMESTAMP NOT NULL,
-                is_done BOOLEAN DEFAULT FALSE
+                is_done BOOLEAN DEFAULT FALSE,
+                output_date DATE
             )
             """
             self.conn.execute(create_table_sql)
             logger.debug("Database schema created or verified")
+            
+            # Handle migration for existing databases
+            self._migrate_schema_for_output_date()
+            
         except Exception as e:
             logger.error(f"Failed to create database schema: {e}", exc_info=True)
             raise
+    
+    def _migrate_schema_for_output_date(self) -> None:
+        """
+        Migrate existing database schema to add output_date column if it doesn't exist.
+        
+        This method checks if the output_date column exists and adds it if missing,
+        ensuring backward compatibility with existing databases.
+        
+        Raises:
+            RuntimeError: If database connection is not established
+            Exception: If migration fails
+        """
+        if self.conn is None:
+            raise RuntimeError("Database connection not established")
+        
+        try:
+            # Check if output_date column exists
+            column_check_sql = """
+            SELECT column_name 
+            FROM information_schema.columns 
+            WHERE table_name = 'meldebestaetigungen' 
+            AND column_name = 'output_date'
+            """
+            result = self.conn.execute(column_check_sql).fetchall()
+            
+            # If column doesn't exist, add it
+            if not result:
+                alter_table_sql = "ALTER TABLE meldebestaetigungen ADD COLUMN output_date DATE"
+                self.conn.execute(alter_table_sql)
+                logger.info("Added output_date column to existing meldebestaetigungen table")
+            else:
+                logger.debug("output_date column already exists in meldebestaetigungen table")
+                
+        except Exception as e:
+            logger.warning(f"Failed to migrate schema for output_date column: {e}", exc_info=True)
+            # Don't raise - allow system to continue with existing schema
     
     def upsert_record(self, record: MeldebestaetigungRecord) -> None:
         """
@@ -163,8 +206,9 @@ class MeldebestaetigungDatabase:
                 case_id,
                 gpas_domain,
                 processed_at,
-                is_done
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                is_done,
+                output_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
             
             self.conn.execute(
@@ -181,6 +225,7 @@ class MeldebestaetigungDatabase:
                     record.gpas_domain,
                     record.processed_at,
                     record.is_done,
+                    record.output_date,
                 ]
             )
             self.conn.commit()
@@ -221,7 +266,8 @@ class MeldebestaetigungDatabase:
                 case_id,
                 gpas_domain,
                 processed_at,
-                is_done
+                is_done,
+                output_date
             FROM meldebestaetigungen
             WHERE vorgangsnummer = ?
             """
@@ -244,7 +290,8 @@ class MeldebestaetigungDatabase:
                 case_id=result[7],
                 gpas_domain=result[8],
                 processed_at=result[9],
-                is_done=result[10]
+                is_done=result[10],
+                output_date=result[11]
             )
         except Exception as e:
             logger.error(

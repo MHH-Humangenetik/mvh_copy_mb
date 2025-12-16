@@ -49,7 +49,8 @@ def create_test_record(**overrides) -> MeldebestaetigungRecord:
         'case_id': None,
         'gpas_domain': None,
         'processed_at': datetime(2023, 1, 1),
-        'is_done': False
+        'is_done': False,
+        'output_date': None
     }
     defaults.update(overrides)
     return MeldebestaetigungRecord(**defaults)
@@ -165,6 +166,7 @@ def test_schema_persistence_across_sessions(db_name: str):
                 'indikationsbereich',
                 'is_done',
                 'meldebestaetigung',
+                'output_date',
                 'processed_at',
                 'source_file',
                 'typ_der_meldung',
@@ -814,6 +816,261 @@ def test_error_resilience_with_logging(caplog):
             retrieved2 = db.get_record("VALID456")
             assert retrieved2 is not None
             assert retrieved2.vorgangsnummer == "VALID456"
+
+
+# Feature: leistungsdatum-integration, Property 6: Database storage consistency
+# Validates: Requirements 2.2
+@settings(max_examples=100)
+@given(
+    vorgangsnummer=st.text(min_size=1, max_size=100),
+    meldebestaetigung=st.text(min_size=1, max_size=500),
+    source_file=st.text(min_size=1, max_size=100),
+    typ_der_meldung=st.text(min_size=1, max_size=50),
+    indikationsbereich=st.text(min_size=1, max_size=50),
+    art_der_daten=st.text(min_size=1, max_size=50),
+    ergebnis_qc=st.text(min_size=1, max_size=50),
+    case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
+    gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
+    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),
+    output_date=st.one_of(
+        st.none(),
+        st.dates(min_value=pytest.importorskip("datetime").date(2020, 1, 1), 
+                max_value=pytest.importorskip("datetime").date(2030, 12, 31))
+    )
+)
+def test_database_storage_consistency(
+    vorgangsnummer: str,
+    meldebestaetigung: str,
+    source_file: str,
+    typ_der_meldung: str,
+    indikationsbereich: str,
+    art_der_daten: str,
+    ergebnis_qc: str,
+    case_id: str,
+    gpas_domain: str,
+    processed_at,
+    output_date
+):
+    """
+    **Feature: leistungsdatum-integration, Property 6: Database storage consistency**
+    
+    For any valid Leistungsdatum, storing it in the database should preserve 
+    the date value accurately.
+    **Validates: Requirements 2.2**
+    """
+    from mvh_copy_mb.database import MeldebestaetigungRecord
+    
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create a record with output_date
+        record = MeldebestaetigungRecord(
+            vorgangsnummer=vorgangsnummer,
+            meldebestaetigung=meldebestaetigung,
+            source_file=source_file,
+            typ_der_meldung=typ_der_meldung,
+            indikationsbereich=indikationsbereich,
+            art_der_daten=art_der_daten,
+            ergebnis_qc=ergebnis_qc,
+            case_id=case_id,
+            gpas_domain=gpas_domain,
+            processed_at=processed_at,
+            output_date=output_date
+        )
+        
+        # Store the record
+        with MeldebestaetigungDatabase(db_path) as db:
+            db.upsert_record(record)
+            
+            # Retrieve the record
+            retrieved_record = db.get_record(vorgangsnummer)
+            
+            # Verify the record was retrieved
+            assert retrieved_record is not None
+            
+            # Verify output_date is preserved accurately
+            assert retrieved_record.output_date == output_date
+            
+            # If output_date is not None, verify it's the same date object
+            if output_date is not None:
+                assert retrieved_record.output_date == output_date
+                assert isinstance(retrieved_record.output_date, pytest.importorskip("datetime").date)
+            else:
+                assert retrieved_record.output_date is None
+
+
+# Feature: leistungsdatum-integration, Property 7: Query result completeness
+# Validates: Requirements 2.4
+@settings(max_examples=100)
+@given(
+    records_data=st.lists(
+        st.tuples(
+            st.text(min_size=1, max_size=100),  # vorgangsnummer
+            st.text(min_size=1, max_size=500),  # meldebestaetigung
+            st.text(min_size=1, max_size=100),  # source_file
+            st.text(min_size=1, max_size=50),   # typ_der_meldung
+            st.text(min_size=1, max_size=50),   # indikationsbereich
+            st.text(min_size=1, max_size=50),   # art_der_daten
+            st.text(min_size=1, max_size=50),   # ergebnis_qc
+            st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # case_id
+            st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # gpas_domain
+            st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),  # processed_at
+            st.one_of(
+                st.none(),
+                st.dates(min_value=pytest.importorskip("datetime").date(2020, 1, 1), 
+                        max_value=pytest.importorskip("datetime").date(2030, 12, 31))
+            )  # output_date
+        ),
+        min_size=1, max_size=10, unique_by=lambda x: x[0]  # Unique by vorgangsnummer
+    )
+)
+def test_query_result_completeness(records_data):
+    """
+    **Feature: leistungsdatum-integration, Property 7: Query result completeness**
+    
+    For any database query, the result set should include the output_date field 
+    when records contain it.
+    **Validates: Requirements 2.4**
+    """
+    from mvh_copy_mb.database import MeldebestaetigungRecord
+    
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create records from the generated data
+        records = []
+        for data in records_data:
+            record = MeldebestaetigungRecord(
+                vorgangsnummer=data[0],
+                meldebestaetigung=data[1],
+                source_file=data[2],
+                typ_der_meldung=data[3],
+                indikationsbereich=data[4],
+                art_der_daten=data[5],
+                ergebnis_qc=data[6],
+                case_id=data[7],
+                gpas_domain=data[8],
+                processed_at=data[9],
+                output_date=data[10]
+            )
+            records.append(record)
+        
+        # Store all records
+        with MeldebestaetigungDatabase(db_path) as db:
+            for record in records:
+                db.upsert_record(record)
+            
+            # Query all records and verify output_date is included
+            query_sql = "SELECT vorgangsnummer, output_date FROM meldebestaetigungen ORDER BY vorgangsnummer"
+            results = db.conn.execute(query_sql).fetchall()
+            
+            # Verify we got all records
+            assert len(results) == len(records)
+            
+            # Verify each record includes output_date field
+            for i, result in enumerate(results):
+                vorgangsnummer = result[0]
+                output_date_from_query = result[1]
+                
+                # Find the corresponding original record
+                original_record = next(r for r in records if r.vorgangsnummer == vorgangsnummer)
+                
+                # Verify output_date is included and matches
+                assert output_date_from_query == original_record.output_date
+                
+                # Also verify using get_record method
+                retrieved_record = db.get_record(vorgangsnummer)
+                assert retrieved_record is not None
+                assert retrieved_record.output_date == original_record.output_date
+
+
+# Feature: leistungsdatum-integration, Property 8: NULL storage for unparseable dates
+# Validates: Requirements 2.5
+@settings(max_examples=100)
+@given(
+    vorgangsnummer=st.text(min_size=1, max_size=100),
+    meldebestaetigung=st.text(min_size=1, max_size=500),
+    source_file=st.text(min_size=1, max_size=100),
+    typ_der_meldung=st.text(min_size=1, max_size=50),
+    indikationsbereich=st.text(min_size=1, max_size=50),
+    art_der_daten=st.text(min_size=1, max_size=50),
+    ergebnis_qc=st.text(min_size=1, max_size=50),
+    case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
+    gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
+    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1))
+)
+def test_null_storage_for_unparseable_dates(
+    vorgangsnummer: str,
+    meldebestaetigung: str,
+    source_file: str,
+    typ_der_meldung: str,
+    indikationsbereich: str,
+    art_der_daten: str,
+    ergebnis_qc: str,
+    case_id: str,
+    gpas_domain: str,
+    processed_at
+):
+    """
+    **Feature: leistungsdatum-integration, Property 8: NULL storage for unparseable dates**
+    
+    For any unparseable Leistungsdatum, the database should store NULL 
+    in the output_date column.
+    **Validates: Requirements 2.5**
+    """
+    from mvh_copy_mb.database import MeldebestaetigungRecord
+    
+    # Create a temporary database
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = Path(tmpdir) / "test.duckdb"
+        
+        # Create a record with NULL output_date (representing unparseable Leistungsdatum)
+        record = MeldebestaetigungRecord(
+            vorgangsnummer=vorgangsnummer,
+            meldebestaetigung=meldebestaetigung,
+            source_file=source_file,
+            typ_der_meldung=typ_der_meldung,
+            indikationsbereich=indikationsbereich,
+            art_der_daten=art_der_daten,
+            ergebnis_qc=ergebnis_qc,
+            case_id=case_id,
+            gpas_domain=gpas_domain,
+            processed_at=processed_at,
+            output_date=None  # NULL for unparseable date
+        )
+        
+        # Store the record
+        with MeldebestaetigungDatabase(db_path) as db:
+            db.upsert_record(record)
+            
+            # Retrieve the record
+            retrieved_record = db.get_record(vorgangsnummer)
+            
+            # Verify the record was retrieved
+            assert retrieved_record is not None
+            
+            # Verify output_date is NULL
+            assert retrieved_record.output_date is None
+            
+            # Verify all other fields are preserved
+            assert retrieved_record.vorgangsnummer == vorgangsnummer
+            assert retrieved_record.meldebestaetigung == meldebestaetigung
+            assert retrieved_record.source_file == source_file
+            assert retrieved_record.typ_der_meldung == typ_der_meldung
+            assert retrieved_record.indikationsbereich == indikationsbereich
+            assert retrieved_record.art_der_daten == art_der_daten
+            assert retrieved_record.ergebnis_qc == ergebnis_qc
+            assert retrieved_record.case_id == case_id
+            assert retrieved_record.gpas_domain == gpas_domain
+            assert retrieved_record.processed_at == processed_at
+            
+            # Verify NULL is stored in database by direct query
+            query_sql = "SELECT output_date FROM meldebestaetigungen WHERE vorgangsnummer = ?"
+            result = db.conn.execute(query_sql, [vorgangsnummer]).fetchone()
+            assert result is not None
+            assert result[0] is None  # output_date should be NULL in database
 
 
 # Feature: web-frontend, Property 11: Done status changes persist to database
