@@ -124,6 +124,7 @@ class GepadoClient:
                 LEFT JOIN av2_ordermanagement_addfields MV_servicedate_k ON MV_servicedate_k.masterguid = C.guid_ordermanagement AND MV_servicedate_k.fieldname = 'MV_servicedate_k'
                 LEFT JOIN av2_ordermanagement_addfields MV_servicedate_g ON MV_servicedate_g.masterguid = C.guid_ordermanagement AND MV_servicedate_g.fieldname = 'MV_servicedate_g'
                 WHERE C.hl7fallid LIKE %s
+                AND C.guid_status_stamm != '89b787d0-a2a6-4fb0-94d1-6b45d896f971'
             """
             
             cursor.execute(query, (hl7_case_id,))

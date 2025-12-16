@@ -113,6 +113,7 @@ def get_patient_guid_for_case(client: GepadoClient, hl7_case_id: str) -> Optiona
             SELECT guid_patient 
             FROM av_ordermanagement 
             WHERE hl7fallid = %s
+            AND guid_status_stamm != '89b787d0-a2a6-4fb0-94d1-6b45d896f971'
         """
         
         cursor.execute(query, (hl7_case_id,))
@@ -161,6 +162,7 @@ def find_correct_genomic_case(client: GepadoClient, patient_guid: str, original_
             SELECT hl7fallid 
             FROM av_ordermanagement 
             WHERE guid_patient = %s AND sapVisitingType = 'GS'
+            AND guid_status_stamm != '89b787d0-a2a6-4fb0-94d1-6b45d896f971'
         """
         
         cursor.execute(query, (patient_guid,))
