@@ -523,6 +523,277 @@ def test_display_statistics_zero_counts(capsys):
                 f"Progress bar should be empty for zero counts: '{bar_content}'"
 
 
+# Error handling tests
+
+def test_processing_statistics_invalid_initialization():
+    """Test ProcessingStatistics initialization with invalid values."""
+    # Test negative values
+    with pytest.raises(ValueError, match="must be non-negative"):
+        ProcessingStatistics(ready_count=-1)
+    
+    with pytest.raises(ValueError, match="must be non-negative"):
+        ProcessingStatistics(unpaired_genomic_count=-5)
+    
+    with pytest.raises(ValueError, match="must be non-negative"):
+        ProcessingStatistics(gepado_errors=-2)
+    
+    # Test non-integer values
+    with pytest.raises(ValueError, match="must be an integer"):
+        ProcessingStatistics(ready_count=3.14)
+    
+    with pytest.raises(ValueError, match="must be an integer"):
+        ProcessingStatistics(unpaired_clinical_count="invalid")
+
+
+def test_processing_statistics_safe_increment_methods():
+    """Test safe increment methods with error handling."""
+    stats = ProcessingStatistics()
+    
+    # Test valid increments
+    stats.increment_ready(5)
+    assert stats.ready_count == 5
+    
+    stats.increment_unpaired_genomic(3)
+    assert stats.unpaired_genomic_count == 3
+    
+    stats.increment_gepado_errors(2)
+    assert stats.gepado_errors == 2
+    
+    # Test invalid increment values
+    with pytest.raises(ValueError, match="must be non-negative"):
+        stats.increment_ready(-1)
+    
+    with pytest.raises(ValueError, match="must be an integer"):
+        stats.increment_unpaired_clinical(3.5)
+    
+    with pytest.raises(ValueError, match="must be an integer"):
+        stats.increment_ignored("invalid")
+    
+    # Verify counts remain unchanged after failed increments
+    assert stats.ready_count == 5
+    assert stats.unpaired_genomic_count == 3
+    assert stats.gepado_errors == 2
+
+
+def test_processing_statistics_validation_in_totals():
+    """Test that total calculation methods handle invalid data gracefully."""
+    # Create stats with valid data first
+    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    
+    # Manually corrupt the data to test error handling
+    stats.ready_count = -1  # This should trigger validation error
+    
+    # get_total_files should handle the error gracefully and return 0
+    total = stats.get_total_files()
+    assert total == 0  # Should return fallback value
+    
+    # Same for GEPADO operations
+    stats.gepado_genomic_updates = -5
+    gepado_total = stats.get_total_gepado_operations()
+    assert gepado_total == 0  # Should return fallback value
+
+
+def test_render_progress_bar_invalid_inputs():
+    """Test progress bar rendering with invalid inputs."""
+    from mvh_copy_mb.statistics import render_progress_bar
+    
+    # Test with non-integer inputs (should be converted)
+    bar = render_progress_bar("5", "10", "20")
+    assert len(bar) == 22  # 20 + 2 brackets
+    assert bar.startswith('[') and bar.endswith(']')
+    
+    # Test with negative values (should be clamped to 0)
+    bar = render_progress_bar(-5, 10, 20)
+    assert bar == "[" + "░" * 20 + "]"  # Should be empty bar
+    
+    # Test with negative total (should be clamped to 0)
+    bar = render_progress_bar(5, -10, 20)
+    assert bar == "[" + "░" * 20 + "]"  # Should be empty bar
+    
+    # Test with zero or negative width (should use fallback)
+    bar = render_progress_bar(5, 10, 0)
+    assert len(bar) == 22  # Should use fallback width of 20
+    
+    bar = render_progress_bar(5, 10, -5)
+    assert len(bar) == 22  # Should use fallback width of 20
+    
+    # Test with invalid types that can't be converted
+    bar = render_progress_bar(None, 10, 20)
+    assert bar == "[" + "░" * 20 + "]"  # Should handle gracefully
+    
+    bar = render_progress_bar(5, [], 20)
+    assert bar == "[" + "░" * 20 + "]"  # Should handle gracefully
+
+
+def test_render_progress_bar_edge_cases():
+    """Test progress bar rendering edge cases and error conditions."""
+    from mvh_copy_mb.statistics import render_progress_bar
+    
+    # Test division by zero (total = 0)
+    bar = render_progress_bar(5, 0, 10)
+    assert bar == "[░░░░░░░░░░]"
+    
+    # Test count exceeding total (should be clamped)
+    bar = render_progress_bar(15, 10, 10)
+    expected_filled = 10  # Should be clamped to total
+    assert bar.count("█") == 10  # Should be fully filled
+    assert bar.count("░") == 0   # No empty chars
+    
+    # Test very large numbers (potential overflow)
+    bar = render_progress_bar(999999999, 1000000000, 10)
+    assert len(bar) == 12  # Should still work
+    assert bar.startswith('[') and bar.endswith(']')
+    
+    # Test floating point inputs (should be converted to int)
+    bar = render_progress_bar(5.7, 10.3, 20.9)
+    assert len(bar) == 22  # Should handle conversion
+
+
+def test_display_statistics_none_input(capsys):
+    """Test display_statistics with None input."""
+    from mvh_copy_mb.statistics import display_statistics
+    
+    display_statistics(None, gepado_enabled=False)
+    captured = capsys.readouterr()
+    
+    # Should display warning message
+    assert "Warning: No statistics available to display" in captured.err
+    assert "PROCESSING SUMMARY" in captured.err
+
+
+def test_display_statistics_invalid_object_type(capsys):
+    """Test display_statistics with invalid object type."""
+    from mvh_copy_mb.statistics import display_statistics
+    
+    # Pass a string instead of ProcessingStatistics
+    display_statistics("invalid", gepado_enabled=False)
+    captured = capsys.readouterr()
+    
+    # Should display warning about invalid type
+    assert "Warning: Invalid statistics object type" in captured.err
+
+
+def test_display_statistics_corrupted_data(capsys):
+    """Test display_statistics with corrupted statistics data."""
+    from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
+    
+    # Create valid stats then corrupt them
+    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    
+    # Manually corrupt the data
+    stats.ready_count = -1
+    stats.unpaired_genomic_count = "invalid"
+    
+    display_statistics(stats, gepado_enabled=False)
+    captured = capsys.readouterr()
+    
+    # Should display warning about invalid data but still attempt to show something
+    assert "Warning: Invalid statistics data" in captured.err
+    assert "PROCESSING SUMMARY" in captured.out  # Should still show the summary
+
+
+def test_display_statistics_terminal_width_detection():
+    """Test display_statistics adapts to terminal width."""
+    from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
+    import unittest.mock
+    
+    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    
+    # Mock narrow terminal
+    with unittest.mock.patch('shutil.get_terminal_size') as mock_size:
+        mock_size.return_value.columns = 40  # Narrow terminal
+        
+        # Should not raise an error and should adapt
+        try:
+            display_statistics(stats, gepado_enabled=False)
+        except Exception as e:
+            pytest.fail(f"display_statistics should handle narrow terminals gracefully: {e}")
+    
+    # Mock terminal size detection failure
+    with unittest.mock.patch('shutil.get_terminal_size', side_effect=OSError("No terminal")):
+        # Should fall back to default width
+        try:
+            display_statistics(stats, gepado_enabled=False)
+        except Exception as e:
+            pytest.fail(f"display_statistics should handle terminal detection failure: {e}")
+
+
+def test_display_statistics_progress_bar_errors(capsys):
+    """Test display_statistics handles progress bar rendering errors gracefully."""
+    from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
+    import unittest.mock
+    
+    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    
+    # Mock render_progress_bar to raise an exception
+    with unittest.mock.patch('mvh_copy_mb.statistics.render_progress_bar', side_effect=Exception("Render error")):
+        display_statistics(stats, gepado_enabled=False)
+        captured = capsys.readouterr()
+        
+        # Should display error messages but continue with the display
+        assert "Ready:" in captured.out
+        assert "[Error: Render error]" in captured.out
+        assert "PROCESSING SUMMARY" in captured.out
+
+
+def test_processing_statistics_increment_all_methods():
+    """Test all increment methods work correctly."""
+    stats = ProcessingStatistics()
+    
+    # Test all increment methods
+    stats.increment_ready(2)
+    stats.increment_unpaired_genomic(3)
+    stats.increment_unpaired_clinical(4)
+    stats.increment_ignored(5)
+    stats.increment_gepado_genomic(6)
+    stats.increment_gepado_clinical(7)
+    stats.increment_gepado_errors(8)
+    
+    assert stats.ready_count == 2
+    assert stats.unpaired_genomic_count == 3
+    assert stats.unpaired_clinical_count == 4
+    assert stats.ignored_count == 5
+    assert stats.gepado_genomic_updates == 6
+    assert stats.gepado_clinical_updates == 7
+    assert stats.gepado_errors == 8
+    
+    # Test default increment (should be 1)
+    stats.increment_ready()
+    assert stats.ready_count == 3
+
+
+def test_processing_statistics_validation_edge_cases():
+    """Test validation with edge case values."""
+    # Test with zero values (should be valid)
+    stats = ProcessingStatistics(
+        ready_count=0,
+        unpaired_genomic_count=0,
+        unpaired_clinical_count=0,
+        ignored_count=0,
+        gepado_genomic_updates=0,
+        gepado_clinical_updates=0,
+        gepado_errors=0
+    )
+    
+    # Should not raise any errors
+    assert stats.get_total_files() == 0
+    assert stats.get_total_gepado_operations() == 0
+    
+    # Test with very large values
+    large_value = 999999999
+    stats = ProcessingStatistics(
+        ready_count=large_value,
+        unpaired_genomic_count=large_value,
+        unpaired_clinical_count=large_value,
+        ignored_count=large_value
+    )
+    
+    # Should handle large numbers without overflow
+    total = stats.get_total_files()
+    expected = large_value * 2 + large_value * 3  # ready counted twice
+    assert total == expected
+
+
 # Feature: cli-summary-statistics, Property 5: File categorization accuracy
 # Validates: Requirements 5.1, 5.2, 5.3
 @settings(max_examples=100)

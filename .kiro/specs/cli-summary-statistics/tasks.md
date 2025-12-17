@@ -1,104 +1,92 @@
 # Implementation Plan
 
 - [ ] 1. Create ProcessingStatistics class and progress bar renderer
-- [x] 1.1 Create ProcessingStatistics dataclass
-  - Implement dataclass with counters for all statistic types
-  - Add methods for calculating totals and GEPADO operations
-  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3_
+- [ ] 1.1 Update ProcessingStatistics dataclass for pairing logic
+  - Modify dataclass to track ready pairs instead of individual ready files
+  - Add internal Case ID tracking for pairing logic
+  - Add GEPADO no-updates-needed counter
+  - Add methods for pairing calculation and finalization
+  - _Requirements: 1.1, 1.2, 1.3, 1.4, 2.1, 2.2, 2.3, 2.4_
 
 - [x] 1.2 Implement progress bar rendering function
   - Create render_progress_bar function with bracket formatting
   - Handle edge cases like zero totals and empty bars
   - _Requirements: 3.1, 3.2, 3.5, 4.4_
 
-- [x] 1.3 Write property test for ready file total calculation
-  - **Property 1: Ready file total calculation**
-  - **Validates: Requirements 1.5**
+- [ ] 1.3 Write property test for pairing logic accuracy
+  - **Property 1: Pairing logic accuracy**
+  - **Validates: Requirements 5.1**
 
-- [x] 1.4 Write property test for progress bar width consistency
-  - **Property 2: Progress bar width consistency**
-  - **Validates: Requirements 3.1, 3.2**
+- [ ] 1.4 Write property test for unpaired file categorization
+  - **Property 2: Unpaired file categorization**
+  - **Validates: Requirements 5.2**
 
-- [x] 1.5 Write property test for progress bar calculation accuracy
-  - **Property 3: Progress bar calculation accuracy**
-  - **Validates: Requirements 3.3, 3.4, 3.5, 4.4**
+- [ ] 1.5 Write property test for total file calculation consistency
+  - **Property 3: Total file calculation consistency**
+  - **Validates: Requirements 1.5, 5.5**
 
 - [x] 2. Implement statistics display formatter
-- [x] 2.1 Create display_statistics function
-  - Implement formatted output with aligned progress bars
-  - Add conditional GEPADO statistics display
-  - Include visual separators and consistent formatting
+- [ ] 2.1 Update display_statistics function for new statistics
+  - Update labels to show "Ready pairs" instead of "Ready files"
+  - Add "No updates needed" line to GEPADO statistics
+  - Update progress bar calculations for new totals
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [x] 2.2 Write property test for statistics formatting consistency
-  - **Property 4: Statistics formatting consistency**
-  - **Validates: Requirements 4.1, 4.2**
+- [ ] 2.2 Write property test for GEPADO operation categorization
+  - **Property 4: GEPADO operation categorization**
+  - **Validates: Requirements 2.1, 2.2, 2.3, 2.4, 5.4**
 
-- [x] 2.3 Write unit tests for display formatting
-  - Test specific display scenarios with known data
-  - Test GEPADO enabled/disabled display modes
-  - Test visual separator placement
-  - _Requirements: 2.4, 4.3_
+- [ ] 2.3 Write property test for progress bar width consistency
+  - **Property 5: Progress bar width consistency**
+  - **Validates: Requirements 3.1, 3.2**
+
+- [ ] 2.4 Write property test for progress bar calculation accuracy
+  - **Property 6: Progress bar calculation accuracy**
+  - **Validates: Requirements 3.3, 3.4, 4.4**
+
+- [ ] 2.5 Write property test for statistics formatting consistency
+  - **Property 7: Statistics formatting consistency**
+  - **Validates: Requirements 4.2**
 
 - [x] 3. Integrate statistics tracking into CLI workflow
-- [x] 3.1 Add statistics tracking to process_row function
-  - Track file categorization during processing
-  - Increment appropriate counters based on processing results
+- [ ] 3.1 Update CLI workflow to use pairing logic
+  - Modify process_row to track resolved Case IDs and data types
+  - Remove direct ready/unpaired counting from process_row
+  - Add finalize_pairing_statistics call after all files processed
   - _Requirements: 5.1, 5.2, 5.3_
 
-- [x] 3.2 Add GEPADO statistics tracking to validate_and_update_record
-  - Track successful genomic and clinical updates
-  - Track GEPADO update errors
-  - _Requirements: 5.4_
-
-- [x] 3.3 Write property test for file categorization accuracy
-  - **Property 5: File categorization accuracy**
-  - **Validates: Requirements 5.1, 5.2, 5.3**
-
-- [x] 3.4 Write property test for GEPADO statistics accuracy
-  - **Property 6: GEPADO statistics accuracy**
-  - **Validates: Requirements 5.4**
+- [ ] 3.2 Update GEPADO statistics tracking for no-updates-needed
+  - Modify validate_and_update_record to distinguish actual updates from validation-only
+  - Track no-updates-needed cases separately from actual updates
+  - _Requirements: 2.3, 5.4_
 
 - [x] 4. Add statistics display to CLI main function
-- [x] 4.1 Initialize ProcessingStatistics in main function
-  - Create statistics instance at start of processing
-  - Pass statistics to processing functions
+- [ ] 4.1 Update main function for pairing workflow
+  - Ensure finalize_pairing_statistics is called after all files processed
+  - Update display_statistics call with new statistics structure
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [x] 4.2 Display statistics at end of CLI execution
-  - Call display_statistics function after processing completes
-  - Pass GEPADO enabled flag for conditional display
-  - _Requirements: 2.1, 2.2, 2.3, 2.4_
-
-- [x] 4.3 Write property test for mathematical consistency
-  - **Property 7: Mathematical consistency**
-  - **Validates: Requirements 5.5**
+- [ ] 4.2 Write unit tests for updated display formatting
+  - Test display with ready pairs instead of ready files
+  - Test GEPADO statistics with no-updates-needed counter
+  - Test visual separator and formatting consistency
+  - _Requirements: 2.5, 4.3_
 
 - [ ] 5. Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Add error handling and edge case support
-- [ ] 6.1 Add error handling for statistics tracking
-  - Handle invalid counts and division by zero
-  - Implement fallback behavior for missing statistics
-  - _Requirements: Error Handling_
-
-- [ ] 6.2 Write unit tests for error handling
-  - Test behavior with invalid statistics data
-  - Test display with zero totals and edge cases
-  - Test terminal compatibility scenarios
-  - _Requirements: Error Handling_
-
-- [ ] 7. Integration testing and validation
-- [ ] 7.1 Test complete CLI workflow with statistics
-  - Verify statistics are collected and displayed correctly
-  - Test with various input scenarios and GEPADO modes
+- [ ] 6. Integration testing and validation
+- [ ] 6.1 Update existing integration tests for pairing logic
+  - Modify test expectations to use ready pairs instead of ready files
+  - Update test data to properly test pairing scenarios
+  - Verify GEPADO no-updates-needed tracking
   - _Requirements: All requirements_
 
-- [ ] 7.2 Validate statistics accuracy with real data
-  - Test with sample CSV files to verify correct counting
-  - Verify progress bar calculations match expected values
+- [ ] 6.2 Test complete CLI workflow with updated statistics
+  - Verify pairing logic matches web interface behavior
+  - Test GEPADO statistics distinguish updates from validation-only
+  - Test with various pairing scenarios (complete pairs, unpaired files)
   - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 8. Final Checkpoint - Ensure all tests pass
+- [ ] 7. Final Checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.

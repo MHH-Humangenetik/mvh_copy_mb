@@ -280,9 +280,9 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
             logger.warning(f"Gepado update skipped - no case ID resolved from GPAS for vorgangsnummer: {vorgangsnummer_str}")
         
         if case_id:
-            # Track as ready file if not already ignored
+            # Track resolved Case ID and data type for pairing logic (if not ignored)
             if stats and not is_ignored:
-                stats.ready_count += 1
+                stats.add_resolved_case_id(case_id, art_der_daten_str)
             
             # Requirement: "Files should be named by their case id then."
             # We copy the source CSV file and rename it to {prefix}{case_id}.csv
@@ -293,18 +293,9 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
             logger.info(f"Copied {source_file.name} to {target_path}")
             
         else:
-            # Track as unpaired based on data type, or ignored if already marked as ignored
-            if stats:
-                if is_ignored:
-                    # Already counted as ignored above
-                    pass
-                elif art_der_daten_str.upper() == 'G':
-                    stats.unpaired_genomic_count += 1
-                elif art_der_daten_str.upper() == 'C':
-                    stats.unpaired_clinical_count += 1
-                else:
-                    # Unknown data type, count as ignored
-                    stats.ignored_count += 1
+            # No Case ID resolved - count as ignored
+            if stats and not is_ignored:
+                stats.ignored_count += 1
             
             # Fallback: Prepend "NOTFOUND_" to the original filename and copy
             new_filename = f"NOTFOUND_{prefix}{source_file.name}"
@@ -415,6 +406,9 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
                 except Exception as e:
                     logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
                     raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+    
+    # Finalize pairing statistics after all files processed
+    stats.finalize_pairing_statistics()
     
     # Display processing statistics
     display_statistics(stats, gepado_enabled=update_gepado)

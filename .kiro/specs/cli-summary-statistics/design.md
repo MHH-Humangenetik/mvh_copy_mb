@@ -21,23 +21,53 @@ The statistics display will be implemented as a statistics tracking system integ
 @dataclass
 class ProcessingStatistics:
     """Tracks statistics during CLI processing."""
-    ready_count: int = 0  # Files with resolved Case IDs and complete pairing
-    unpaired_genomic_count: int = 0  # Genomic files without clinical counterparts
-    unpaired_clinical_count: int = 0  # Clinical files without genomic counterparts
-    ignored_count: int = 0  # Files skipped due to QC failures or errors
+    ready_pairs_count: int = 0  # Complete pairs with both G and C data sharing same Case ID
+    unpaired_genomic_count: int = 0  # Genomic files with Case IDs but no clinical counterpart
+    unpaired_clinical_count: int = 0  # Clinical files with Case IDs but no genomic counterpart
+    ignored_count: int = 0  # Files skipped due to QC failures, unresolved Case IDs, or errors
     
     # GEPADO statistics (only when GEPADO updates enabled)
-    gepado_genomic_updates: int = 0  # Successful genomic updates in GEPADO
-    gepado_clinical_updates: int = 0  # Successful clinical updates in GEPADO
-    gepado_errors: int = 0  # Errors during GEPADO updates
+    gepado_genomic_updates: int = 0  # Actual genomic data updates in GEPADO
+    gepado_clinical_updates: int = 0  # Actual clinical data updates in GEPADO
+    gepado_no_updates_needed: int = 0  # Records validated but no updates needed
+    gepado_errors: int = 0  # Errors during GEPADO operations
+    
+    # Internal tracking for pairing logic
+    _resolved_case_ids: dict = field(default_factory=dict)  # Case ID -> {genomic: bool, clinical: bool}
     
     def get_total_files(self) -> int:
-        """Calculate total files processed (Ready counted twice as specified)."""
-        return self.ready_count * 2 + self.unpaired_genomic_count + self.unpaired_clinical_count + self.ignored_count
+        """Calculate total files processed (Ready pairs counted as two files each)."""
+        return self.ready_pairs_count * 2 + self.unpaired_genomic_count + self.unpaired_clinical_count + self.ignored_count
     
     def get_total_gepado_operations(self) -> int:
         """Calculate total GEPADO operations attempted."""
-        return self.gepado_genomic_updates + self.gepado_clinical_updates + self.gepado_errors
+        return self.gepado_genomic_updates + self.gepado_clinical_updates + self.gepado_no_updates_needed + self.gepado_errors
+    
+    def add_resolved_case_id(self, case_id: str, data_type: str) -> None:
+        """Track a resolved Case ID and its data type for pairing logic."""
+        if case_id not in self._resolved_case_ids:
+            self._resolved_case_ids[case_id] = {'genomic': False, 'clinical': False}
+        
+        if data_type.upper() == 'G':
+            self._resolved_case_ids[case_id]['genomic'] = True
+        elif data_type.upper() == 'C':
+            self._resolved_case_ids[case_id]['clinical'] = True
+    
+    def finalize_pairing_statistics(self) -> None:
+        """Calculate final pairing statistics based on resolved Case IDs."""
+        for case_id, types in self._resolved_case_ids.items():
+            has_genomic = types['genomic']
+            has_clinical = types['clinical']
+            
+            if has_genomic and has_clinical:
+                # Complete pair
+                self.ready_pairs_count += 1
+            elif has_genomic and not has_clinical:
+                # Unpaired genomic
+                self.unpaired_genomic_count += 1
+            elif has_clinical and not has_genomic:
+                # Unpaired clinical
+                self.unpaired_clinical_count += 1
 ```
 
 ### Progress Bar Renderer
@@ -80,7 +110,7 @@ def display_statistics(stats: ProcessingStatistics, gepado_enabled: bool = False
     print("="*50)
     
     # File statistics
-    print(f"Ready:     {stats.ready_count:>6} {render_progress_bar(stats.ready_count * 2, total_files)}")
+    print(f"Ready pairs:            {stats.ready_pairs_count:>6} {render_progress_bar(stats.ready_pairs_count * 2, total_files)}")
     print(f"Unpaired genomic:       {stats.unpaired_genomic_count:>6} {render_progress_bar(stats.unpaired_genomic_count, total_files)}")
     print(f"Unpaired clinical:      {stats.unpaired_clinical_count:>6} {render_progress_bar(stats.unpaired_clinical_count, total_files)}")
     print(f"Ignored files:          {stats.ignored_count:>6} {render_progress_bar(stats.ignored_count, total_files)}")
@@ -88,10 +118,11 @@ def display_statistics(stats: ProcessingStatistics, gepado_enabled: bool = False
     # GEPADO statistics (if enabled)
     if gepado_enabled:
         total_gepado = stats.get_total_gepado_operations()
-        print("\nGEPADO UPDATES:")
+        print("\nGEPADO OPERATIONS:")
         print(f"Updated genomic data:   {stats.gepado_genomic_updates:>6} {render_progress_bar(stats.gepado_genomic_updates, total_gepado)}")
         print(f"Updated clinical data:  {stats.gepado_clinical_updates:>6} {render_progress_bar(stats.gepado_clinical_updates, total_gepado)}")
-        print(f"Errors while updating:  {stats.gepado_errors:>6} {render_progress_bar(stats.gepado_errors, total_gepado)}")
+        print(f"No updates needed:      {stats.gepado_no_updates_needed:>6} {render_progress_bar(stats.gepado_no_updates_needed, total_gepado)}")
+        print(f"Errors during ops:      {stats.gepado_errors:>6} {render_progress_bar(stats.gepado_errors, total_gepado)}")
     
     print("="*50)
 ```
@@ -104,21 +135,24 @@ The main data model for tracking statistics during processing:
 ```python
 @dataclass
 class ProcessingStatistics:
-    ready_count: int = 0
+    ready_pairs_count: int = 0
     unpaired_genomic_count: int = 0
     unpaired_clinical_count: int = 0
     ignored_count: int = 0
     gepado_genomic_updates: int = 0
     gepado_clinical_updates: int = 0
+    gepado_no_updates_needed: int = 0
     gepado_errors: int = 0
+    _resolved_case_ids: dict = field(default_factory=dict)
 ```
 
 ### Integration Points
 The statistics will be integrated into the existing CLI workflow at these points:
 
-1. **File Processing**: Track file categorization during `process_row()`
-2. **GEPADO Updates**: Track update results in `validate_and_update_record()`
-3. **CLI Completion**: Display statistics at the end of `main()`
+1. **File Processing**: Track resolved Case IDs and data types during `process_row()`
+2. **Pairing Logic**: Calculate final pairing statistics after all files are processed
+3. **GEPADO Updates**: Track actual updates vs no-updates-needed in `validate_and_update_record()`
+4. **CLI Completion**: Display statistics at the end of `main()`
 
 ## Correctness Properties
 
@@ -127,40 +161,42 @@ The statistics will be integrated into the existing CLI workflow at these points
 After analyzing the acceptance criteria, several properties can be consolidated to eliminate redundancy:
 
 **Property Reflection:**
-- Properties 3.1 and 3.2 both test the same behavior: that progress bars are 20 characters wide
-- Properties 3.3 and 3.4 both test progress bar calculation logic but with different maximum values
-- Properties 4.1, 4.2, and 4.4 all test formatting consistency
-- Several properties test the same statistical counting behavior
+After analyzing the updated requirements, several properties can be consolidated:
+- Properties 1.2 and 1.3 both test unpaired file counting but for different data types - can be combined
+- Properties 2.1 and 2.2 both test actual GEPADO updates but for different data types - can be combined  
+- Properties 3.1 and 3.2 both test progress bar width consistency
+- Properties 3.3 and 3.4 both test progress bar calculation logic but with different contexts
+- Properties 5.1, 5.2, and 5.3 all test file categorization logic
 
 **Consolidated Properties:**
 
-Property 1: Ready file total calculation
-*For any* set of processing statistics, the total file count should equal ready_count * 2 + unpaired_genomic + unpaired_clinical + ignored_count
-**Validates: Requirements 1.5**
+Property 1: Pairing logic accuracy
+*For any* set of files with resolved Case IDs, a Case ID should be counted as a ready pair if and only if it has both genomic (G) and clinical (C) files, matching the web interface logic
+**Validates: Requirements 5.1**
 
-Property 2: Progress bar width consistency
+Property 2: Unpaired file categorization
+*For any* file with a resolved Case ID, it should be counted as unpaired genomic or unpaired clinical if it lacks a counterpart of the opposite data type
+**Validates: Requirements 5.2**
+
+Property 3: Total file calculation consistency
+*For any* set of processing statistics, the total file count should equal ready_pairs_count * 2 + unpaired_genomic_count + unpaired_clinical_count + ignored_count
+**Validates: Requirements 1.5, 5.5**
+
+Property 4: GEPADO operation categorization
+*For any* GEPADO operation, it should be counted in exactly one category: actual update (genomic or clinical), no update needed, or error
+**Validates: Requirements 2.1, 2.2, 2.3, 2.4, 5.4**
+
+Property 5: Progress bar width consistency
 *For any* statistic display, all progress bars should be exactly 22 characters wide (20 characters plus opening and closing brackets)
 **Validates: Requirements 3.1, 3.2**
 
-Property 3: Progress bar calculation accuracy
-*For any* statistic count and total, the progress bar should accurately represent the proportion with appropriate filled and empty characters enclosed in brackets
-**Validates: Requirements 3.3, 3.4, 3.5, 4.4**
+Property 6: Progress bar calculation accuracy
+*For any* statistic count and total, the progress bar should accurately represent the proportion with appropriate filled and empty characters
+**Validates: Requirements 3.3, 3.4, 4.4**
 
-Property 4: Statistics formatting consistency
-*For any* statistics display, all labels and counts should follow the same formatting pattern with aligned progress bars
-**Validates: Requirements 4.1, 4.2**
-
-Property 5: File categorization accuracy
-*For any* processed file, it should be counted in exactly one category (Ready, Unpaired genomic, Unpaired clinical, or Ignored) based on its processing results
-**Validates: Requirements 5.1, 5.2, 5.3**
-
-Property 6: GEPADO statistics accuracy
-*For any* GEPADO update operation, it should be counted as either successful (genomic or clinical) or failed, but not both
-**Validates: Requirements 5.4**
-
-Property 7: Mathematical consistency
-*For any* statistics display, the sum of individual counts should equal the total used for progress bar calculations
-**Validates: Requirements 5.5**
+Property 7: Statistics formatting consistency
+*For any* statistics display, all labels and counts should follow the same formatting pattern with consistent alignment
+**Validates: Requirements 4.2**
 
 ## Error Handling
 

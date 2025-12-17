@@ -7,11 +7,12 @@ This feature adds summary statistics display to the CLI tool that shows key metr
 ## Glossary
 
 - **CLI Tool**: The command-line interface application for processing Meldebestätigungen CSV files
-- **Ready Files**: Files that have been successfully processed and have both genomic and clinical data with resolved Case IDs
-- **Unpaired Genomic**: Files with genomic data that lack corresponding clinical data
-- **Unpaired Clinical**: Files with clinical data that lack corresponding genomic data  
-- **Ignored Files**: Files that were skipped during processing due to QC failures or other issues
-- **GEPADO Updates**: Database update operations performed on the GEPADO system
+- **Ready Pairs**: Complete pairs of files where both genomic (G) and clinical (C) data exist with the same resolved Case ID
+- **Unpaired Genomic**: Files with genomic data that have resolved Case IDs but lack corresponding clinical data with the same Case ID
+- **Unpaired Clinical**: Files with clinical data that have resolved Case IDs but lack corresponding genomic data with the same Case ID  
+- **Ignored Files**: Files that were skipped during processing due to QC failures, unresolved Case IDs, or other issues
+- **GEPADO Updates**: Database update operations that actually modified data in the GEPADO system
+- **GEPADO No Updates**: Database operations where validation passed but no data changes were needed
 - **Progress Bar**: A visual representation showing the proportion of each statistic relative to a maximum value
 - **Summary Statistics**: Aggregate metrics displayed after CLI processing completion
 - **Case ID**: Unique identifier resolved from gPAS for linking genomic and clinical records
@@ -20,26 +21,27 @@ This feature adds summary statistics display to the CLI tool that shows key metr
 
 ### Requirement 1
 
-**User Story:** As a user, I want to see file processing statistics after CLI execution, so that I understand how many files were processed in each category.
+**User Story:** As a user, I want to see file processing statistics after CLI execution, so that I understand how many complete pairs and unpaired files were processed.
 
 #### Acceptance Criteria
 
-1. WHEN the CLI tool completes processing THEN the system SHALL display the count of Ready files (files with resolved Case IDs and complete data)
-2. WHEN the CLI tool completes processing THEN the system SHALL display the count of Unpaired genomic files (genomic files without matching clinical data)
-3. WHEN the CLI tool completes processing THEN the system SHALL display the count of Unpaired clinical files (clinical files without matching genomic data)
-4. WHEN the CLI tool completes processing THEN the system SHALL display the count of Ignored files (files skipped due to QC failures or processing errors)
-5. WHEN displaying file counts THEN the system SHALL count Ready files twice in the total as specified in the requirements
+1. WHEN the CLI tool completes processing THEN the system SHALL display the count of Ready pairs (complete pairs with both genomic and clinical data sharing the same resolved Case ID)
+2. WHEN the CLI tool completes processing THEN the system SHALL display the count of Unpaired genomic files (genomic files with resolved Case IDs but no matching clinical counterpart)
+3. WHEN the CLI tool completes processing THEN the system SHALL display the count of Unpaired clinical files (clinical files with resolved Case IDs but no matching genomic counterpart)
+4. WHEN the CLI tool completes processing THEN the system SHALL display the count of Ignored files (files skipped due to QC failures, unresolved Case IDs, or processing errors)
+5. WHEN calculating totals for progress bars THEN the system SHALL count each Ready pair as two files (one genomic + one clinical)
 
 ### Requirement 2
 
-**User Story:** As a user, I want to see GEPADO update statistics when GEPADO integration is enabled, so that I can track the success rate of database updates.
+**User Story:** As a user, I want to see GEPADO update statistics when GEPADO integration is enabled, so that I can track the success rate of database operations and distinguish between actual updates and validation-only operations.
 
 #### Acceptance Criteria
 
-1. WHEN GEPADO updates are enabled AND the CLI tool completes processing THEN the system SHALL display the count of successful genomic data updates in GEPADO
-2. WHEN GEPADO updates are enabled AND the CLI tool completes processing THEN the system SHALL display the count of successful clinical data updates in GEPADO
-3. WHEN GEPADO updates are enabled AND the CLI tool completes processing THEN the system SHALL display the count of errors encountered while updating GEPADO
-4. WHEN GEPADO updates are disabled THEN the system SHALL not display GEPADO-related statistics
+1. WHEN GEPADO updates are enabled AND the CLI tool completes processing THEN the system SHALL display the count of genomic data records that were actually updated in GEPADO
+2. WHEN GEPADO updates are enabled AND the CLI tool completes processing THEN the system SHALL display the count of clinical data records that were actually updated in GEPADO
+3. WHEN GEPADO updates are enabled AND the CLI tool completes processing THEN the system SHALL display the count of records where validation passed but no updates were needed
+4. WHEN GEPADO updates are enabled AND the CLI tool completes processing THEN the system SHALL display the count of errors encountered during GEPADO operations
+5. WHEN GEPADO updates are disabled THEN the system SHALL not display GEPADO-related statistics
 
 ### Requirement 3
 
@@ -66,12 +68,12 @@ This feature adds summary statistics display to the CLI tool that shows key metr
 
 ### Requirement 5
 
-**User Story:** As a user, I want the statistics to accurately reflect the processing results, so that I can trust the reported metrics for decision making.
+**User Story:** As a user, I want the statistics to accurately reflect the processing results using the same pairing logic as the web interface, so that I can trust the reported metrics for decision making.
 
 #### Acceptance Criteria
 
-1. WHEN counting Ready files THEN the system SHALL include only files that have successfully resolved Case IDs and complete genomic/clinical pairing
-2. WHEN counting Unpaired files THEN the system SHALL distinguish between genomic files missing clinical counterparts and clinical files missing genomic counterparts
-3. WHEN counting Ignored files THEN the system SHALL include files with QC failures, processing errors, or unresolved Case IDs
-4. WHEN counting GEPADO updates THEN the system SHALL track successful updates separately from failed attempts
+1. WHEN counting Ready pairs THEN the system SHALL include only Case IDs that have both genomic (G) and clinical (C) files with resolved Case IDs, matching the web interface pairing logic
+2. WHEN counting Unpaired files THEN the system SHALL include files with resolved Case IDs that lack a counterpart of the opposite data type (G missing C, or C missing G)
+3. WHEN counting Ignored files THEN the system SHALL include files with QC failures, unresolved Case IDs, or processing errors
+4. WHEN counting GEPADO operations THEN the system SHALL distinguish between actual updates, no-update-needed cases, and errors
 5. WHEN calculating totals for progress bars THEN the system SHALL ensure mathematical consistency between counts and maximum values

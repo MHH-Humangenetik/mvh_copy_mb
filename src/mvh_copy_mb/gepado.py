@@ -487,7 +487,7 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
         if updates_needed:
             success = client.update_record(corrected_case_id, updates_needed)
             if success:
-                # Track successful update based on data type
+                # Track actual update based on data type
                 if stats:
                     if art_der_daten.upper() == 'G':
                         stats.gepado_genomic_updates += 1
@@ -505,12 +505,9 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
                 # Error already logged in update_record(), just return False
                 return False
         else:
-            # No updates needed - still count as successful operation based on data type
+            # No updates needed - track as validation-only operation
             if stats:
-                if art_der_daten.upper() == 'G':
-                    stats.gepado_genomic_updates += 1
-                elif art_der_daten.upper() == 'C':
-                    stats.gepado_clinical_updates += 1
+                stats.gepado_no_updates_needed += 1
             
             if corrected_case_id != hl7_case_id:
                 logger.info(f"No updates needed for gepado record with corrected HL7 case ID {corrected_case_id} (original: {hl7_case_id})")
