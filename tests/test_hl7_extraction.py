@@ -84,7 +84,7 @@ class TestHL7ExtractionProperties:
         """
         # Ensure middle_text provides clear separation between patterns
         # Filter out cases where middle_text could cause pattern ambiguity
-        if not middle_text or middle_text.strip() == "" or any(c.isalnum() for c in middle_text[:1]):
+        if not middle_text or middle_text.strip() == "" or any(c.isalnum() for c in middle_text[:1]) or "_" in middle_text:
             middle_text = " "
         
         # Create string with multiple HUMGEN patterns

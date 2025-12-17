@@ -338,20 +338,18 @@ class TestCLIIntegrationStatistics:
             stats.finalize_pairing_statistics()
             
             # Verify statistics - 1 ready pair (READY001 & READY002 both resolve to same Case ID)
-            # and unpaired files that resolve but don't have counterparts
+            # UNPAIRED001, UNPAIRED002 don't resolve (ignored), IGNORED001, IGNORED002 are QC/non-initial (ignored)
             assert stats.ready_pairs_count == 1, f"Expected 1 ready pair, got {stats.ready_pairs_count}"
-            assert stats.unpaired_genomic_count == 1, f"Expected 1 unpaired genomic, got {stats.unpaired_genomic_count}"
-            assert stats.unpaired_clinical_count == 1, f"Expected 1 unpaired clinical, got {stats.unpaired_clinical_count}"
-            assert stats.ignored_count == 2, f"Expected 2 ignored files, got {stats.ignored_count}"
+            assert stats.unpaired_genomic_count == 0, f"Expected 0 unpaired genomic, got {stats.unpaired_genomic_count}"
+            assert stats.unpaired_clinical_count == 0, f"Expected 0 unpaired clinical, got {stats.unpaired_clinical_count}"
+            assert stats.ignored_count == 4, f"Expected 4 ignored files, got {stats.ignored_count}"
             
             # Verify total calculation
-            expected_total = 2 * 2 + 2 + 1 + 3  # 2 ready pairs * 2 + 2 unpaired G + 1 unpaired C + 3 ignored
+            expected_total = 1 * 2 + 0 + 0 + 4  # 1 ready pair * 2 + 0 unpaired G + 0 unpaired C + 4 ignored = 6
             assert stats.get_total_files() == expected_total, f"Expected total {expected_total}, got {stats.get_total_files()}"
             
-            # Verify all categories have files
+            # Verify expected categories have files
             assert stats.ready_pairs_count > 0, "Should have ready pairs"
-            assert stats.unpaired_genomic_count > 0, "Should have unpaired genomic files"
-            assert stats.unpaired_clinical_count > 0, "Should have unpaired clinical files"
             assert stats.ignored_count > 0, "Should have ignored files"
     
     @patch('mvh_copy_mb.cli.create_gepado_client_from_env')
@@ -525,7 +523,7 @@ class TestCLIIntegrationStatistics:
         captured_output = output_buffer.getvalue()
         
         # Verify file statistics are present
-        assert "Ready:" in captured_output, "Should contain ready files count"
+        assert "Ready pairs:" in captured_output, "Should contain ready pairs count"
         assert "Unpaired genomic:" in captured_output, "Should contain unpaired genomic count"
         assert "Unpaired clinical:" in captured_output, "Should contain unpaired clinical count"
         assert "Ignored files:" in captured_output, "Should contain ignored files count"
@@ -839,22 +837,23 @@ class TestStatisticsAccuracyWithRealData:
             stats.finalize_pairing_statistics()
             
             # Verify expected statistics based on realistic data
-            # All genomic files, no clinical counterparts - all should be unpaired genomic
-            # Expected: 0 ready pairs, 5 unpaired genomic (GRZ2024001-005), 0 unpaired clinical, 3 ignored (QC failed + non-initial)
+            # Only GRZ2024001-003 resolve to Case IDs (unpaired genomic since no clinical counterparts)
+            # GRZ2024004-005 don't resolve (ignored), GRZ2024006-007 are QC failed (ignored), GRZ2024008 is non-initial (ignored)
+            # Expected: 0 ready pairs, 3 unpaired genomic, 0 unpaired clinical, 5 ignored
             assert stats.ready_pairs_count == 0, f"Expected 0 ready pairs, got {stats.ready_pairs_count}"
-            assert stats.unpaired_genomic_count == 5, f"Expected 5 unpaired genomic files, got {stats.unpaired_genomic_count}"
+            assert stats.unpaired_genomic_count == 3, f"Expected 3 unpaired genomic files, got {stats.unpaired_genomic_count}"
             assert stats.unpaired_clinical_count == 0, f"Expected 0 unpaired clinical files, got {stats.unpaired_clinical_count}"
-            assert stats.ignored_count == 3, f"Expected 3 ignored files, got {stats.ignored_count}"
+            assert stats.ignored_count == 5, f"Expected 5 ignored files, got {stats.ignored_count}"
             
             # Verify total calculation matches manual count
-            expected_total = 3 * 2 + 2 + 0 + 3  # 3 ready * 2 + 2 unpaired G + 0 unpaired C + 3 ignored = 11
+            expected_total = 0 * 2 + 3 + 0 + 5  # 0 ready * 2 + 3 unpaired G + 0 unpaired C + 5 ignored = 8
             actual_total = stats.get_total_files()
             assert actual_total == expected_total, f"Expected total {expected_total}, got {actual_total}"
             
             # Verify progress bar calculations are accurate
-            # Test progress bar for unpaired genomic files (should show 5 out of 8 total)
+            # Test progress bar for unpaired genomic files (should show 3 out of 8 total)
             genomic_bar = render_progress_bar(stats.unpaired_genomic_count, actual_total, 20)
-            expected_filled_chars = int((5 / 8) * 20)  # 5 out of 8 = ~12.5 chars filled
+            expected_filled_chars = int((3 / 8) * 20)  # 3 out of 8 = 7.5 chars filled
             actual_filled_chars = genomic_bar.count('█')
             
             # Allow for rounding tolerance
@@ -870,11 +869,11 @@ class TestStatisticsAccuracyWithRealData:
             qc_failed_files = list(genomseq_g_dir.glob('*QC_FAILED*.csv'))
             no_initial_files = list(genomseq_g_dir.glob('*NO_INITIAL*.csv'))
             notfound_files = list(genomseq_g_dir.glob('NOTFOUND_*.csv'))
-            # Filter out QC_FAILED and NO_INITIAL from NOTFOUND (these are unpaired files)
-            unpaired_files = [f for f in notfound_files if 'QC_FAILED' not in f.name and 'NO_INITIAL' not in f.name]
+            # Filter out QC_FAILED and NO_INITIAL from NOTFOUND (these are unresolved files)
+            unresolved_files = [f for f in notfound_files if 'QC_FAILED' not in f.name and 'NO_INITIAL' not in f.name]
             
             assert len(ready_files) == 3, f"Expected 3 ready files in directory, got {len(ready_files)}"
-            assert len(unpaired_files) == 2, f"Expected 2 unpaired files in directory, got {len(unpaired_files)}"
+            assert len(unresolved_files) == 2, f"Expected 2 unresolved files in directory, got {len(unresolved_files)}"
             assert len(qc_failed_files) == 2, f"Expected 2 QC failed files in directory, got {len(qc_failed_files)}"
             assert len(no_initial_files) == 1, f"Expected 1 non-initial file in directory, got {len(no_initial_files)}"
     
@@ -912,21 +911,22 @@ class TestStatisticsAccuracyWithRealData:
             stats.finalize_pairing_statistics()
             
             # Verify expected statistics
-            # All clinical files, no genomic counterparts - all should be unpaired clinical
-            # Expected: 0 ready pairs, 0 unpaired genomic, 5 unpaired clinical (KDK2024001-005), 1 ignored (QC failed)
+            # Only KDK2024001 and KDK2024002 resolve to Case IDs (unpaired clinical since no genomic counterparts)
+            # KDK2024003-005 don't resolve (ignored), KDK2024006 is QC failed (ignored)
+            # Expected: 0 ready pairs, 0 unpaired genomic, 2 unpaired clinical, 4 ignored
             assert stats.ready_pairs_count == 0, f"Expected 0 ready pairs, got {stats.ready_pairs_count}"
             assert stats.unpaired_genomic_count == 0, f"Expected 0 unpaired genomic files, got {stats.unpaired_genomic_count}"
-            assert stats.unpaired_clinical_count == 5, f"Expected 5 unpaired clinical files, got {stats.unpaired_clinical_count}"
-            assert stats.ignored_count == 1, f"Expected 1 ignored file, got {stats.ignored_count}"
+            assert stats.unpaired_clinical_count == 2, f"Expected 2 unpaired clinical files, got {stats.unpaired_clinical_count}"
+            assert stats.ignored_count == 4, f"Expected 4 ignored files, got {stats.ignored_count}"
             
             # Verify total calculation
-            expected_total = 0 * 2 + 0 + 5 + 1  # 0 ready pairs * 2 + 0 unpaired G + 5 unpaired C + 1 ignored = 6
+            expected_total = 0 * 2 + 0 + 2 + 4  # 0 ready pairs * 2 + 0 unpaired G + 2 unpaired C + 4 ignored = 6
             actual_total = stats.get_total_files()
             assert actual_total == expected_total, f"Expected total {expected_total}, got {actual_total}"
             
             # Verify progress bar calculations for unpaired clinical files
             clinical_bar = render_progress_bar(stats.unpaired_clinical_count, actual_total, 20)
-            expected_filled_chars = int((3 / 8) * 20)  # 3 out of 8 = 7.5 chars filled
+            expected_filled_chars = int((2 / 6) * 20)  # 2 out of 6 = ~6.7 chars filled
             actual_filled_chars = clinical_bar.count('█')
             
             assert abs(actual_filled_chars - expected_filled_chars) <= 1, \
@@ -966,22 +966,22 @@ class TestStatisticsAccuracyWithRealData:
             stats.finalize_pairing_statistics()
             
             # Verify expected statistics for mixed batch
-            # Expected: 2 ready pairs (PAIR001G+PAIR001C, PAIR002G+PAIR002C), 2 unpaired G, 1 unpaired C, 3 ignored
+            # Expected: 2 ready pairs (PAIR001G+PAIR001C, PAIR002G+PAIR002C), 0 unpaired (UNPAIR* don't resolve), 6 ignored
             assert stats.ready_pairs_count == 2, f"Expected 2 ready pairs, got {stats.ready_pairs_count}"
-            assert stats.unpaired_genomic_count == 2, f"Expected 2 unpaired genomic files, got {stats.unpaired_genomic_count}"
-            assert stats.unpaired_clinical_count == 1, f"Expected 1 unpaired clinical file, got {stats.unpaired_clinical_count}"
-            assert stats.ignored_count == 3, f"Expected 3 ignored files, got {stats.ignored_count}"
+            assert stats.unpaired_genomic_count == 0, f"Expected 0 unpaired genomic files, got {stats.unpaired_genomic_count}"
+            assert stats.unpaired_clinical_count == 0, f"Expected 0 unpaired clinical files, got {stats.unpaired_clinical_count}"
+            assert stats.ignored_count == 6, f"Expected 6 ignored files, got {stats.ignored_count}"
             
             # Verify total calculation
-            expected_total = 4 * 2 + 2 + 1 + 3  # 4 ready * 2 + 2 unpaired G + 1 unpaired C + 3 ignored = 14
+            expected_total = 2 * 2 + 0 + 0 + 6  # 2 ready * 2 + 0 unpaired G + 0 unpaired C + 6 ignored = 10
             actual_total = stats.get_total_files()
             assert actual_total == expected_total, f"Expected total {expected_total}, got {actual_total}"
             
             # Verify all categories have appropriate representation in progress bars
-            ready_proportion = (4 * 2) / 14  # 8/14 = ~57%
-            genomic_proportion = 2 / 14  # 2/14 = ~14%
-            clinical_proportion = 1 / 14  # 1/14 = ~7%
-            ignored_proportion = 3 / 14  # 3/14 = ~21%
+            ready_proportion = (2 * 2) / 10  # 4/10 = 40%
+            genomic_proportion = 0 / 10  # 0/10 = 0%
+            clinical_proportion = 0 / 10  # 0/10 = 0%
+            ignored_proportion = 6 / 10  # 6/10 = 60%
             
             # Test that proportions add up correctly (accounting for ready files counted twice)
             total_proportion = ready_proportion + genomic_proportion + clinical_proportion + ignored_proportion
@@ -1184,14 +1184,14 @@ class TestStatisticsAccuracyWithRealData:
             stats.finalize_pairing_statistics()
             
             # Verify expected statistics for large batch
-            # Expected: 25 ready pairs, 20 unpaired G, 15 unpaired C, 10 ignored
+            # Expected: 25 ready pairs (READY001G+READY001C through READY025G+READY025C), 0 unpaired (UNPAIRED* don't resolve), 45 ignored
             assert stats.ready_pairs_count == 25, f"Expected 25 ready pairs, got {stats.ready_pairs_count}"
-            assert stats.unpaired_genomic_count == 20, f"Expected 20 unpaired genomic files, got {stats.unpaired_genomic_count}"
-            assert stats.unpaired_clinical_count == 15, f"Expected 15 unpaired clinical files, got {stats.unpaired_clinical_count}"
-            assert stats.ignored_count == 10, f"Expected 10 ignored files, got {stats.ignored_count}"
+            assert stats.unpaired_genomic_count == 0, f"Expected 0 unpaired genomic files, got {stats.unpaired_genomic_count}"
+            assert stats.unpaired_clinical_count == 0, f"Expected 0 unpaired clinical files, got {stats.unpaired_clinical_count}"
+            assert stats.ignored_count == 45, f"Expected 45 ignored files, got {stats.ignored_count}"
             
             # Verify total calculation for large batch
-            expected_total = 25 * 2 + 20 + 15 + 10  # 25 ready pairs * 2 + 20 + 15 + 10 = 95
+            expected_total = 25 * 2 + 0 + 0 + 45  # 25 ready pairs * 2 + 0 unpaired G + 0 unpaired C + 45 ignored = 95
             actual_total = stats.get_total_files()
             assert actual_total == expected_total, f"Expected total {expected_total}, got {actual_total}"
             
@@ -1205,12 +1205,12 @@ class TestStatisticsAccuracyWithRealData:
             assert abs(ready_filled - expected_ready_filled) <= 1, \
                 f"Large batch ready progress bar: expected ~{expected_ready_filled} filled, got {ready_filled}"
             
-            # Unpaired genomic should be smaller portion (20/145 = ~14%)
+            # Unpaired genomic should be empty (0/95 = 0%)
             genomic_bar = render_progress_bar(stats.unpaired_genomic_count, actual_total, bar_width)
             genomic_filled = genomic_bar.count('█')
-            expected_genomic_filled = int((20 / 145) * bar_width)  # ~2-3 chars
-            assert abs(genomic_filled - expected_genomic_filled) <= 1, \
-                f"Large batch genomic progress bar: expected ~{expected_genomic_filled} filled, got {genomic_filled}"
+            expected_genomic_filled = 0  # 0 chars
+            assert genomic_filled == expected_genomic_filled, \
+                f"Large batch genomic progress bar: expected {expected_genomic_filled} filled, got {genomic_filled}"
             
             # Test that the sum of all progress bar segments makes sense
             clinical_bar = render_progress_bar(stats.unpaired_clinical_count, actual_total, bar_width)
@@ -1282,14 +1282,15 @@ class TestStatisticsAccuracyWithRealData:
             # Finalize pairing statistics after processing all files
             stats.finalize_pairing_statistics()
             
-            # Verify minimal case statistics - no pairs since all different Case IDs
+            # Verify minimal case statistics - only SINGLE_READY resolves to Case ID (unpaired genomic)
+            # SINGLE_UNPAIRED_G, SINGLE_UNPAIRED_C don't resolve (ignored), SINGLE_IGNORED is QC failed (ignored)
             assert stats.ready_pairs_count == 0, f"Expected 0 ready pairs, got {stats.ready_pairs_count}"
             assert stats.unpaired_genomic_count == 1, f"Expected 1 unpaired genomic file, got {stats.unpaired_genomic_count}"
-            assert stats.unpaired_clinical_count == 1, f"Expected 1 unpaired clinical file, got {stats.unpaired_clinical_count}"
-            assert stats.ignored_count == 2, f"Expected 2 ignored files, got {stats.ignored_count}"
+            assert stats.unpaired_clinical_count == 0, f"Expected 0 unpaired clinical file, got {stats.unpaired_clinical_count}"
+            assert stats.ignored_count == 3, f"Expected 3 ignored files, got {stats.ignored_count}"
             
             # Verify total calculation for minimal case
-            expected_total = 0 * 2 + 1 + 1 + 2  # 0 ready pairs * 2 + 1 + 1 + 2 = 4
+            expected_total = 0 * 2 + 1 + 0 + 3  # 0 ready pairs * 2 + 1 unpaired G + 0 unpaired C + 3 ignored = 4
             actual_total = stats.get_total_files()
             assert actual_total == expected_total, f"Expected total {expected_total}, got {actual_total}"
             

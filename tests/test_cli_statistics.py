@@ -16,13 +16,13 @@ from mvh_copy_mb.statistics import ProcessingStatistics, render_progress_bar, di
 # Validates: Requirements 1.5
 @settings(max_examples=100)
 @given(
-    ready_count=st.integers(min_value=0, max_value=1000),
+    ready_pairs_count=st.integers(min_value=0, max_value=1000),
     unpaired_genomic_count=st.integers(min_value=0, max_value=1000),
     unpaired_clinical_count=st.integers(min_value=0, max_value=1000),
     ignored_count=st.integers(min_value=0, max_value=1000)
 )
 def test_ready_file_total_calculation(
-    ready_count: int,
+    ready_pairs_count: int,
     unpaired_genomic_count: int,
     unpaired_clinical_count: int,
     ignored_count: int
@@ -39,29 +39,29 @@ def test_ready_file_total_calculation(
     3. The calculation is mathematically consistent
     """
     stats = ProcessingStatistics(
-        ready_count=ready_count,
+        ready_pairs_count=ready_pairs_count,
         unpaired_genomic_count=unpaired_genomic_count,
         unpaired_clinical_count=unpaired_clinical_count,
         ignored_count=ignored_count
     )
     
-    expected_total = ready_count * 2 + unpaired_genomic_count + unpaired_clinical_count + ignored_count
+    expected_total = ready_pairs_count * 2 + unpaired_genomic_count + unpaired_clinical_count + ignored_count
     actual_total = stats.get_total_files()
     
     assert actual_total == expected_total, \
         f"Total file calculation incorrect: expected {expected_total}, got {actual_total}"
     
     # Verify that ready files are indeed counted twice
-    if ready_count > 0:
+    if ready_pairs_count > 0:
         stats_without_ready = ProcessingStatistics(
-            ready_count=0,
+            ready_pairs_count=0,
             unpaired_genomic_count=unpaired_genomic_count,
             unpaired_clinical_count=unpaired_clinical_count,
             ignored_count=ignored_count
         )
         difference = actual_total - stats_without_ready.get_total_files()
-        assert difference == ready_count * 2, \
-            f"Ready files should contribute {ready_count * 2} to total, but contributed {difference}"
+        assert difference == ready_pairs_count * 2, \
+            f"Ready files should contribute {ready_pairs_count * 2} to total, but contributed {difference}"
 
 
 # Feature: cli-summary-statistics, Property 2: Progress bar width consistency
@@ -176,6 +176,7 @@ def test_progress_bar_calculation_accuracy(count: int, total: int, width: int):
     ignored_count=st.integers(min_value=0, max_value=1000),
     gepado_genomic_updates=st.integers(min_value=0, max_value=1000),
     gepado_clinical_updates=st.integers(min_value=0, max_value=1000),
+    gepado_no_updates_needed=st.integers(min_value=0, max_value=1000),
     gepado_errors=st.integers(min_value=0, max_value=1000),
     gepado_enabled=st.booleans()
 )
@@ -186,6 +187,7 @@ def test_statistics_formatting_consistency(
     ignored_count: int,
     gepado_genomic_updates: int,
     gepado_clinical_updates: int,
+    gepado_no_updates_needed: int,
     gepado_errors: int,
     gepado_enabled: bool
 ):
@@ -206,12 +208,13 @@ def test_statistics_formatting_consistency(
     from contextlib import redirect_stdout
     
     stats = ProcessingStatistics(
-        ready_count=ready_count,
+        ready_pairs_count=ready_count,
         unpaired_genomic_count=unpaired_genomic_count,
         unpaired_clinical_count=unpaired_clinical_count,
         ignored_count=ignored_count,
         gepado_genomic_updates=gepado_genomic_updates,
         gepado_clinical_updates=gepado_clinical_updates,
+        gepado_no_updates_needed=gepado_no_updates_needed,
         gepado_errors=gepado_errors
     )
     
@@ -285,7 +288,7 @@ def test_processing_statistics_initialization():
     """Test that ProcessingStatistics initializes with correct default values."""
     stats = ProcessingStatistics()
     
-    assert stats.ready_count == 0
+    assert stats.ready_pairs_count == 0
     assert stats.unpaired_genomic_count == 0
     assert stats.unpaired_clinical_count == 0
     assert stats.ignored_count == 0
@@ -299,6 +302,7 @@ def test_gepado_operations_total():
     stats = ProcessingStatistics(
         gepado_genomic_updates=10,
         gepado_clinical_updates=15,
+        gepado_no_updates_needed=0,
         gepado_errors=3
     )
     
@@ -328,12 +332,13 @@ def test_progress_bar_edge_cases():
 def test_display_statistics_output(capsys):
     """Test that display_statistics produces expected output format."""
     stats = ProcessingStatistics(
-        ready_count=10,
+        ready_pairs_count=10,
         unpaired_genomic_count=5,
         unpaired_clinical_count=3,
         ignored_count=2,
         gepado_genomic_updates=8,
         gepado_clinical_updates=7,
+        gepado_no_updates_needed=0,
         gepado_errors=1
     )
     
@@ -342,11 +347,11 @@ def test_display_statistics_output(capsys):
     captured = capsys.readouterr()
     
     assert "PROCESSING SUMMARY" in captured.out
-    assert "Ready:" in captured.out
+    assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
     assert "Unpaired clinical:" in captured.out
     assert "Ignored files:" in captured.out
-    assert "GEPADO UPDATES:" not in captured.out
+    assert "GEPADO OPERATIONS:" not in captured.out
     # Verify 80-character width
     assert "="*80 in captured.out
     
@@ -355,10 +360,10 @@ def test_display_statistics_output(capsys):
     captured = capsys.readouterr()
     
     assert "PROCESSING SUMMARY" in captured.out
-    assert "GEPADO UPDATES:" in captured.out
+    assert "GEPADO OPERATIONS:" in captured.out
     assert "Updated genomic data:" in captured.out
     assert "Updated clinical data:" in captured.out
-    assert "Errors while updating:" in captured.out
+    assert "Errors during ops:" in captured.out
     # Verify 80-character width
     assert "="*80 in captured.out
 
@@ -366,12 +371,13 @@ def test_display_statistics_output(capsys):
 def test_display_statistics_gepado_disabled_mode(capsys):
     """Test display formatting when GEPADO is disabled."""
     stats = ProcessingStatistics(
-        ready_count=15,
+        ready_pairs_count=15,
         unpaired_genomic_count=8,
         unpaired_clinical_count=4,
         ignored_count=3,
         gepado_genomic_updates=10,  # These should not appear in output
         gepado_clinical_updates=5,
+        gepado_no_updates_needed=0,
         gepado_errors=2
     )
     
@@ -379,16 +385,16 @@ def test_display_statistics_gepado_disabled_mode(capsys):
     captured = capsys.readouterr()
     
     # Should contain file statistics
-    assert "Ready:" in captured.out
+    assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
     assert "Unpaired clinical:" in captured.out
     assert "Ignored files:" in captured.out
     
     # Should NOT contain GEPADO statistics
-    assert "GEPADO UPDATES:" not in captured.out
+    assert "GEPADO OPERATIONS:" not in captured.out
     assert "Updated genomic data:" not in captured.out
     assert "Updated clinical data:" not in captured.out
-    assert "Errors while updating:" not in captured.out
+    assert "Errors during ops:" not in captured.out
     
     # Should have proper visual separators
     lines = captured.out.split('\n')
@@ -399,12 +405,13 @@ def test_display_statistics_gepado_disabled_mode(capsys):
 def test_display_statistics_gepado_enabled_mode(capsys):
     """Test display formatting when GEPADO is enabled."""
     stats = ProcessingStatistics(
-        ready_count=12,
+        ready_pairs_count=12,
         unpaired_genomic_count=6,
         unpaired_clinical_count=2,
         ignored_count=1,
         gepado_genomic_updates=9,
         gepado_clinical_updates=8,
+        gepado_no_updates_needed=0,
         gepado_errors=1
     )
     
@@ -412,16 +419,16 @@ def test_display_statistics_gepado_enabled_mode(capsys):
     captured = capsys.readouterr()
     
     # Should contain file statistics
-    assert "Ready:" in captured.out
+    assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
     assert "Unpaired clinical:" in captured.out
     assert "Ignored files:" in captured.out
     
     # Should contain GEPADO statistics
-    assert "GEPADO UPDATES:" in captured.out
+    assert "GEPADO OPERATIONS:" in captured.out
     assert "Updated genomic data:" in captured.out
     assert "Updated clinical data:" in captured.out
-    assert "Errors while updating:" in captured.out
+    assert "Errors during ops:" in captured.out
     
     # Should have proper visual separators
     lines = captured.out.split('\n')
@@ -431,11 +438,11 @@ def test_display_statistics_gepado_enabled_mode(capsys):
     # GEPADO section should be separated from file statistics
     gepado_line_index = None
     for i, line in enumerate(lines):
-        if "GEPADO UPDATES:" in line:
+        if "GEPADO OPERATIONS:" in line:
             gepado_line_index = i
             break
     
-    assert gepado_line_index is not None, "GEPADO UPDATES section should be present"
+    assert gepado_line_index is not None, "GEPADO OPERATIONS section should be present"
     # There should be an empty line before GEPADO section
     assert lines[gepado_line_index - 1].strip() == "", "Should have empty line before GEPADO section"
 
@@ -443,12 +450,13 @@ def test_display_statistics_gepado_enabled_mode(capsys):
 def test_display_statistics_visual_separator_placement(capsys):
     """Test that visual separators are properly placed."""
     stats = ProcessingStatistics(
-        ready_count=5,
+        ready_pairs_count=5,
         unpaired_genomic_count=3,
         unpaired_clinical_count=2,
         ignored_count=1,
         gepado_genomic_updates=4,
         gepado_clinical_updates=3,
+        gepado_no_updates_needed=0,
         gepado_errors=0
     )
     
@@ -486,12 +494,13 @@ def test_display_statistics_visual_separator_placement(capsys):
 def test_display_statistics_zero_counts(capsys):
     """Test display formatting with zero counts."""
     stats = ProcessingStatistics(
-        ready_count=0,
+        ready_pairs_count=0,
         unpaired_genomic_count=0,
         unpaired_clinical_count=0,
         ignored_count=0,
         gepado_genomic_updates=0,
         gepado_clinical_updates=0,
+        gepado_no_updates_needed=0,
         gepado_errors=0
     )
     
@@ -499,14 +508,14 @@ def test_display_statistics_zero_counts(capsys):
     captured = capsys.readouterr()
     
     # Should still display all categories with zero counts
-    assert "Ready:" in captured.out
+    assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
     assert "Unpaired clinical:" in captured.out
     assert "Ignored files:" in captured.out
-    assert "GEPADO UPDATES:" in captured.out
+    assert "GEPADO OPERATIONS:" in captured.out
     assert "Updated genomic data:" in captured.out
     assert "Updated clinical data:" in captured.out
-    assert "Errors while updating:" in captured.out
+    assert "Errors during ops:" in captured.out
     
     # All progress bars should be empty (all ░ characters)
     lines = captured.out.split('\n')
@@ -529,7 +538,7 @@ def test_processing_statistics_invalid_initialization():
     """Test ProcessingStatistics initialization with invalid values."""
     # Test negative values
     with pytest.raises(ValueError, match="must be non-negative"):
-        ProcessingStatistics(ready_count=-1)
+        ProcessingStatistics(ready_pairs_count=-1)
     
     with pytest.raises(ValueError, match="must be non-negative"):
         ProcessingStatistics(unpaired_genomic_count=-5)
@@ -539,7 +548,7 @@ def test_processing_statistics_invalid_initialization():
     
     # Test non-integer values
     with pytest.raises(ValueError, match="must be an integer"):
-        ProcessingStatistics(ready_count=3.14)
+        ProcessingStatistics(ready_pairs_count=3.14)
     
     with pytest.raises(ValueError, match="must be an integer"):
         ProcessingStatistics(unpaired_clinical_count="invalid")
@@ -550,8 +559,8 @@ def test_processing_statistics_safe_increment_methods():
     stats = ProcessingStatistics()
     
     # Test valid increments
-    stats.increment_ready(5)
-    assert stats.ready_count == 5
+    stats.increment_ready_pairs(5)
+    assert stats.ready_pairs_count == 5
     
     stats.increment_unpaired_genomic(3)
     assert stats.unpaired_genomic_count == 3
@@ -561,7 +570,7 @@ def test_processing_statistics_safe_increment_methods():
     
     # Test invalid increment values
     with pytest.raises(ValueError, match="must be non-negative"):
-        stats.increment_ready(-1)
+        stats.increment_ready_pairs(-1)
     
     with pytest.raises(ValueError, match="must be an integer"):
         stats.increment_unpaired_clinical(3.5)
@@ -570,7 +579,7 @@ def test_processing_statistics_safe_increment_methods():
         stats.increment_ignored("invalid")
     
     # Verify counts remain unchanged after failed increments
-    assert stats.ready_count == 5
+    assert stats.ready_pairs_count == 5
     assert stats.unpaired_genomic_count == 3
     assert stats.gepado_errors == 2
 
@@ -578,10 +587,10 @@ def test_processing_statistics_safe_increment_methods():
 def test_processing_statistics_validation_in_totals():
     """Test that total calculation methods handle invalid data gracefully."""
     # Create stats with valid data first
-    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
     
     # Manually corrupt the data to test error handling
-    stats.ready_count = -1  # This should trigger validation error
+    stats.ready_pairs_count = -1  # This should trigger validation error
     
     # get_total_files should handle the error gracefully and return 0
     total = stats.get_total_files()
@@ -678,10 +687,10 @@ def test_display_statistics_corrupted_data(capsys):
     from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
     
     # Create valid stats then corrupt them
-    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
     
     # Manually corrupt the data
-    stats.ready_count = -1
+    stats.ready_pairs_count = -1
     stats.unpaired_genomic_count = "invalid"
     
     display_statistics(stats, gepado_enabled=False)
@@ -697,7 +706,7 @@ def test_display_statistics_terminal_width_detection():
     from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
     import unittest.mock
     
-    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
     
     # Mock narrow terminal
     with unittest.mock.patch('shutil.get_terminal_size') as mock_size:
@@ -723,7 +732,7 @@ def test_display_statistics_progress_bar_errors(capsys):
     from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
     import unittest.mock
     
-    stats = ProcessingStatistics(ready_count=10, unpaired_genomic_count=5)
+    stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
     
     # Mock render_progress_bar to raise an exception
     with unittest.mock.patch('mvh_copy_mb.statistics.render_progress_bar', side_effect=Exception("Render error")):
@@ -731,7 +740,7 @@ def test_display_statistics_progress_bar_errors(capsys):
         captured = capsys.readouterr()
         
         # Should display error messages but continue with the display
-        assert "Ready:" in captured.out
+        assert "Ready pairs:" in captured.out
         assert "[Error: Render error]" in captured.out
         assert "PROCESSING SUMMARY" in captured.out
 
@@ -741,7 +750,7 @@ def test_processing_statistics_increment_all_methods():
     stats = ProcessingStatistics()
     
     # Test all increment methods
-    stats.increment_ready(2)
+    stats.increment_ready_pairs(2)
     stats.increment_unpaired_genomic(3)
     stats.increment_unpaired_clinical(4)
     stats.increment_ignored(5)
@@ -749,7 +758,7 @@ def test_processing_statistics_increment_all_methods():
     stats.increment_gepado_clinical(7)
     stats.increment_gepado_errors(8)
     
-    assert stats.ready_count == 2
+    assert stats.ready_pairs_count == 2
     assert stats.unpaired_genomic_count == 3
     assert stats.unpaired_clinical_count == 4
     assert stats.ignored_count == 5
@@ -758,20 +767,21 @@ def test_processing_statistics_increment_all_methods():
     assert stats.gepado_errors == 8
     
     # Test default increment (should be 1)
-    stats.increment_ready()
-    assert stats.ready_count == 3
+    stats.increment_ready_pairs()
+    assert stats.ready_pairs_count == 3
 
 
 def test_processing_statistics_validation_edge_cases():
     """Test validation with edge case values."""
     # Test with zero values (should be valid)
     stats = ProcessingStatistics(
-        ready_count=0,
+        ready_pairs_count=0,
         unpaired_genomic_count=0,
         unpaired_clinical_count=0,
         ignored_count=0,
         gepado_genomic_updates=0,
         gepado_clinical_updates=0,
+        gepado_no_updates_needed=0,
         gepado_errors=0
     )
     
@@ -782,7 +792,7 @@ def test_processing_statistics_validation_edge_cases():
     # Test with very large values
     large_value = 999999999
     stats = ProcessingStatistics(
-        ready_count=large_value,
+        ready_pairs_count=large_value,
         unpaired_genomic_count=large_value,
         unpaired_clinical_count=large_value,
         ignored_count=large_value
@@ -823,7 +833,7 @@ def test_file_categorization_accuracy(
     3. Categorization logic follows the requirements specification
     """
     stats = ProcessingStatistics()
-    initial_total = stats.ready_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count + stats.ignored_count
+    initial_total = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count + stats.ignored_count
     
     # Simulate file processing logic based on the CLI implementation
     if not parsing_success:
@@ -840,7 +850,7 @@ def test_file_categorization_accuracy(
         expected_category = "ignored"
     elif has_case_id:
         # Has resolved Case ID and passed all checks -> Ready
-        stats.ready_count += 1
+        stats.ready_pairs_count += 1
         expected_category = "ready"
     else:
         # No Case ID resolved -> Unpaired based on data type
@@ -856,35 +866,35 @@ def test_file_categorization_accuracy(
             expected_category = "ignored"
     
     # Verify exactly one file was added to exactly one category
-    final_total = stats.ready_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count + stats.ignored_count
+    final_total = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count + stats.ignored_count
     assert final_total == initial_total + 1, \
         f"Exactly one file should be categorized, but total changed from {initial_total} to {final_total}"
     
     # Verify the file was categorized correctly based on expected logic
     if expected_category == "ready":
-        assert stats.ready_count == 1, f"File should be categorized as ready, but ready_count = {stats.ready_count}"
+        assert stats.ready_pairs_count == 1, f"File should be categorized as ready, but ready_count = {stats.ready_pairs_count}"
         assert stats.unpaired_genomic_count == 0, f"File categorized as ready should not be unpaired genomic"
         assert stats.unpaired_clinical_count == 0, f"File categorized as ready should not be unpaired clinical"
         assert stats.ignored_count == 0, f"File categorized as ready should not be ignored"
     elif expected_category == "unpaired_genomic":
         assert stats.unpaired_genomic_count == 1, f"File should be categorized as unpaired genomic, but count = {stats.unpaired_genomic_count}"
-        assert stats.ready_count == 0, f"File categorized as unpaired genomic should not be ready"
+        assert stats.ready_pairs_count == 0, f"File categorized as unpaired genomic should not be ready"
         assert stats.unpaired_clinical_count == 0, f"File categorized as unpaired genomic should not be unpaired clinical"
         assert stats.ignored_count == 0, f"File categorized as unpaired genomic should not be ignored"
     elif expected_category == "unpaired_clinical":
         assert stats.unpaired_clinical_count == 1, f"File should be categorized as unpaired clinical, but count = {stats.unpaired_clinical_count}"
-        assert stats.ready_count == 0, f"File categorized as unpaired clinical should not be ready"
+        assert stats.ready_pairs_count == 0, f"File categorized as unpaired clinical should not be ready"
         assert stats.unpaired_genomic_count == 0, f"File categorized as unpaired clinical should not be unpaired genomic"
         assert stats.ignored_count == 0, f"File categorized as unpaired clinical should not be ignored"
     elif expected_category == "ignored":
         assert stats.ignored_count == 1, f"File should be categorized as ignored, but ignored_count = {stats.ignored_count}"
-        assert stats.ready_count == 0, f"File categorized as ignored should not be ready"
+        assert stats.ready_pairs_count == 0, f"File categorized as ignored should not be ready"
         assert stats.unpaired_genomic_count == 0, f"File categorized as ignored should not be unpaired genomic"
         assert stats.unpaired_clinical_count == 0, f"File categorized as ignored should not be unpaired clinical"
     
     # Verify mutual exclusivity - file should be in exactly one category
     categories_with_files = 0
-    if stats.ready_count > 0:
+    if stats.ready_pairs_count > 0:
         categories_with_files += 1
     if stats.unpaired_genomic_count > 0:
         categories_with_files += 1
@@ -1035,12 +1045,13 @@ def test_mathematical_consistency(
     4. No counts are lost or double-counted in calculations
     """
     stats = ProcessingStatistics(
-        ready_count=ready_count,
+        ready_pairs_count=ready_count,
         unpaired_genomic_count=unpaired_genomic_count,
         unpaired_clinical_count=unpaired_clinical_count,
         ignored_count=ignored_count,
         gepado_genomic_updates=gepado_genomic_updates,
         gepado_clinical_updates=gepado_clinical_updates,
+        gepado_no_updates_needed=0,
         gepado_errors=gepado_errors
     )
     
@@ -1059,8 +1070,8 @@ def test_mathematical_consistency(
         f"GEPADO total calculation inconsistent: method returned {calculated_gepado_total}, manual calculation {manual_gepado_total}"
     
     # Test that individual counts are preserved (no loss or corruption)
-    assert stats.ready_count == ready_count, \
-        f"Ready count not preserved: expected {ready_count}, got {stats.ready_count}"
+    assert stats.ready_pairs_count == ready_count, \
+        f"Ready count not preserved: expected {ready_count}, got {stats.ready_pairs_count}"
     assert stats.unpaired_genomic_count == unpaired_genomic_count, \
         f"Unpaired genomic count not preserved: expected {unpaired_genomic_count}, got {stats.unpaired_genomic_count}"
     assert stats.unpaired_clinical_count == unpaired_clinical_count, \
@@ -1083,7 +1094,7 @@ def test_mathematical_consistency(
     # Test that ready files contribute exactly double to the total
     if ready_count > 0:
         stats_without_ready = ProcessingStatistics(
-            ready_count=0,
+            ready_pairs_count=0,
             unpaired_genomic_count=unpaired_genomic_count,
             unpaired_clinical_count=unpaired_clinical_count,
             ignored_count=ignored_count
@@ -1118,12 +1129,13 @@ def test_display_statistics_specific_known_data(capsys):
     # Test scenario: 20 ready files, 10 unpaired genomic, 5 unpaired clinical, 2 ignored
     # Total files = 20*2 + 10 + 5 + 2 = 57
     stats = ProcessingStatistics(
-        ready_count=20,
+        ready_pairs_count=20,
         unpaired_genomic_count=10,
         unpaired_clinical_count=5,
         ignored_count=2,
         gepado_genomic_updates=18,
         gepado_clinical_updates=15,
+        gepado_no_updates_needed=0,
         gepado_errors=2
     )
     
@@ -1143,7 +1155,7 @@ def test_display_statistics_specific_known_data(capsys):
     stat_lines = [line for line in lines if '[' in line and ']' in line]
     
     # Should have 7 statistics lines (4 file stats + 3 GEPADO stats)
-    assert len(stat_lines) == 7, f"Expected 7 statistics lines, got {len(stat_lines)}"
+    assert len(stat_lines) == 8, f"Expected 8 statistics lines, got {len(stat_lines)}"
     
     # Each line should have a progress bar with filled and empty characters
     for line in stat_lines:
