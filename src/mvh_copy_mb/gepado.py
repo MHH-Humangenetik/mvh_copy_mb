@@ -7,10 +7,13 @@ laboratory information system database.
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 import logging
 import pymssql
 import os
+
+if TYPE_CHECKING:
+    from .statistics import ProcessingStatistics
 
 logger = logging.getLogger(__name__)
 
@@ -407,7 +410,7 @@ def should_process_record_for_gepado(ergebnis_qc: str, typ_der_meldung: str) -> 
     return should_process
 
 
-def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsnummer: str, ibe_string: str, art_der_daten: str, ergebnis_qc: str, typ_der_meldung: str, output_date: Optional[date] = None) -> bool:
+def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsnummer: str, ibe_string: str, art_der_daten: str, ergebnis_qc: str, typ_der_meldung: str, output_date: Optional[date] = None, stats: Optional["ProcessingStatistics"] = None) -> bool:
     """
     Validate record processing criteria and update gepado record if appropriate.
     
@@ -432,6 +435,9 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
     # Check if record should be processed
     if not should_process_record_for_gepado(ergebnis_qc, typ_der_meldung):
         logger.warning(f"Skipping gepado update for HL7 case ID {hl7_case_id}")
+        # Track as error since the record didn't meet processing criteria
+        if stats:
+            stats.gepado_errors += 1
         return False
     
     # Validate data type
@@ -439,6 +445,9 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
         map_data_type_to_fields(art_der_daten)
     except ValueError:
         logger.error(f"Invalid Art der Daten '{art_der_daten}' for HL7 case ID {hl7_case_id}")
+        # Track as error due to invalid data type
+        if stats:
+            stats.gepado_errors += 1
         return False
     
     try:
@@ -455,6 +464,9 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
         existing_record = client.query_record(corrected_case_id)
         if not existing_record:
             logger.warning(f"No gepado record found for corrected HL7 case ID: {corrected_case_id} (original: {hl7_case_id})")
+            # Track as error since no record was found
+            if stats:
+                stats.gepado_errors += 1
             return False
         
         # Compare data and determine updates (including output_date)
@@ -475,14 +487,31 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
         if updates_needed:
             success = client.update_record(corrected_case_id, updates_needed)
             if success:
+                # Track successful update based on data type
+                if stats:
+                    if art_der_daten.upper() == 'G':
+                        stats.gepado_genomic_updates += 1
+                    elif art_der_daten.upper() == 'C':
+                        stats.gepado_clinical_updates += 1
+                
                 if corrected_case_id != hl7_case_id:
                     logger.info(f"Successfully updated gepado record for corrected HL7 case ID {corrected_case_id} (original: {hl7_case_id}): {updates_needed}")
                 else:
                     logger.info(f"Successfully updated gepado record for HL7 case ID {hl7_case_id}: {updates_needed}")
             else:
+                # Track as error since update failed
+                if stats:
+                    stats.gepado_errors += 1
                 # Error already logged in update_record(), just return False
                 return False
         else:
+            # No updates needed - still count as successful operation based on data type
+            if stats:
+                if art_der_daten.upper() == 'G':
+                    stats.gepado_genomic_updates += 1
+                elif art_der_daten.upper() == 'C':
+                    stats.gepado_clinical_updates += 1
+            
             if corrected_case_id != hl7_case_id:
                 logger.info(f"No updates needed for gepado record with corrected HL7 case ID {corrected_case_id} (original: {hl7_case_id})")
             else:
@@ -492,6 +521,9 @@ def validate_and_update_record(client: GepadoClient, hl7_case_id: str, vorgangsn
             
     except Exception as e:
         logger.error(f"Error processing gepado record for HL7 case ID {hl7_case_id}: {e}")
+        # Track as error due to exception
+        if stats:
+            stats.gepado_errors += 1
         return False
 
 

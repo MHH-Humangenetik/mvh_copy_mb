@@ -17,6 +17,7 @@ from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRec
 from mvh_copy_mb.hl7_extraction import extract_hl7_case_id
 from mvh_copy_mb.gepado import create_gepado_client_from_env, validate_and_update_record
 from mvh_copy_mb.leistungsdatum_extraction import parse_leistungsdatum
+from mvh_copy_mb.statistics import ProcessingStatistics
 
 # Load environment variables
 load_dotenv()
@@ -147,7 +148,7 @@ def parse_meldebestaetigung(mb_string: str) -> dict:
         logger.error(f"Error parsing Meldebestaetigung '{mb_string}': {e}")
         return {}
 
-def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None):
+def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None, stats: Optional[ProcessingStatistics] = None):
     try:
         # Extract Vorgangsnummer directly
         vorgangsnummer = row.get('Vorgangsnummer')
@@ -168,6 +169,9 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
 
         if not all([indikationsbereich, art_der_daten, typ_der_meldung, ergebnis_qc]):
             logger.warning(f"Could not extract all required fields from Meldebestaetigung: {meldebestaetigung}")
+            # Track as ignored file due to parsing failure
+            if stats:
+                stats.ignored_count += 1
             return
 
         # Log Leistungsdatum extraction status
@@ -185,14 +189,22 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         target_dir = root_dir / indikationsbereich_str / art_der_daten_str
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        # Determine filename prefix
+        # Determine filename prefix and track statistics
         # Typ der Meldung: 0 = Erstmeldung
         # Ergebnis QC: 1 = bestanden
         prefix = ""
+        is_ignored = False
+        
         if ergebnis_qc != "1":
             prefix = "QC_FAILED_"
+            is_ignored = True
+            if stats:
+                stats.ignored_count += 1
         elif typ_der_meldung != "0":
             prefix = "NO_INITIAL_"
+            is_ignored = True
+            if stats:
+                stats.ignored_count += 1
 
         # Resolve Case ID from gPAS
         case_id = gpas_client.get_original_value(vorgangsnummer_str)
@@ -250,7 +262,8 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                         art_der_daten_str,
                         ergebnis_qc,
                         typ_der_meldung,
-                        output_date  # Pass the extracted Leistungsdatum
+                        output_date,  # Pass the extracted Leistungsdatum
+                        stats  # Pass statistics for tracking
                     )
                     
                     if success:
@@ -267,6 +280,10 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
             logger.warning(f"Gepado update skipped - no case ID resolved from GPAS for vorgangsnummer: {vorgangsnummer_str}")
         
         if case_id:
+            # Track as ready file if not already ignored
+            if stats and not is_ignored:
+                stats.ready_count += 1
+            
             # Requirement: "Files should be named by their case id then."
             # We copy the source CSV file and rename it to {prefix}{case_id}.csv
             new_filename = f"{prefix}{case_id}.csv"
@@ -276,6 +293,19 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
             logger.info(f"Copied {source_file.name} to {target_path}")
             
         else:
+            # Track as unpaired based on data type, or ignored if already marked as ignored
+            if stats:
+                if is_ignored:
+                    # Already counted as ignored above
+                    pass
+                elif art_der_daten_str.upper() == 'G':
+                    stats.unpaired_genomic_count += 1
+                elif art_der_daten_str.upper() == 'C':
+                    stats.unpaired_clinical_count += 1
+                else:
+                    # Unknown data type, count as ignored
+                    stats.ignored_count += 1
+            
             # Fallback: Prepend "NOTFOUND_" to the original filename and copy
             new_filename = f"NOTFOUND_{prefix}{source_file.name}"
             target_path = target_dir / new_filename
@@ -286,7 +316,7 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
     except Exception as e:
         logger.error(f"Error processing row: {e}")
 
-def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None):
+def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None, stats: Optional[ProcessingStatistics] = None):
     try:
         # Detect delimiter - assuming ';' for German CSVs usually, but let's try to be robust
         with open(file_path, 'r', encoding='utf-8') as f:
@@ -303,7 +333,7 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, d
             reader = csv.DictReader(f, dialect=dialect)
             
             for row in reader:
-                process_row(row, file_path, root_dir, gpas_client, db, update_gepado, gepado_client)
+                process_row(row, file_path, root_dir, gpas_client, db, update_gepado, gepado_client, stats)
                 
     except Exception as e:
         logger.error(f"Failed to process file {file_path}: {e}")
