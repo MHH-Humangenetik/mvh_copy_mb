@@ -59,18 +59,18 @@
   - **Property 6: GEPADO statistics accuracy**
   - **Validates: Requirements 5.4**
 
-- [ ] 4. Add statistics display to CLI main function
-- [ ] 4.1 Initialize ProcessingStatistics in main function
+- [x] 4. Add statistics display to CLI main function
+- [x] 4.1 Initialize ProcessingStatistics in main function
   - Create statistics instance at start of processing
   - Pass statistics to processing functions
   - _Requirements: 1.1, 1.2, 1.3, 1.4_
 
-- [ ] 4.2 Display statistics at end of CLI execution
+- [x] 4.2 Display statistics at end of CLI execution
   - Call display_statistics function after processing completes
   - Pass GEPADO enabled flag for conditional display
   - _Requirements: 2.1, 2.2, 2.3, 2.4_
 
-- [ ] 4.3 Write property test for mathematical consistency
+- [x] 4.3 Write property test for mathematical consistency
   - **Property 7: Mathematical consistency**
   - **Validates: Requirements 5.5**
 
@@ -83,12 +83,7 @@
   - Implement fallback behavior for missing statistics
   - _Requirements: Error Handling_
 
-- [ ] 6.2 Add terminal compatibility support
-  - Handle narrow terminals and character encoding issues
-  - Ensure statistics work with output redirection
-  - _Requirements: Error Handling_
-
-- [ ] 6.3 Write unit tests for error handling
+- [ ] 6.2 Write unit tests for error handling
   - Test behavior with invalid statistics data
   - Test display with zero totals and edge cases
   - Test terminal compatibility scenarios

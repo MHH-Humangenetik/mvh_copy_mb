@@ -730,6 +730,118 @@ def test_gepado_statistics_accuracy(
             "Failed operations should only increment error counter"
 
 
+# Feature: cli-summary-statistics, Property 7: Mathematical consistency
+# Validates: Requirements 5.5
+@settings(max_examples=100)
+@given(
+    ready_count=st.integers(min_value=0, max_value=1000),
+    unpaired_genomic_count=st.integers(min_value=0, max_value=1000),
+    unpaired_clinical_count=st.integers(min_value=0, max_value=1000),
+    ignored_count=st.integers(min_value=0, max_value=1000),
+    gepado_genomic_updates=st.integers(min_value=0, max_value=1000),
+    gepado_clinical_updates=st.integers(min_value=0, max_value=1000),
+    gepado_errors=st.integers(min_value=0, max_value=1000)
+)
+def test_mathematical_consistency(
+    ready_count: int,
+    unpaired_genomic_count: int,
+    unpaired_clinical_count: int,
+    ignored_count: int,
+    gepado_genomic_updates: int,
+    gepado_clinical_updates: int,
+    gepado_errors: int
+):
+    """
+    Property 7: Mathematical consistency
+    
+    For any statistics display, the sum of individual counts should equal
+    the total used for progress bar calculations
+    
+    This test verifies that:
+    1. File statistics sum equals the total used for file progress bars
+    2. GEPADO statistics sum equals the total used for GEPADO progress bars
+    3. Mathematical operations are consistent and accurate
+    4. No counts are lost or double-counted in calculations
+    """
+    stats = ProcessingStatistics(
+        ready_count=ready_count,
+        unpaired_genomic_count=unpaired_genomic_count,
+        unpaired_clinical_count=unpaired_clinical_count,
+        ignored_count=ignored_count,
+        gepado_genomic_updates=gepado_genomic_updates,
+        gepado_clinical_updates=gepado_clinical_updates,
+        gepado_errors=gepado_errors
+    )
+    
+    # Test file statistics mathematical consistency
+    calculated_file_total = stats.get_total_files()
+    manual_file_total = ready_count * 2 + unpaired_genomic_count + unpaired_clinical_count + ignored_count
+    
+    assert calculated_file_total == manual_file_total, \
+        f"File total calculation inconsistent: method returned {calculated_file_total}, manual calculation {manual_file_total}"
+    
+    # Test GEPADO statistics mathematical consistency
+    calculated_gepado_total = stats.get_total_gepado_operations()
+    manual_gepado_total = gepado_genomic_updates + gepado_clinical_updates + gepado_errors
+    
+    assert calculated_gepado_total == manual_gepado_total, \
+        f"GEPADO total calculation inconsistent: method returned {calculated_gepado_total}, manual calculation {manual_gepado_total}"
+    
+    # Test that individual counts are preserved (no loss or corruption)
+    assert stats.ready_count == ready_count, \
+        f"Ready count not preserved: expected {ready_count}, got {stats.ready_count}"
+    assert stats.unpaired_genomic_count == unpaired_genomic_count, \
+        f"Unpaired genomic count not preserved: expected {unpaired_genomic_count}, got {stats.unpaired_genomic_count}"
+    assert stats.unpaired_clinical_count == unpaired_clinical_count, \
+        f"Unpaired clinical count not preserved: expected {unpaired_clinical_count}, got {stats.unpaired_clinical_count}"
+    assert stats.ignored_count == ignored_count, \
+        f"Ignored count not preserved: expected {ignored_count}, got {stats.ignored_count}"
+    assert stats.gepado_genomic_updates == gepado_genomic_updates, \
+        f"GEPADO genomic updates not preserved: expected {gepado_genomic_updates}, got {stats.gepado_genomic_updates}"
+    assert stats.gepado_clinical_updates == gepado_clinical_updates, \
+        f"GEPADO clinical updates not preserved: expected {gepado_clinical_updates}, got {stats.gepado_clinical_updates}"
+    assert stats.gepado_errors == gepado_errors, \
+        f"GEPADO errors not preserved: expected {gepado_errors}, got {stats.gepado_errors}"
+    
+    # Test that totals are non-negative (mathematical sanity check)
+    assert calculated_file_total >= 0, \
+        f"File total should be non-negative, got {calculated_file_total}"
+    assert calculated_gepado_total >= 0, \
+        f"GEPADO total should be non-negative, got {calculated_gepado_total}"
+    
+    # Test that ready files contribute exactly double to the total
+    if ready_count > 0:
+        stats_without_ready = ProcessingStatistics(
+            ready_count=0,
+            unpaired_genomic_count=unpaired_genomic_count,
+            unpaired_clinical_count=unpaired_clinical_count,
+            ignored_count=ignored_count
+        )
+        total_without_ready = stats_without_ready.get_total_files()
+        ready_contribution = calculated_file_total - total_without_ready
+        
+        assert ready_contribution == ready_count * 2, \
+            f"Ready files should contribute {ready_count * 2} to total, but contributed {ready_contribution}"
+    
+    # Test that each GEPADO operation type contributes exactly once to the total
+    if gepado_genomic_updates > 0 or gepado_clinical_updates > 0 or gepado_errors > 0:
+        # Verify each component contributes exactly its count
+        component_sum = gepado_genomic_updates + gepado_clinical_updates + gepado_errors
+        assert component_sum == calculated_gepado_total, \
+            f"GEPADO component sum {component_sum} should equal total {calculated_gepado_total}"
+    
+    # Test mathematical properties (commutativity, associativity)
+    # File total should be the same regardless of calculation order
+    alt_file_total = (ready_count * 2) + (unpaired_genomic_count + unpaired_clinical_count + ignored_count)
+    assert alt_file_total == calculated_file_total, \
+        f"File total calculation should be commutative: {alt_file_total} != {calculated_file_total}"
+    
+    # GEPADO total should be the same regardless of calculation order
+    alt_gepado_total = (gepado_genomic_updates + gepado_clinical_updates) + gepado_errors
+    assert alt_gepado_total == calculated_gepado_total, \
+        f"GEPADO total calculation should be commutative: {alt_gepado_total} != {calculated_gepado_total}"
+
+
 def test_display_statistics_specific_known_data(capsys):
     """Test specific display scenarios with known data."""
     # Test scenario: 20 ready files, 10 unpaired genomic, 5 unpaired clinical, 2 ignored

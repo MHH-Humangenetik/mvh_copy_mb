@@ -17,7 +17,7 @@ from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRec
 from mvh_copy_mb.hl7_extraction import extract_hl7_case_id
 from mvh_copy_mb.gepado import create_gepado_client_from_env, validate_and_update_record
 from mvh_copy_mb.leistungsdatum_extraction import parse_leistungsdatum
-from mvh_copy_mb.statistics import ProcessingStatistics
+from mvh_copy_mb.statistics import ProcessingStatistics, display_statistics
 
 # Load environment variables
 load_dotenv()
@@ -395,11 +395,14 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
     
     csv_files = list(input_path.glob('*.csv'))
     
+    # Initialize processing statistics
+    stats = ProcessingStatistics()
+    
     # Use context manager for automatic database cleanup
     with MeldebestaetigungDatabase(db_path) as db:
         for csv_file in tqdm(csv_files, desc="Processing CSV files", unit="file", ncols=80):
             logger.info(f"Processing file: {csv_file.name}")
-            process_csv_file(csv_file, input_path, gpas_client, db, update_gepado, gepado_client)
+            process_csv_file(csv_file, input_path, gpas_client, db, update_gepado, gepado_client, stats)
 
             if archive_dir:
                 try:
@@ -412,6 +415,9 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
                 except Exception as e:
                     logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
                     raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+    
+    # Display processing statistics
+    display_statistics(stats, gepado_enabled=update_gepado)
     
     # Clean up gepado client connection
     if gepado_client:
