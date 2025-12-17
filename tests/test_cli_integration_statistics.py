@@ -474,19 +474,19 @@ class TestCLIIntegrationStatistics:
             
             # Verify output contains expected elements
             assert "PROCESSING SUMMARY" in captured_output, "Should contain summary header"
-            assert "Ready:" in captured_output, "Should contain ready files count"
+            assert "Ready pairs:" in captured_output, "Should contain ready pairs count"
             assert "Unpaired genomic:" in captured_output, "Should contain unpaired genomic count"
             assert "Unpaired clinical:" in captured_output, "Should contain unpaired clinical count"
             assert "Ignored files:" in captured_output, "Should contain ignored files count"
-            assert "GEPADO UPDATES:" in captured_output, "Should contain GEPADO section"
+            assert "GEPADO OPERATIONS:" in captured_output, "Should contain GEPADO section"
             assert "Updated genomic data:" in captured_output, "Should contain GEPADO genomic updates"
             assert "Updated clinical data:" in captured_output, "Should contain GEPADO clinical updates"
-            assert "Errors while updating:" in captured_output, "Should contain GEPADO errors"
+            assert "Errors during ops:" in captured_output, "Should contain GEPADO errors"
             
             # Verify progress bars are present
             lines = captured_output.split('\n')
             progress_bar_lines = [line for line in lines if '[' in line and ']' in line]
-            assert len(progress_bar_lines) == 7, f"Expected 7 progress bar lines, got {len(progress_bar_lines)}"
+            assert len(progress_bar_lines) == 8, f"Expected 8 progress bar lines, got {len(progress_bar_lines)}"
             
             # Verify all progress bars have consistent format
             for line in progress_bar_lines:
@@ -531,10 +531,10 @@ class TestCLIIntegrationStatistics:
         assert "Ignored files:" in captured_output, "Should contain ignored files count"
         
         # Verify GEPADO statistics are NOT present
-        assert "GEPADO UPDATES:" not in captured_output, "Should not contain GEPADO section when disabled"
+        assert "GEPADO OPERATIONS:" not in captured_output, "Should not contain GEPADO section when disabled"
         assert "Updated genomic data:" not in captured_output, "Should not contain GEPADO genomic updates"
         assert "Updated clinical data:" not in captured_output, "Should not contain GEPADO clinical updates"
-        assert "Errors while updating:" not in captured_output, "Should not contain GEPADO errors"
+        assert "Errors during ops:" not in captured_output, "Should not contain GEPADO errors"
         
         # Verify only file statistics progress bars are present (4 lines)
         lines = captured_output.split('\n')
@@ -608,7 +608,7 @@ class TestCLIIntegrationStatistics:
         
         # Test error handling for invalid increments
         with pytest.raises(ValueError):
-            stats.increment_ready(-1)  # Negative increment should fail
+            stats.increment_ready_pairs(-1)  # Negative increment should fail
         
         with pytest.raises(ValueError):
             stats.increment_unpaired_clinical("invalid")  # Non-integer should fail
