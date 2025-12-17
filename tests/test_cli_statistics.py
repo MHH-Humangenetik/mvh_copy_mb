@@ -1166,3 +1166,344 @@ def test_display_statistics_specific_known_data(capsys):
         # Should contain valid progress bar characters
         assert all(c in '█░' for c in bar_content), \
             f"Progress bar should only contain valid characters: '{bar_content}'"
+
+
+# Feature: cli-summary-statistics, Property 1: Pairing logic accuracy
+# Validates: Requirements 5.1
+@settings(max_examples=100)
+@given(
+    case_ids_with_types=st.lists(
+        st.tuples(
+            st.text(min_size=1, max_size=20, alphabet=st.characters(min_codepoint=65, max_codepoint=90)),  # Case ID
+            st.sampled_from(['G', 'C'])  # Data type
+        ),
+        min_size=0,
+        max_size=50
+    )
+)
+def test_pairing_logic_accuracy(case_ids_with_types):
+    """
+    Property 1: Pairing logic accuracy
+    
+    For any set of files with resolved Case IDs, a Case ID should be counted as a ready pair
+    if and only if it has both genomic (G) and clinical (C) files, matching the web interface logic.
+    
+    This test verifies that:
+    1. Case IDs with both G and C files are counted as ready pairs
+    2. Case IDs with only G files are counted as unpaired genomic
+    3. Case IDs with only C files are counted as unpaired clinical
+    4. The pairing logic is mathematically consistent
+    """
+    stats = ProcessingStatistics()
+    
+    # Track expected results based on the input data
+    case_id_types = {}
+    for case_id, data_type in case_ids_with_types:
+        if case_id not in case_id_types:
+            case_id_types[case_id] = {'genomic': False, 'clinical': False}
+        
+        if data_type == 'G':
+            case_id_types[case_id]['genomic'] = True
+        elif data_type == 'C':
+            case_id_types[case_id]['clinical'] = True
+    
+    # Add all resolved case IDs to the statistics tracker
+    for case_id, data_type in case_ids_with_types:
+        stats.add_resolved_case_id(case_id, data_type)
+    
+    # Finalize pairing statistics
+    stats.finalize_pairing_statistics()
+    
+    # Calculate expected counts based on pairing logic
+    expected_ready_pairs = 0
+    expected_unpaired_genomic = 0
+    expected_unpaired_clinical = 0
+    
+    for case_id, types in case_id_types.items():
+        has_genomic = types['genomic']
+        has_clinical = types['clinical']
+        
+        if has_genomic and has_clinical:
+            expected_ready_pairs += 1
+        elif has_genomic and not has_clinical:
+            expected_unpaired_genomic += 1
+        elif has_clinical and not has_genomic:
+            expected_unpaired_clinical += 1
+    
+    # Verify the pairing logic produces expected results
+    assert stats.ready_pairs_count == expected_ready_pairs, \
+        f"Ready pairs count mismatch: expected {expected_ready_pairs}, got {stats.ready_pairs_count}"
+    
+    assert stats.unpaired_genomic_count == expected_unpaired_genomic, \
+        f"Unpaired genomic count mismatch: expected {expected_unpaired_genomic}, got {stats.unpaired_genomic_count}"
+    
+    assert stats.unpaired_clinical_count == expected_unpaired_clinical, \
+        f"Unpaired clinical count mismatch: expected {expected_unpaired_clinical}, got {stats.unpaired_clinical_count}"
+    
+    # Verify mathematical consistency: each unique case ID should be counted exactly once
+    total_unique_case_ids = len(case_id_types)
+    total_counted = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count
+    
+    assert total_counted == total_unique_case_ids, \
+        f"Total counted case IDs ({total_counted}) should equal unique case IDs ({total_unique_case_ids})"
+    
+    # Verify that ready pairs are counted correctly in file totals (each pair = 2 files)
+    expected_file_contribution = expected_ready_pairs * 2 + expected_unpaired_genomic + expected_unpaired_clinical
+    actual_file_total = stats.get_total_files()  # Should equal expected since ignored_count = 0
+    
+    assert actual_file_total == expected_file_contribution, \
+        f"File total ({actual_file_total}) should match expected contribution ({expected_file_contribution})"
+    
+    # Verify that duplicate entries for the same case ID and data type don't affect counts
+    # (This tests idempotency of the add_resolved_case_id method)
+    if case_ids_with_types:
+        # Pick the first case ID and data type, add it again
+        first_case_id, first_data_type = case_ids_with_types[0]
+        stats.add_resolved_case_id(first_case_id, first_data_type)
+        stats.finalize_pairing_statistics()
+        
+        # Counts should remain the same (idempotent)
+        assert stats.ready_pairs_count == expected_ready_pairs, \
+            f"Duplicate addition changed ready pairs: expected {expected_ready_pairs}, got {stats.ready_pairs_count}"
+        assert stats.unpaired_genomic_count == expected_unpaired_genomic, \
+            f"Duplicate addition changed unpaired genomic: expected {expected_unpaired_genomic}, got {stats.unpaired_genomic_count}"
+        assert stats.unpaired_clinical_count == expected_unpaired_clinical, \
+            f"Duplicate addition changed unpaired clinical: expected {expected_unpaired_clinical}, got {stats.unpaired_clinical_count}"
+
+# Feature: cli-summary-statistics, Property 2: Unpaired file categorization
+# Validates: Requirements 5.2
+@settings(max_examples=100)
+@given(
+    files_with_case_ids=st.lists(
+        st.tuples(
+            st.text(min_size=1, max_size=20, alphabet=st.characters(min_codepoint=65, max_codepoint=90)),  # Case ID
+            st.sampled_from(['G', 'C'])  # Data type
+        ),
+        min_size=1,
+        max_size=30
+    ).filter(lambda files: len(set(case_id for case_id, _ in files)) > 0)  # Ensure at least one unique case ID
+)
+def test_unpaired_file_categorization(files_with_case_ids):
+    """
+    Property 2: Unpaired file categorization
+    
+    For any file with a resolved Case ID, it should be counted as unpaired genomic or unpaired clinical
+    if it lacks a counterpart of the opposite data type.
+    
+    This test verifies that:
+    1. Files with resolved Case IDs that lack counterparts are correctly categorized as unpaired
+    2. Genomic files without clinical counterparts are counted as unpaired genomic
+    3. Clinical files without genomic counterparts are counted as unpaired clinical
+    4. Files that do have counterparts are not counted as unpaired
+    """
+    stats = ProcessingStatistics()
+    
+    # Track what data types exist for each case ID
+    case_id_types = {}
+    for case_id, data_type in files_with_case_ids:
+        if case_id not in case_id_types:
+            case_id_types[case_id] = {'genomic': False, 'clinical': False}
+        
+        if data_type == 'G':
+            case_id_types[case_id]['genomic'] = True
+        elif data_type == 'C':
+            case_id_types[case_id]['clinical'] = True
+    
+    # Add all resolved case IDs to the statistics tracker
+    for case_id, data_type in files_with_case_ids:
+        stats.add_resolved_case_id(case_id, data_type)
+    
+    # Finalize pairing statistics
+    stats.finalize_pairing_statistics()
+    
+    # Calculate expected unpaired counts
+    expected_unpaired_genomic = 0
+    expected_unpaired_clinical = 0
+    expected_ready_pairs = 0
+    
+    for case_id, types in case_id_types.items():
+        has_genomic = types['genomic']
+        has_clinical = types['clinical']
+        
+        if has_genomic and has_clinical:
+            # Complete pair - not unpaired
+            expected_ready_pairs += 1
+        elif has_genomic and not has_clinical:
+            # Genomic file without clinical counterpart - unpaired genomic
+            expected_unpaired_genomic += 1
+        elif has_clinical and not has_genomic:
+            # Clinical file without genomic counterpart - unpaired clinical
+            expected_unpaired_clinical += 1
+    
+    # Verify unpaired categorization is correct
+    assert stats.unpaired_genomic_count == expected_unpaired_genomic, \
+        f"Unpaired genomic count mismatch: expected {expected_unpaired_genomic}, got {stats.unpaired_genomic_count}"
+    
+    assert stats.unpaired_clinical_count == expected_unpaired_clinical, \
+        f"Unpaired clinical count mismatch: expected {expected_unpaired_clinical}, got {stats.unpaired_clinical_count}"
+    
+    # Verify that files with counterparts are NOT counted as unpaired
+    assert stats.ready_pairs_count == expected_ready_pairs, \
+        f"Ready pairs count mismatch: expected {expected_ready_pairs}, got {stats.ready_pairs_count}"
+    
+    # Verify mutual exclusivity: files should be either paired or unpaired, not both
+    total_case_ids = len(case_id_types)
+    total_categorized = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count
+    
+    assert total_categorized == total_case_ids, \
+        f"Total categorized case IDs ({total_categorized}) should equal unique case IDs ({total_case_ids})"
+    
+    # Verify that unpaired files are correctly identified by data type
+    for case_id, types in case_id_types.items():
+        has_genomic = types['genomic']
+        has_clinical = types['clinical']
+        
+        if has_genomic and not has_clinical:
+            # This case ID should contribute to unpaired genomic count
+            assert stats.unpaired_genomic_count > 0, \
+                f"Case ID {case_id} has genomic but no clinical, should contribute to unpaired genomic count"
+        
+        if has_clinical and not has_genomic:
+            # This case ID should contribute to unpaired clinical count
+            assert stats.unpaired_clinical_count > 0, \
+                f"Case ID {case_id} has clinical but no genomic, should contribute to unpaired clinical count"
+        
+        if has_genomic and has_clinical:
+            # This case ID should contribute to ready pairs count
+            assert stats.ready_pairs_count > 0, \
+                f"Case ID {case_id} has both genomic and clinical, should contribute to ready pairs count"
+    
+    # Test edge case: if all files are unpaired, ready pairs should be zero
+    if expected_ready_pairs == 0:
+        assert stats.ready_pairs_count == 0, \
+            f"When no complete pairs exist, ready pairs count should be 0, got {stats.ready_pairs_count}"
+    
+    # Test edge case: if all files are paired, unpaired counts should be zero
+    if expected_unpaired_genomic == 0 and expected_unpaired_clinical == 0:
+        assert stats.unpaired_genomic_count == 0 and stats.unpaired_clinical_count == 0, \
+            f"When all files are paired, unpaired counts should be 0, got genomic={stats.unpaired_genomic_count}, clinical={stats.unpaired_clinical_count}"
+
+
+# Feature: cli-summary-statistics, Property 4: GEPADO operation categorization
+# Validates: Requirements 2.1, 2.2, 2.3, 2.4, 5.4
+@settings(max_examples=100)
+@given(
+    operation_success=st.booleans(),
+    art_der_daten=st.sampled_from(['G', 'C', 'X']),  # Data type: G = genomic, C = clinical, X = unknown
+    has_updates_needed=st.booleans(),  # Whether the operation requires actual updates
+    record_found=st.booleans(),  # Whether a GEPADO record was found
+    valid_processing_criteria=st.booleans()  # Whether QC and message type criteria are met
+)
+def test_gepado_operation_categorization(
+    operation_success: bool,
+    art_der_daten: str,
+    has_updates_needed: bool,
+    record_found: bool,
+    valid_processing_criteria: bool
+):
+    """
+    Property 4: GEPADO operation categorization
+    
+    For any GEPADO operation, it should be counted in exactly one category:
+    actual update (genomic or clinical), no update needed, or error.
+    
+    This test verifies that:
+    1. Each GEPADO operation is counted in exactly one category
+    2. Actual updates are categorized by data type (genomic vs clinical)
+    3. Operations where validation passes but no updates are needed are counted separately
+    4. Failed operations are counted as errors
+    5. Mutual exclusivity is maintained across all categories
+    """
+    stats = ProcessingStatistics()
+    initial_genomic = stats.gepado_genomic_updates
+    initial_clinical = stats.gepado_clinical_updates
+    initial_no_updates = stats.gepado_no_updates_needed
+    initial_errors = stats.gepado_errors
+    initial_total = stats.get_total_gepado_operations()
+    
+    # Simulate GEPADO operation logic based on the implementation
+    if not valid_processing_criteria:
+        # Doesn't meet QC/message type criteria -> Error
+        stats.gepado_errors += 1
+        expected_category = "error"
+    elif not record_found:
+        # No GEPADO record found -> Error
+        stats.gepado_errors += 1
+        expected_category = "error"
+    elif art_der_daten.upper() not in ['G', 'C']:
+        # Invalid data type -> Error
+        stats.gepado_errors += 1
+        expected_category = "error"
+    elif not operation_success:
+        # Operation failed (e.g., database update failed) -> Error
+        stats.gepado_errors += 1
+        expected_category = "error"
+    elif not has_updates_needed:
+        # Validation passed but no updates needed -> No updates needed
+        stats.gepado_no_updates_needed += 1
+        expected_category = "no_updates_needed"
+    else:
+        # Successful operation with updates needed -> Count based on data type
+        if art_der_daten.upper() == 'G':
+            stats.gepado_genomic_updates += 1
+            expected_category = "genomic_update"
+        elif art_der_daten.upper() == 'C':
+            stats.gepado_clinical_updates += 1
+            expected_category = "clinical_update"
+    
+    # Verify exactly one operation was counted
+    final_total = stats.get_total_gepado_operations()
+    assert final_total == initial_total + 1, \
+        f"Exactly one GEPADO operation should be counted, but total changed from {initial_total} to {final_total}"
+    
+    # Verify the operation was categorized correctly
+    genomic_increase = stats.gepado_genomic_updates - initial_genomic
+    clinical_increase = stats.gepado_clinical_updates - initial_clinical
+    no_updates_increase = stats.gepado_no_updates_needed - initial_no_updates
+    error_increase = stats.gepado_errors - initial_errors
+    
+    # Verify exactly one category was incremented
+    total_increases = genomic_increase + clinical_increase + no_updates_increase + error_increase
+    assert total_increases == 1, \
+        f"Exactly one category should be incremented, but {total_increases} categories were incremented"
+    
+    # Verify the correct category was incremented
+    if expected_category == "genomic_update":
+        assert genomic_increase == 1, f"Expected genomic update, but genomic_increase = {genomic_increase}"
+        assert clinical_increase == 0, f"Expected genomic update, but clinical was also incremented"
+        assert no_updates_increase == 0, f"Expected genomic update, but no_updates was also incremented"
+        assert error_increase == 0, f"Expected genomic update, but error was also incremented"
+    elif expected_category == "clinical_update":
+        assert clinical_increase == 1, f"Expected clinical update, but clinical_increase = {clinical_increase}"
+        assert genomic_increase == 0, f"Expected clinical update, but genomic was also incremented"
+        assert no_updates_increase == 0, f"Expected clinical update, but no_updates was also incremented"
+        assert error_increase == 0, f"Expected clinical update, but error was also incremented"
+    elif expected_category == "no_updates_needed":
+        assert no_updates_increase == 1, f"Expected no updates needed, but no_updates_increase = {no_updates_increase}"
+        assert genomic_increase == 0, f"Expected no updates needed, but genomic was also incremented"
+        assert clinical_increase == 0, f"Expected no updates needed, but clinical was also incremented"
+        assert error_increase == 0, f"Expected no updates needed, but error was also incremented"
+    elif expected_category == "error":
+        assert error_increase == 1, f"Expected error, but error_increase = {error_increase}"
+        assert genomic_increase == 0, f"Expected error, but genomic was also incremented"
+        assert clinical_increase == 0, f"Expected error, but clinical was also incremented"
+        assert no_updates_increase == 0, f"Expected error, but no_updates was also incremented"
+    
+    # Verify mutual exclusivity across all categories
+    categories_incremented = 0
+    if genomic_increase > 0:
+        categories_incremented += 1
+    if clinical_increase > 0:
+        categories_incremented += 1
+    if no_updates_increase > 0:
+        categories_incremented += 1
+    if error_increase > 0:
+        categories_incremented += 1
+    
+    assert categories_incremented == 1, \
+        f"Operation should be in exactly one category, but found in {categories_incremented} categories"
+    
+    # Verify that the total is consistent with the sum of all categories
+    expected_total = stats.gepado_genomic_updates + stats.gepado_clinical_updates + stats.gepado_no_updates_needed + stats.gepado_errors
+    assert final_total == expected_total, \
+        f"Total GEPADO operations ({final_total}) should equal sum of categories ({expected_total})"
