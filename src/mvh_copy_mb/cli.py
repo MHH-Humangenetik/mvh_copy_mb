@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Optional, cast
 
 import click
-from tqdm import tqdm
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
 from zeep import Client
 from zeep.transports import Transport
 from requests import Session
@@ -21,6 +22,9 @@ from mvh_copy_mb.statistics import ProcessingStatistics, display_statistics
 
 # Load environment variables
 load_dotenv()
+
+# Initialize rich console
+console = Console()
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -167,6 +171,10 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         ergebnis_qc = mb_data.get('Ergebnis QC')
         output_date = mb_data.get('output_date')
 
+        # Ensure required string types for later use
+        typ_der_meldung_str = cast(str, typ_der_meldung) if typ_der_meldung is not None else ""
+        ergebnis_qc_str = cast(str, ergebnis_qc) if ergebnis_qc is not None else ""
+
         if not all([indikationsbereich, art_der_daten, typ_der_meldung, ergebnis_qc]):
             logger.warning(f"Could not extract all required fields from Meldebestaetigung: {meldebestaetigung}")
             # Track as ignored file due to parsing failure
@@ -195,12 +203,12 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         prefix = ""
         is_ignored = False
         
-        if ergebnis_qc != "1":
+        if ergebnis_qc_str != "1":
             prefix = "QC_FAILED_"
             is_ignored = True
             if stats:
                 stats.ignored_count += 1
-        elif typ_der_meldung != "0":
+        elif typ_der_meldung_str != "0":
             prefix = "NO_INITIAL_"
             is_ignored = True
             if stats:
@@ -211,11 +219,14 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         gpas_domain = None
         
         # Determine which domain resolved the pseudonym (if any)
-        if case_id:
-            # Try to determine which domain resolved it
+        if case_id and getattr(gpas_client, 'client', None):
+            # Try to determine which domain resolved the pseudonym (if any)
             for domain in gpas_client.domains:
                 try:
-                    response = gpas_client.client.service.getValueFor(psn=vorgangsnummer_str, domainName=domain)
+                    svc = getattr(gpas_client.client, 'service', None)
+                    if not svc:
+                        break
+                    response = svc.getValueFor(psn=vorgangsnummer_str, domainName=domain)
                     if response:
                         gpas_domain = domain
                         break
@@ -229,10 +240,10 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                     vorgangsnummer=vorgangsnummer_str,
                     meldebestaetigung=meldebestaetigung,
                     source_file=source_file.name,
-                    typ_der_meldung=typ_der_meldung,
+                    typ_der_meldung=typ_der_meldung_str,
                     indikationsbereich=indikationsbereich_str,
                     art_der_daten=art_der_daten_str,
-                    ergebnis_qc=ergebnis_qc,
+                    ergebnis_qc=ergebnis_qc_str,
                     case_id=case_id,
                     gpas_domain=gpas_domain,
                     processed_at=datetime.now(),
@@ -260,8 +271,8 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                         vorgangsnummer_str,
                         meldebestaetigung,  # Using meldebestaetigung as IBE string
                         art_der_daten_str,
-                        ergebnis_qc,
-                        typ_der_meldung,
+                        ergebnis_qc_str,
+                        typ_der_meldung_str,
                         output_date,  # Pass the extracted Leistungsdatum
                         stats  # Pass statistics for tracking
                     )
@@ -306,7 +317,6 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
 
     except Exception as e:
         logger.error(f"Error processing row: {e}")
-
 def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None, stats: Optional[ProcessingStatistics] = None):
     try:
         # Detect delimiter - assuming ';' for German CSVs usually, but let's try to be robust
@@ -328,7 +338,6 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, d
                 
     except Exception as e:
         logger.error(f"Failed to process file {file_path}: {e}")
-
 @click.command()
 @click.option('--input-dir', envvar='INPUT_DIR', type=click.Path(exists=True, file_okay=False), required=True, help='Directory containing .csv files')
 @click.option('--gpas-endpoint', envvar='GPAS_ENDPOINT', required=True, help='gPAS API Endpoint')
@@ -385,34 +394,44 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
             raise click.ClickException("Failed to initialize gepado client. Please check MSSQL environment variables.")
     
     csv_files = list(input_path.glob('*.csv'))
-    
+
     # Initialize processing statistics
     stats = ProcessingStatistics()
-    
+
     # Use context manager for automatic database cleanup
     with MeldebestaetigungDatabase(db_path) as db:
-        for csv_file in tqdm(csv_files, desc="Processing CSV files", unit="file", ncols=80):
-            logger.info(f"Processing file: {csv_file.name}")
-            process_csv_file(csv_file, input_path, gpas_client, db, update_gepado, gepado_client, stats)
+        with Progress(
+            SpinnerColumn(),
+            BarColumn(),
+            TimeRemainingColumn(),
+            TextColumn("{task.description}"),
+            console=console,
+            transient=True
+        ) as progress:
+            task = progress.add_task("[cyan]Processing CSV files...", total=len(csv_files))
+            for csv_file in csv_files:
+                # Update the progress description to show current file (keeps terminal output minimal)
+                progress.update(task, description=f"[cyan]Processing:[/cyan] {csv_file.name}")
+                process_csv_file(csv_file, input_path, gpas_client, db, update_gepado, gepado_client, stats)
+                progress.advance(task)  # advance after processing
 
-            if archive_dir:
-                try:
-                    dest_path = Path(archive_dir) / csv_file.name
-                    # Remove destination if it exists to allow overwrite
-                    if dest_path.exists():
-                        dest_path.unlink()
-                    shutil.move(str(csv_file), archive_dir)
-                    logger.info(f"Moved {csv_file.name} to {archive_dir}")
-                except Exception as e:
-                    logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
-                    raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
-    
+                if archive_dir:
+                    try:
+                        dest_path = Path(archive_dir) / csv_file.name
+                        if dest_path.exists():
+                            dest_path.unlink()
+                        shutil.move(str(csv_file), archive_dir)
+                        logger.info(f"Moved {csv_file.name} to {archive_dir}")
+                    except Exception as e:
+                        logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+                        raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+
     # Finalize pairing statistics after all files processed
     stats.finalize_pairing_statistics()
-    
+
     # Display processing statistics
     display_statistics(stats, gepado_enabled=update_gepado)
-    
+
     # Clean up gepado client connection
     if gepado_client:
         try:
@@ -421,4 +440,4 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
             logger.warning(f"Error closing gepado connection: {e}")
 
 if __name__ == '__main__':
-    main()
+    main()  # type: ignore[arg-type]

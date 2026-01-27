@@ -9,7 +9,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
 
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord

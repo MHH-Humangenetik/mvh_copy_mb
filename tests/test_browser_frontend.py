@@ -134,10 +134,6 @@ def test_database() -> Iterator[Path]:
 @pytest.fixture(scope="module")
 def web_server(test_database):
     """Start the FastAPI web server for testing."""
-    import os
-    import subprocess
-    import time
-    import signal
     
     # Set database path
     os.environ['DB_PATH'] = str(test_database)

@@ -10,12 +10,11 @@ import pytest
 import tempfile
 import csv
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from click.testing import CliRunner
 import io
-import sys
 
-from mvh_copy_mb.cli import main, process_csv_file, GpasClient
+from mvh_copy_mb.cli import process_csv_file, GpasClient
 from mvh_copy_mb.statistics import ProcessingStatistics, display_statistics, render_progress_bar
 from mvh_copy_mb.database import MeldebestaetigungDatabase
 

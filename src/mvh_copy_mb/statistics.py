@@ -34,7 +34,7 @@ class ProcessingStatistics:
     gepado_clinical_updates: int = 0
     gepado_no_updates_needed: int = 0
     gepado_errors: int = 0
-    _resolved_case_ids: dict = None
+    _resolved_case_ids: Optional[dict] = None
     
     def __post_init__(self):
         """Initialize internal tracking and validate statistics data after initialization."""
@@ -202,9 +202,13 @@ class ProcessingStatistics:
             case_id: The resolved Case ID
             data_type: The data type ('G' for genomic, 'C' for clinical)
         """
+        # Ensure internal mapping initialized
+        if self._resolved_case_ids is None:
+            self._resolved_case_ids = {}
+
         if case_id not in self._resolved_case_ids:
             self._resolved_case_ids[case_id] = {'genomic': False, 'clinical': False}
-        
+
         if data_type.upper() == 'G':
             self._resolved_case_ids[case_id]['genomic'] = True
         elif data_type.upper() == 'C':
@@ -219,11 +223,14 @@ class ProcessingStatistics:
         self.ready_pairs_count = 0
         self.unpaired_genomic_count = 0
         self.unpaired_clinical_count = 0
-        
+
+        if not self._resolved_case_ids:
+            return
+
         for case_id, types in self._resolved_case_ids.items():
             has_genomic = types['genomic']
             has_clinical = types['clinical']
-            
+
             if has_genomic and has_clinical:
                 # Complete pair
                 self.ready_pairs_count += 1
@@ -403,68 +410,118 @@ def display_statistics(stats: Optional[ProcessingStatistics], gepado_enabled: bo
             separator_width = 80
             bar_width = 47
         
+        # If stdout is a terminal, use rich for a prettier summary
+        from rich.console import Console
+        from rich.table import Table
+        from rich import box
+        from rich.progress_bar import ProgressBar
+
+        console = Console()
+        if console.is_terminal:
+            # Build a table for file statistics using Rich ProgressBar for nicer visuals
+            tbl = Table(title="PROCESSING SUMMARY", box=box.HEAVY_EDGE, pad_edge=True)
+            tbl.add_column("Metric", justify="left")
+            tbl.add_column("Count", justify="right")
+            tbl.add_column("", justify="left")
+
+            # Bar expects a positive total; fall back to 1 to show empty bar when total is 0
+            total_for_bars = total_files if total_files > 0 else 1
+
+            # Bar(size, begin, end, width=...)
+            ready_bar = ProgressBar(total_for_bars, completed=stats.ready_pairs_count * 2, width=bar_width)
+            genomic_bar = ProgressBar(total_for_bars, completed=stats.unpaired_genomic_count, width=bar_width)
+            clinical_bar = ProgressBar(total_for_bars, completed=stats.unpaired_clinical_count, width=bar_width)
+            ignored_bar = ProgressBar(total_for_bars, completed=stats.ignored_count, width=bar_width)
+
+            tbl.add_row("Total files:", f"{total_files:>6}", "")
+            tbl.add_row("[green]Ready pairs:[/green]", f"[green]{stats.ready_pairs_count:>6}[/green]", ready_bar)
+            tbl.add_row("[yellow]Unpaired genomic:[/yellow]", f"[yellow]{stats.unpaired_genomic_count:>6}[/yellow]", genomic_bar)
+            tbl.add_row("[yellow]Unpaired clinical:[/yellow]", f"[yellow]{stats.unpaired_clinical_count:>6}[/yellow]", clinical_bar)
+            tbl.add_row("[blue]Ignored files:[/blue]", f"[blue]{stats.ignored_count:>6}[/blue]", ignored_bar)
+
+            # GEPADO section included in same table when enabled
+            if gepado_enabled:
+                total_gepado = stats.get_total_gepado_operations()
+                total_gepado_for_bars = total_gepado if total_gepado > 0 else 1
+
+                genomic_updates_bar = ProgressBar(total_gepado_for_bars, completed=stats.gepado_genomic_updates, width=bar_width)
+                clinical_updates_bar = ProgressBar(total_gepado_for_bars, completed=stats.gepado_clinical_updates, width=bar_width)
+                no_updates_bar = ProgressBar(total_gepado_for_bars, completed=stats.gepado_no_updates_needed, width=bar_width)
+                errors_bar = ProgressBar(total_gepado_for_bars, completed=stats.gepado_errors, width=bar_width)
+
+                # Add a separator
+                tbl.add_section()
+                tbl.add_row("[bold]GEPADO[/bold]", "", "")
+                tbl.add_row("[green]Updated genomic data:[/green]", f"[green]{stats.gepado_genomic_updates:>6}[/green]", genomic_updates_bar)
+                tbl.add_row("[green]Updated clinical data:[/green]", f"[green]{stats.gepado_clinical_updates:>6}[/green]", clinical_updates_bar)
+                tbl.add_row("[blue]No updates needed:[/blue]", f"[blue]{stats.gepado_no_updates_needed:>6}[/blue]", no_updates_bar)
+                tbl.add_row("[red]Errors during ops:[/red]", f"[red]{stats.gepado_errors:>6}[/red]", errors_bar)
+            console.print(tbl)
+
+            return
+
+        # Non-terminal fallback: keep original plain-text output for tests and non-interactive runs
         print("\n" + "="*separator_width)
         print("PROCESSING SUMMARY".center(separator_width))
         print("="*separator_width)
-        
-        # File statistics with error handling for each display line
+
         try:
             ready_bar = render_progress_bar(stats.ready_pairs_count * 2, total_files, bar_width)
             print(f"Ready pairs:            {stats.ready_pairs_count:>6} {ready_bar}")
         except Exception as e:
             print(f"Ready pairs:            {getattr(stats, 'ready_pairs_count', 0):>6} [Error: {e}]")
-        
+
         try:
             genomic_bar = render_progress_bar(stats.unpaired_genomic_count, total_files, bar_width)
             print(f"Unpaired genomic:       {stats.unpaired_genomic_count:>6} {genomic_bar}")
         except Exception as e:
             print(f"Unpaired genomic:       {getattr(stats, 'unpaired_genomic_count', 0):>6} [Error: {e}]")
-        
+
         try:
             clinical_bar = render_progress_bar(stats.unpaired_clinical_count, total_files, bar_width)
             print(f"Unpaired clinical:      {stats.unpaired_clinical_count:>6} {clinical_bar}")
         except Exception as e:
             print(f"Unpaired clinical:      {getattr(stats, 'unpaired_clinical_count', 0):>6} [Error: {e}]")
-        
+
         try:
             ignored_bar = render_progress_bar(stats.ignored_count, total_files, bar_width)
             print(f"Ignored files:          {stats.ignored_count:>6} {ignored_bar}")
         except Exception as e:
             print(f"Ignored files:          {getattr(stats, 'ignored_count', 0):>6} [Error: {e}]")
-        
+
         # GEPADO statistics (if enabled) with error handling
         if gepado_enabled:
             try:
                 total_gepado = stats.get_total_gepado_operations()
                 print("\nGEPADO OPERATIONS:")
-                
+
                 try:
                     genomic_updates_bar = render_progress_bar(stats.gepado_genomic_updates, total_gepado, bar_width)
                     print(f"Updated genomic data:   {stats.gepado_genomic_updates:>6} {genomic_updates_bar}")
                 except Exception as e:
                     print(f"Updated genomic data:   {getattr(stats, 'gepado_genomic_updates', 0):>6} [Error: {e}]")
-                
+
                 try:
                     clinical_updates_bar = render_progress_bar(stats.gepado_clinical_updates, total_gepado, bar_width)
                     print(f"Updated clinical data:  {stats.gepado_clinical_updates:>6} {clinical_updates_bar}")
                 except Exception as e:
                     print(f"Updated clinical data:  {getattr(stats, 'gepado_clinical_updates', 0):>6} [Error: {e}]")
-                
+
                 try:
                     no_updates_bar = render_progress_bar(stats.gepado_no_updates_needed, total_gepado, bar_width)
                     print(f"No updates needed:      {stats.gepado_no_updates_needed:>6} {no_updates_bar}")
                 except Exception as e:
                     print(f"No updates needed:      {getattr(stats, 'gepado_no_updates_needed', 0):>6} [Error: {e}]")
-                
+
                 try:
                     errors_bar = render_progress_bar(stats.gepado_errors, total_gepado, bar_width)
                     print(f"Errors during ops:      {stats.gepado_errors:>6} {errors_bar}")
                 except Exception as e:
                     print(f"Errors during ops:      {getattr(stats, 'gepado_errors', 0):>6} [Error: {e}]")
-                    
+
             except Exception as e:
                 print(f"\nGEPADO OPERATIONS: [Error calculating totals: {e}]")
-        
+
         print("="*separator_width)
         
     except Exception as e:

@@ -9,7 +9,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from bs4 import BeautifulSoup
@@ -724,9 +723,9 @@ def test_client_side_filter_matches_all_columns(num_pairs: int, filter_str: str)
             assert len(filtered_pairs) > 0, "Filter should match at least one record"
             
             # Verify that the first pair is in the filtered results
-            first_pair_case_id = f"CASE_000"
+            first_pair_case_id = "CASE_000"
             assert any(p.case_id == first_pair_case_id for p in filtered_pairs), \
-                f"Pair with filter string should be in filtered results"
+                "Pair with filter string should be in filtered results"
 
 
 # Feature: web-frontend, Property 16: Client-side sort orders by selected column

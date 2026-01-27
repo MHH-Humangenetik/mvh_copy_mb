@@ -204,7 +204,6 @@ def test_statistics_formatting_consistency(
     4. Visual separators are properly placed
     """
     import io
-    import sys
     from contextlib import redirect_stdout
     
     stats = ProcessingStatistics(
@@ -873,24 +872,24 @@ def test_file_categorization_accuracy(
     # Verify the file was categorized correctly based on expected logic
     if expected_category == "ready":
         assert stats.ready_pairs_count == 1, f"File should be categorized as ready, but ready_count = {stats.ready_pairs_count}"
-        assert stats.unpaired_genomic_count == 0, f"File categorized as ready should not be unpaired genomic"
-        assert stats.unpaired_clinical_count == 0, f"File categorized as ready should not be unpaired clinical"
-        assert stats.ignored_count == 0, f"File categorized as ready should not be ignored"
+        assert stats.unpaired_genomic_count == 0, "File categorized as ready should not be unpaired genomic"
+        assert stats.unpaired_clinical_count == 0, "File categorized as ready should not be unpaired clinical"
+        assert stats.ignored_count == 0, "File categorized as ready should not be ignored"
     elif expected_category == "unpaired_genomic":
         assert stats.unpaired_genomic_count == 1, f"File should be categorized as unpaired genomic, but count = {stats.unpaired_genomic_count}"
-        assert stats.ready_pairs_count == 0, f"File categorized as unpaired genomic should not be ready"
-        assert stats.unpaired_clinical_count == 0, f"File categorized as unpaired genomic should not be unpaired clinical"
-        assert stats.ignored_count == 0, f"File categorized as unpaired genomic should not be ignored"
+        assert stats.ready_pairs_count == 0, "File categorized as unpaired genomic should not be ready"
+        assert stats.unpaired_clinical_count == 0, "File categorized as unpaired genomic should not be unpaired clinical"
+        assert stats.ignored_count == 0, "File categorized as unpaired genomic should not be ignored"
     elif expected_category == "unpaired_clinical":
         assert stats.unpaired_clinical_count == 1, f"File should be categorized as unpaired clinical, but count = {stats.unpaired_clinical_count}"
-        assert stats.ready_pairs_count == 0, f"File categorized as unpaired clinical should not be ready"
-        assert stats.unpaired_genomic_count == 0, f"File categorized as unpaired clinical should not be unpaired genomic"
-        assert stats.ignored_count == 0, f"File categorized as unpaired clinical should not be ignored"
+        assert stats.ready_pairs_count == 0, "File categorized as unpaired clinical should not be ready"
+        assert stats.unpaired_genomic_count == 0, "File categorized as unpaired clinical should not be unpaired genomic"
+        assert stats.ignored_count == 0, "File categorized as unpaired clinical should not be ignored"
     elif expected_category == "ignored":
         assert stats.ignored_count == 1, f"File should be categorized as ignored, but ignored_count = {stats.ignored_count}"
-        assert stats.ready_pairs_count == 0, f"File categorized as ignored should not be ready"
-        assert stats.unpaired_genomic_count == 0, f"File categorized as ignored should not be unpaired genomic"
-        assert stats.unpaired_clinical_count == 0, f"File categorized as ignored should not be unpaired clinical"
+        assert stats.ready_pairs_count == 0, "File categorized as ignored should not be ready"
+        assert stats.unpaired_genomic_count == 0, "File categorized as ignored should not be unpaired genomic"
+        assert stats.unpaired_clinical_count == 0, "File categorized as ignored should not be unpaired clinical"
     
     # Verify mutual exclusivity - file should be in exactly one category
     categories_with_files = 0
@@ -980,16 +979,16 @@ def test_gepado_statistics_accuracy(
     
     if expected_category == "genomic_success":
         assert genomic_increase == 1, f"Should have 1 genomic success, got {genomic_increase}"
-        assert clinical_increase == 0, f"Genomic operation should not increase clinical count"
-        assert error_increase == 0, f"Successful operation should not increase error count"
+        assert clinical_increase == 0, "Genomic operation should not increase clinical count"
+        assert error_increase == 0, "Successful operation should not increase error count"
     elif expected_category == "clinical_success":
         assert clinical_increase == 1, f"Should have 1 clinical success, got {clinical_increase}"
-        assert genomic_increase == 0, f"Clinical operation should not increase genomic count"
-        assert error_increase == 0, f"Successful operation should not increase error count"
+        assert genomic_increase == 0, "Clinical operation should not increase genomic count"
+        assert error_increase == 0, "Successful operation should not increase error count"
     elif expected_category == "error":
         assert error_increase == 1, f"Should have 1 error, got {error_increase}"
-        assert genomic_increase == 0, f"Failed operation should not increase genomic count"
-        assert clinical_increase == 0, f"Failed operation should not increase clinical count"
+        assert genomic_increase == 0, "Failed operation should not increase genomic count"
+        assert clinical_increase == 0, "Failed operation should not increase clinical count"
     
     # Verify mutual exclusivity - operation should be in exactly one category
     total_increases = genomic_increase + clinical_increase + error_increase
@@ -1470,24 +1469,24 @@ def test_gepado_operation_categorization(
     # Verify the correct category was incremented
     if expected_category == "genomic_update":
         assert genomic_increase == 1, f"Expected genomic update, but genomic_increase = {genomic_increase}"
-        assert clinical_increase == 0, f"Expected genomic update, but clinical was also incremented"
-        assert no_updates_increase == 0, f"Expected genomic update, but no_updates was also incremented"
-        assert error_increase == 0, f"Expected genomic update, but error was also incremented"
+        assert clinical_increase == 0, "Expected genomic update, but clinical was also incremented"
+        assert no_updates_increase == 0, "Expected genomic update, but no_updates was also incremented"
+        assert error_increase == 0, "Expected genomic update, but error was also incremented"
     elif expected_category == "clinical_update":
         assert clinical_increase == 1, f"Expected clinical update, but clinical_increase = {clinical_increase}"
-        assert genomic_increase == 0, f"Expected clinical update, but genomic was also incremented"
-        assert no_updates_increase == 0, f"Expected clinical update, but no_updates was also incremented"
-        assert error_increase == 0, f"Expected clinical update, but error was also incremented"
+        assert genomic_increase == 0, "Expected clinical update, but genomic was also incremented"
+        assert no_updates_increase == 0, "Expected clinical update, but no_updates was also incremented"
+        assert error_increase == 0, "Expected clinical update, but error was also incremented"
     elif expected_category == "no_updates_needed":
         assert no_updates_increase == 1, f"Expected no updates needed, but no_updates_increase = {no_updates_increase}"
-        assert genomic_increase == 0, f"Expected no updates needed, but genomic was also incremented"
-        assert clinical_increase == 0, f"Expected no updates needed, but clinical was also incremented"
-        assert error_increase == 0, f"Expected no updates needed, but error was also incremented"
+        assert genomic_increase == 0, "Expected no updates needed, but genomic was also incremented"
+        assert clinical_increase == 0, "Expected no updates needed, but clinical was also incremented"
+        assert error_increase == 0, "Expected no updates needed, but error was also incremented"
     elif expected_category == "error":
         assert error_increase == 1, f"Expected error, but error_increase = {error_increase}"
-        assert genomic_increase == 0, f"Expected error, but genomic was also incremented"
-        assert clinical_increase == 0, f"Expected error, but clinical was also incremented"
-        assert no_updates_increase == 0, f"Expected error, but no_updates was also incremented"
+        assert genomic_increase == 0, "Expected error, but genomic was also incremented"
+        assert clinical_increase == 0, "Expected error, but clinical was also incremented"
+        assert no_updates_increase == 0, "Expected error, but no_updates was also incremented"
     
     # Verify mutual exclusivity across all categories
     categories_incremented = 0

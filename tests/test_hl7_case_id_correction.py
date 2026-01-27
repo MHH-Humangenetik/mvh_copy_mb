@@ -318,7 +318,6 @@ class TestCorrectHL7CaseIdForGepado:
     @patch('mvh_copy_mb.hl7_case_id_correction.validate_hl7_case_sapvisitingtype')
     def test_correction_handles_database_error(self, mock_validate):
         """Test correction handles database errors gracefully."""
-        import pymssql
         
         mock_validate.side_effect = Exception("Database error")
         

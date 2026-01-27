@@ -7,10 +7,8 @@ gPAS lookup to database storage.
 
 import tempfile
 from pathlib import Path
-from datetime import datetime
 from unittest.mock import Mock, MagicMock
 
-import pytest
 
 from mvh_copy_mb.cli import process_row, GpasClient
 from mvh_copy_mb.database import MeldebestaetigungDatabase

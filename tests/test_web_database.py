@@ -14,7 +14,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
-from mvh_copy_mb.web_database import WebDatabaseService, RecordPair
+from mvh_copy_mb.web_database import WebDatabaseService
 
 
 # Feature: web-frontend, Property 4: Records with same Case ID are consecutive

@@ -19,7 +19,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 from bs4 import BeautifulSoup
 
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord

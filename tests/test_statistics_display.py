@@ -9,7 +9,6 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 
-import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from bs4 import BeautifulSoup
@@ -330,7 +329,7 @@ def test_complete_pair_definition(num_pairs: int, record_types: list):
         # Verify that complete pairs count is consistent with individual pair flags
         actual_complete_count = sum(1 for p in pairs if p.is_complete)
         assert stats['completePairs'] == actual_complete_count, \
-            f"Complete pairs statistic should match individual pair flags"
+            "Complete pairs statistic should match individual pair flags"
 
 # Feature: statistics-display, Property 3: Done status reactivity
 # Validates: Requirements 3.3, 3.4, 5.2

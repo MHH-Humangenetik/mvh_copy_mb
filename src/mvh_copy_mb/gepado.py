@@ -7,7 +7,7 @@ laboratory information system database.
 
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional, Dict, Any, TYPE_CHECKING
+from typing import Optional, Dict, TYPE_CHECKING
 import logging
 import pymssql
 import os

@@ -2,7 +2,6 @@
 Tests for HL7 case ID extraction functionality.
 """
 
-import pytest
 from hypothesis import given, strategies as st
 
 from mvh_copy_mb.hl7_extraction import extract_hl7_case_id

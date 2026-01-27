@@ -2,7 +2,6 @@
 Tests for Leistungsdatum extraction functionality.
 """
 
-import pytest
 from datetime import date
 from hypothesis import given, strategies as st
 

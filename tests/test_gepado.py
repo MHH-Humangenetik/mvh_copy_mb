@@ -3,7 +3,7 @@ Tests for gepado database client functionality.
 """
 import os
 from datetime import date
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import pytest
 from hypothesis import given, strategies as st
 
@@ -561,7 +561,7 @@ class TestComprehensiveLogging:
         **Validates: Requirements 1.4, 1.5, 4.7, 5.1, 5.2, 5.3, 5.4, 5.5**
         """
         import logging
-        from unittest.mock import Mock, patch
+        from unittest.mock import Mock
         from io import StringIO
         
         # Create a string buffer to capture log output
@@ -730,7 +730,6 @@ class TestGepadoServiceDateIntegration:
         
         **Validates: Requirements 3.3**
         """
-        from unittest.mock import Mock
         
         # Mock an existing gepado record with populated VN/IBE but empty MV_servicedate_k for clinical data
         mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vnk="VN123", ibe_k="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
@@ -761,7 +760,6 @@ class TestGepadoServiceDateIntegration:
         
         **Validates: Requirements 3.4**
         """
-        from unittest.mock import Mock
         
         # Mock an existing gepado record with populated VN/IBE but empty MV_servicedate_g for genetic data
         mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
@@ -792,7 +790,7 @@ class TestGepadoServiceDateIntegration:
         
         **Validates: Requirements 3.1**
         """
-        from unittest.mock import Mock, patch
+        from unittest.mock import Mock
         
         # Mock a gepado client
         mock_client = Mock()
@@ -831,7 +829,6 @@ class TestGepadoServiceDateIntegration:
         
         **Validates: Requirements 3.2**
         """
-        from unittest.mock import Mock
         
         # Mock an existing gepado record with populated VN/IBE but empty MV_servicedate_g
         mock_record = GepadoRecord(hl7_case_id=hl7_case_id, vng="VN123", ibe_g="IBE123", mv_servicedate_k=None, mv_servicedate_g=None)
@@ -864,7 +861,6 @@ class TestGepadoServiceDateIntegration:
         
         **Validates: Requirements 3.3**
         """
-        from unittest.mock import Mock
         import logging
         from io import StringIO
         
@@ -922,7 +918,6 @@ class TestGepadoServiceDateIntegration:
         
         **Validates: Requirements 3.4**
         """
-        from unittest.mock import Mock
         import logging
         from io import StringIO
         
@@ -1217,7 +1212,6 @@ class TestValidateAndUpdateRecord:
         
         **Validates: Requirements 3.5**
         """
-        from unittest.mock import Mock
         import logging
         from io import StringIO
         
@@ -1276,7 +1270,6 @@ class TestValidateAndUpdateRecord:
         
         **Validates: Requirements 3.6**
         """
-        from unittest.mock import Mock
         import logging
         from io import StringIO
         
@@ -1334,7 +1327,6 @@ class TestValidateAndUpdateRecord:
         
         **Validates: Requirements 3.7**
         """
-        from unittest.mock import Mock
         import logging
         from io import StringIO
         
@@ -1386,7 +1378,6 @@ class TestValidateAndUpdateRecord:
         
         **Validates: Requirements 3.8**
         """
-        from unittest.mock import Mock
         import logging
         from io import StringIO
         
