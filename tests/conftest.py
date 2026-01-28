@@ -1,6 +1,7 @@
 """
 Pytest configuration and fixtures for the test suite.
 """
+
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -21,7 +22,7 @@ def test_db():
     """Create a temporary test database with sample data."""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create sample data
         with MeldebestaetigungDatabase(db_path) as db:
             # Complete pair (both genomic and clinical)
@@ -36,10 +37,10 @@ def test_db():
                 case_id="CASE_COMPLETE",
                 gpas_domain="test_domain",
                 processed_at=datetime(2023, 1, 1, 12, 0, 0),
-                is_done=False
+                is_done=False,
             )
             db.upsert_record(genomic_complete)
-            
+
             clinical_complete = MeldebestaetigungRecord(
                 vorgangsnummer="VN_C_COMPLETE",
                 meldebestaetigung="mb_clinical_complete",
@@ -51,10 +52,10 @@ def test_db():
                 case_id="CASE_COMPLETE",
                 gpas_domain="test_domain",
                 processed_at=datetime(2023, 1, 1, 12, 0, 0),
-                is_done=False
+                is_done=False,
             )
             db.upsert_record(clinical_complete)
-            
+
             # Incomplete pair (only genomic)
             genomic_incomplete = MeldebestaetigungRecord(
                 vorgangsnummer="VN_G_INCOMPLETE",
@@ -67,8 +68,8 @@ def test_db():
                 case_id="CASE_INCOMPLETE",
                 gpas_domain="test_domain",
                 processed_at=datetime(2023, 1, 1, 12, 0, 0),
-                is_done=False
+                is_done=False,
             )
             db.upsert_record(genomic_incomplete)
-        
+
         yield db_path

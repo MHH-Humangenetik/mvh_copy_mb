@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class MeldebestaetigungRecord:
     """
     Represents a processed Meldebestaetigung record with all metadata.
-    
+
     Attributes:
         vorgangsnummer: Pseudonymized identifier (unique)
         meldebestaetigung: Complete Meldebestaetigung string
@@ -35,6 +35,7 @@ class MeldebestaetigungRecord:
         is_done: Whether the record has been reviewed and marked complete
         output_date: Leistungsdatum extracted from hash string (None if not parseable)
     """
+
     vorgangsnummer: str
     meldebestaetigung: str
     source_file: str
@@ -52,28 +53,28 @@ class MeldebestaetigungRecord:
 class MeldebestaetigungDatabase:
     """
     Manages DuckDB database operations for Meldebestaetigung records.
-    
+
     This class handles database connection lifecycle, schema creation,
     and CRUD operations for Meldebestaetigung records.
     """
-    
+
     def __init__(self, db_path: Path):
         """
         Initialize database connection.
-        
+
         Args:
             db_path: Path to the DuckDB database file
         """
         self.db_path = db_path
         self.conn: Optional[duckdb.DuckDBPyConnection] = None
-    
-    def __enter__(self) -> 'MeldebestaetigungDatabase':
+
+    def __enter__(self) -> "MeldebestaetigungDatabase":
         """
         Context manager entry: open database connection and create schema.
-        
+
         Returns:
             Self for use in with statement
-            
+
         Raises:
             Exception: If database connection or schema creation fails
         """
@@ -83,13 +84,15 @@ class MeldebestaetigungDatabase:
             self._create_schema()
             return self
         except Exception as e:
-            logger.error(f"Failed to initialize database at {self.db_path}: {e}", exc_info=True)
+            logger.error(
+                f"Failed to initialize database at {self.db_path}: {e}", exc_info=True
+            )
             raise
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """
         Context manager exit: close database connection.
-        
+
         Args:
             exc_type: Exception type if an exception occurred
             exc_val: Exception value if an exception occurred
@@ -98,22 +101,24 @@ class MeldebestaetigungDatabase:
         try:
             self.close()
         except Exception as e:
-            logger.warning(f"Error while closing database connection: {e}", exc_info=True)
-    
+            logger.warning(
+                f"Error while closing database connection: {e}", exc_info=True
+            )
+
     def _create_schema(self) -> None:
         """
         Create the database schema if it doesn't exist.
-        
+
         Creates the meldebestaetigungen table with all required columns
         and constraints. Also handles migration for existing databases.
-        
+
         Raises:
             RuntimeError: If database connection is not established
             Exception: If schema creation fails
         """
         if self.conn is None:
             raise RuntimeError("Database connection not established")
-        
+
         try:
             create_table_sql = """
             CREATE TABLE IF NOT EXISTS meldebestaetigungen (
@@ -133,28 +138,28 @@ class MeldebestaetigungDatabase:
             """
             self.conn.execute(create_table_sql)
             logger.debug("Database schema created or verified")
-            
+
             # Handle migration for existing databases
             self._migrate_schema_for_output_date()
-            
+
         except Exception as e:
             logger.error(f"Failed to create database schema: {e}", exc_info=True)
             raise
-    
+
     def _migrate_schema_for_output_date(self) -> None:
         """
         Migrate existing database schema to add output_date column if it doesn't exist.
-        
+
         This method checks if the output_date column exists and adds it if missing,
         ensuring backward compatibility with existing databases.
-        
+
         Raises:
             RuntimeError: If database connection is not established
             Exception: If migration fails
         """
         if self.conn is None:
             raise RuntimeError("Database connection not established")
-        
+
         try:
             # Check if output_date column exists
             column_check_sql = """
@@ -164,35 +169,43 @@ class MeldebestaetigungDatabase:
             AND column_name = 'output_date'
             """
             result = self.conn.execute(column_check_sql).fetchall()
-            
+
             # If column doesn't exist, add it
             if not result:
-                alter_table_sql = "ALTER TABLE meldebestaetigungen ADD COLUMN output_date DATE"
+                alter_table_sql = (
+                    "ALTER TABLE meldebestaetigungen ADD COLUMN output_date DATE"
+                )
                 self.conn.execute(alter_table_sql)
-                logger.info("Added output_date column to existing meldebestaetigungen table")
+                logger.info(
+                    "Added output_date column to existing meldebestaetigungen table"
+                )
             else:
-                logger.debug("output_date column already exists in meldebestaetigungen table")
-                
+                logger.debug(
+                    "output_date column already exists in meldebestaetigungen table"
+                )
+
         except Exception as e:
-            logger.warning(f"Failed to migrate schema for output_date column: {e}", exc_info=True)
+            logger.warning(
+                f"Failed to migrate schema for output_date column: {e}", exc_info=True
+            )
             # Don't raise - allow system to continue with existing schema
-    
+
     def upsert_record(self, record: MeldebestaetigungRecord) -> None:
         """
         Insert or update a Meldebestaetigung record.
-        
+
         If a record with the same vorgangsnummer exists, it will be updated.
         Otherwise, a new record will be inserted.
-        
+
         Args:
             record: The record to insert or update
-            
+
         Raises:
             RuntimeError: If database connection is not established
         """
         if self.conn is None:
             raise RuntimeError("Database connection not established")
-        
+
         try:
             upsert_sql = """
             INSERT OR REPLACE INTO meldebestaetigungen (
@@ -210,7 +223,7 @@ class MeldebestaetigungDatabase:
                 output_date
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
-            
+
             self.conn.execute(
                 upsert_sql,
                 [
@@ -226,33 +239,35 @@ class MeldebestaetigungDatabase:
                     record.processed_at,
                     record.is_done,
                     record.output_date,
-                ]
+                ],
             )
             self.conn.commit()
-            logger.debug(f"Successfully upserted record for vorgangsnummer: {record.vorgangsnummer}")
+            logger.debug(
+                f"Successfully upserted record for vorgangsnummer: {record.vorgangsnummer}"
+            )
         except Exception as e:
             logger.error(
                 f"Failed to upsert record for vorgangsnummer {record.vorgangsnummer}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise
-    
+
     def get_record(self, vorgangsnummer: str) -> Optional[MeldebestaetigungRecord]:
         """
         Retrieve a record by its vorgangsnummer.
-        
+
         Args:
             vorgangsnummer: The unique identifier to search for
-            
+
         Returns:
             The matching record if found, None otherwise
-            
+
         Raises:
             RuntimeError: If database connection is not established
         """
         if self.conn is None:
             raise RuntimeError("Database connection not established")
-        
+
         try:
             select_sql = """
             SELECT 
@@ -271,14 +286,16 @@ class MeldebestaetigungDatabase:
             FROM meldebestaetigungen
             WHERE vorgangsnummer = ?
             """
-            
+
             result = self.conn.execute(select_sql, [vorgangsnummer]).fetchone()
-            
+
             if result is None:
                 logger.debug(f"No record found for vorgangsnummer: {vorgangsnummer}")
                 return None
-            
-            logger.debug(f"Successfully retrieved record for vorgangsnummer: {vorgangsnummer}")
+
+            logger.debug(
+                f"Successfully retrieved record for vorgangsnummer: {vorgangsnummer}"
+            )
             return MeldebestaetigungRecord(
                 vorgangsnummer=result[0],
                 meldebestaetigung=result[1],
@@ -291,19 +308,19 @@ class MeldebestaetigungDatabase:
                 gpas_domain=result[8],
                 processed_at=result[9],
                 is_done=result[10],
-                output_date=result[11]
+                output_date=result[11],
             )
         except Exception as e:
             logger.error(
                 f"Failed to retrieve record for vorgangsnummer {vorgangsnummer}: {e}",
-                exc_info=True
+                exc_info=True,
             )
             raise
-    
+
     def close(self) -> None:
         """
         Close the database connection.
-        
+
         This method can be called explicitly or will be called automatically
         when using the context manager.
         """

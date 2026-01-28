@@ -14,20 +14,20 @@ from pydantic import BaseModel, Field
 class DoneStatusUpdate(BaseModel):
     """
     Request model for updating done status of a record pair.
-    
+
     Attributes:
         done: The new done status (True = marked as done, False = not done)
     """
+
     done: bool = Field(
-        ...,
-        description="Whether the record pair should be marked as done"
+        ..., description="Whether the record pair should be marked as done"
     )
 
 
 class RecordResponse(BaseModel):
     """
     Response model for individual Meldebestaetigung records.
-    
+
     Attributes:
         vorgangsnummer: Pseudonymized identifier
         meldebestaetigung: IBE string (full content from second CSV column)
@@ -41,6 +41,7 @@ class RecordResponse(BaseModel):
         is_done: Whether the record has been reviewed
         output_date: Leistungsdatum extracted from hash string (None if not parseable)
     """
+
     vorgangsnummer: str
     meldebestaetigung: str
     case_id: Optional[str]
@@ -52,16 +53,17 @@ class RecordResponse(BaseModel):
     processed_at: datetime
     is_done: bool
     output_date: Optional[date] = None
-    
+
     class Config:
         """Pydantic configuration."""
+
         from_attributes = True
 
 
 class PairResponse(BaseModel):
     """
     Response model for record pairs grouped by Case ID.
-    
+
     Attributes:
         case_id: The shared Case ID
         genomic: Genomic record (if exists)
@@ -71,6 +73,7 @@ class PairResponse(BaseModel):
         is_done: Both records marked done
         priority_group: 1, 2, or 3 for sorting
     """
+
     case_id: str
     genomic: Optional[RecordResponse]
     clinical: Optional[RecordResponse]
@@ -78,7 +81,8 @@ class PairResponse(BaseModel):
     is_valid: bool
     is_done: bool
     priority_group: int
-    
+
     class Config:
         """Pydantic configuration."""
+
         from_attributes = True

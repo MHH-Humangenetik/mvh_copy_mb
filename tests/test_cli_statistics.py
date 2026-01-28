@@ -9,7 +9,11 @@ import pytest
 from hypothesis import given, settings, HealthCheck
 from hypothesis import strategies as st
 
-from mvh_copy_mb.statistics import ProcessingStatistics, render_progress_bar, display_statistics
+from mvh_copy_mb.statistics import (
+    ProcessingStatistics,
+    render_progress_bar,
+    display_statistics,
+)
 
 
 # Feature: cli-summary-statistics, Property 1: Ready file total calculation
@@ -19,20 +23,20 @@ from mvh_copy_mb.statistics import ProcessingStatistics, render_progress_bar, di
     ready_pairs_count=st.integers(min_value=0, max_value=1000),
     unpaired_genomic_count=st.integers(min_value=0, max_value=1000),
     unpaired_clinical_count=st.integers(min_value=0, max_value=1000),
-    ignored_count=st.integers(min_value=0, max_value=1000)
+    ignored_count=st.integers(min_value=0, max_value=1000),
 )
 def test_ready_file_total_calculation(
     ready_pairs_count: int,
     unpaired_genomic_count: int,
     unpaired_clinical_count: int,
-    ignored_count: int
+    ignored_count: int,
 ):
     """
     Property 1: Ready file total calculation
-    
+
     For any set of processing statistics, the total file count should equal
     ready_count * 2 + unpaired_genomic + unpaired_clinical + ignored_count
-    
+
     This test verifies that:
     1. Ready files are counted twice in the total as specified
     2. Other file types are counted once
@@ -42,26 +46,33 @@ def test_ready_file_total_calculation(
         ready_pairs_count=ready_pairs_count,
         unpaired_genomic_count=unpaired_genomic_count,
         unpaired_clinical_count=unpaired_clinical_count,
-        ignored_count=ignored_count
+        ignored_count=ignored_count,
     )
-    
-    expected_total = ready_pairs_count * 2 + unpaired_genomic_count + unpaired_clinical_count + ignored_count
+
+    expected_total = (
+        ready_pairs_count * 2
+        + unpaired_genomic_count
+        + unpaired_clinical_count
+        + ignored_count
+    )
     actual_total = stats.get_total_files()
-    
-    assert actual_total == expected_total, \
+
+    assert actual_total == expected_total, (
         f"Total file calculation incorrect: expected {expected_total}, got {actual_total}"
-    
+    )
+
     # Verify that ready files are indeed counted twice
     if ready_pairs_count > 0:
         stats_without_ready = ProcessingStatistics(
             ready_pairs_count=0,
             unpaired_genomic_count=unpaired_genomic_count,
             unpaired_clinical_count=unpaired_clinical_count,
-            ignored_count=ignored_count
+            ignored_count=ignored_count,
         )
         difference = actual_total - stats_without_ready.get_total_files()
-        assert difference == ready_pairs_count * 2, \
+        assert difference == ready_pairs_count * 2, (
             f"Ready files should contribute {ready_pairs_count * 2} to total, but contributed {difference}"
+        )
 
 
 # Feature: cli-summary-statistics, Property 2: Progress bar width consistency
@@ -70,37 +81,43 @@ def test_ready_file_total_calculation(
 @given(
     count=st.integers(min_value=0, max_value=1000),
     total=st.integers(min_value=0, max_value=1000),
-    width=st.integers(min_value=1, max_value=50)
+    width=st.integers(min_value=1, max_value=50),
 )
 def test_progress_bar_width_consistency(count: int, total: int, width: int):
     """
     Property 2: Progress bar width consistency
-    
+
     For any statistic display, all progress bars should be exactly width + 2 characters
     wide (width characters plus opening and closing brackets)
-    
+
     This test verifies that:
     1. Progress bars always have consistent width regardless of count/total
     2. Brackets are always present
     3. Width parameter is respected
     """
     progress_bar = render_progress_bar(count, total, width)
-    
+
     # Progress bar should always be width + 2 characters (for brackets)
     expected_length = width + 2
     actual_length = len(progress_bar)
-    
-    assert actual_length == expected_length, \
+
+    assert actual_length == expected_length, (
         f"Progress bar should be {expected_length} characters, got {actual_length}: '{progress_bar}'"
-    
+    )
+
     # Should start and end with brackets
-    assert progress_bar.startswith('['), f"Progress bar should start with '[': '{progress_bar}'"
-    assert progress_bar.endswith(']'), f"Progress bar should end with ']': '{progress_bar}'"
-    
+    assert progress_bar.startswith("["), (
+        f"Progress bar should start with '[': '{progress_bar}'"
+    )
+    assert progress_bar.endswith("]"), (
+        f"Progress bar should end with ']': '{progress_bar}'"
+    )
+
     # Inner content should be exactly width characters
     inner_content = progress_bar[1:-1]
-    assert len(inner_content) == width, \
+    assert len(inner_content) == width, (
         f"Inner content should be {width} characters, got {len(inner_content)}: '{inner_content}'"
+    )
 
 
 # Feature: cli-summary-statistics, Property 3: Progress bar calculation accuracy
@@ -109,15 +126,15 @@ def test_progress_bar_width_consistency(count: int, total: int, width: int):
 @given(
     count=st.integers(min_value=0, max_value=1000),
     total=st.integers(min_value=0, max_value=1000),
-    width=st.integers(min_value=1, max_value=50)
+    width=st.integers(min_value=1, max_value=50),
 )
 def test_progress_bar_calculation_accuracy(count: int, total: int, width: int):
     """
     Property 3: Progress bar calculation accuracy
-    
+
     For any statistic count and total, the progress bar should accurately represent
     the proportion with appropriate filled and empty characters enclosed in brackets
-    
+
     This test verifies that:
     1. Filled portion represents the correct proportion
     2. Empty portion fills the remainder
@@ -126,44 +143,50 @@ def test_progress_bar_calculation_accuracy(count: int, total: int, width: int):
     """
     progress_bar = render_progress_bar(count, total, width)
     inner_content = progress_bar[1:-1]  # Remove brackets
-    
+
     if total == 0:
         # Special case: when total is 0, should be all empty
-        assert inner_content == "░" * width, \
+        assert inner_content == "░" * width, (
             f"When total is 0, progress bar should be all empty: '{inner_content}'"
+        )
     else:
         # Calculate expected filled width (count is clamped to total)
         clamped_count = min(count, total)
         expected_filled_width = int((clamped_count / total) * width)
         expected_empty_width = width - expected_filled_width
-        
+
         # Count actual filled and empty characters
         filled_chars = inner_content.count("█")
         empty_chars = inner_content.count("░")
-        
-        assert filled_chars == expected_filled_width, \
+
+        assert filled_chars == expected_filled_width, (
             f"Expected {expected_filled_width} filled chars, got {filled_chars}"
-        
-        assert empty_chars == expected_empty_width, \
+        )
+
+        assert empty_chars == expected_empty_width, (
             f"Expected {expected_empty_width} empty chars, got {empty_chars}"
-        
+        )
+
         # Verify total characters add up
-        assert filled_chars + empty_chars == width, \
+        assert filled_chars + empty_chars == width, (
             f"Filled ({filled_chars}) + empty ({empty_chars}) should equal width ({width})"
-        
+        )
+
         # Verify only valid characters are used
         valid_chars = set("█░")
         actual_chars = set(inner_content)
-        assert actual_chars.issubset(valid_chars), \
+        assert actual_chars.issubset(valid_chars), (
             f"Progress bar contains invalid characters: {actual_chars - valid_chars}"
-        
+        )
+
         # Verify proportion accuracy (within rounding tolerance)
         actual_proportion = filled_chars / width
         expected_proportion = clamped_count / total
         # Allow for rounding errors due to integer division
         tolerance = 1 / width  # One character worth of tolerance
-        assert abs(actual_proportion - expected_proportion) <= tolerance, \
+        assert abs(actual_proportion - expected_proportion) <= tolerance, (
             f"Proportion accuracy: expected ~{expected_proportion:.3f}, got {actual_proportion:.3f}"
+        )
 
 
 # Feature: cli-summary-statistics, Property 4: Statistics formatting consistency
@@ -178,7 +201,7 @@ def test_progress_bar_calculation_accuracy(count: int, total: int, width: int):
     gepado_clinical_updates=st.integers(min_value=0, max_value=1000),
     gepado_no_updates_needed=st.integers(min_value=0, max_value=1000),
     gepado_errors=st.integers(min_value=0, max_value=1000),
-    gepado_enabled=st.booleans()
+    gepado_enabled=st.booleans(),
 )
 def test_statistics_formatting_consistency(
     ready_count: int,
@@ -189,14 +212,14 @@ def test_statistics_formatting_consistency(
     gepado_clinical_updates: int,
     gepado_no_updates_needed: int,
     gepado_errors: int,
-    gepado_enabled: bool
+    gepado_enabled: bool,
 ):
     """
     Property 4: Statistics formatting consistency
-    
+
     For any statistics display, all labels and counts should follow the same
     formatting pattern with aligned progress bars
-    
+
     This test verifies that:
     1. All progress bars are aligned vertically
     2. All count values are right-aligned consistently
@@ -205,7 +228,7 @@ def test_statistics_formatting_consistency(
     """
     import io
     from contextlib import redirect_stdout
-    
+
     stats = ProcessingStatistics(
         ready_pairs_count=ready_count,
         unpaired_genomic_count=unpaired_genomic_count,
@@ -214,55 +237,57 @@ def test_statistics_formatting_consistency(
         gepado_genomic_updates=gepado_genomic_updates,
         gepado_clinical_updates=gepado_clinical_updates,
         gepado_no_updates_needed=gepado_no_updates_needed,
-        gepado_errors=gepado_errors
+        gepado_errors=gepado_errors,
     )
-    
+
     # Capture output using redirect_stdout
     output_buffer = io.StringIO()
     with redirect_stdout(output_buffer):
         display_statistics(stats, gepado_enabled=gepado_enabled)
-    
+
     captured_output = output_buffer.getvalue()
-    lines = captured_output.strip().split('\n')
-    
+    lines = captured_output.strip().split("\n")
+
     # Find lines with statistics (contain progress bars)
-    stat_lines = [line for line in lines if '[' in line and ']' in line]
-    
+    stat_lines = [line for line in lines if "[" in line and "]" in line]
+
     if len(stat_lines) > 0:
         # Check that all progress bars are aligned (same position)
         progress_bar_positions = []
         for line in stat_lines:
-            bracket_pos = line.find('[')
+            bracket_pos = line.find("[")
             if bracket_pos != -1:
                 progress_bar_positions.append(bracket_pos)
-        
+
         # All progress bars should start at the same column position
         if len(progress_bar_positions) > 1:
             first_position = progress_bar_positions[0]
             for pos in progress_bar_positions[1:]:
-                assert pos == first_position, \
+                assert pos == first_position, (
                     f"Progress bars not aligned: positions {progress_bar_positions}"
-        
+                )
+
         # Check that all progress bars have the same length
         progress_bar_lengths = []
         for line in stat_lines:
-            start_bracket = line.find('[')
-            end_bracket = line.find(']')
+            start_bracket = line.find("[")
+            end_bracket = line.find("]")
             if start_bracket != -1 and end_bracket != -1:
                 bar_length = end_bracket - start_bracket + 1
                 progress_bar_lengths.append(bar_length)
-        
+
         if len(progress_bar_lengths) > 1:
             first_length = progress_bar_lengths[0]
             for length in progress_bar_lengths[1:]:
-                assert length == first_length, \
+                assert length == first_length, (
                     f"Progress bars have inconsistent lengths: {progress_bar_lengths}"
-        
+                )
+
         # Check that count values are right-aligned (consistent spacing before progress bar)
         count_positions = []
         for line in stat_lines:
             # Find the number before the progress bar
-            bracket_pos = line.find('[')
+            bracket_pos = line.find("[")
             if bracket_pos > 0:
                 # Extract the part before the bracket and find the last number
                 before_bracket = line[:bracket_pos].strip()
@@ -270,23 +295,27 @@ def test_statistics_formatting_consistency(
                 tokens = before_bracket.split()
                 if tokens and tokens[-1].isdigit():
                     # Calculate position of the count relative to the bracket
-                    count_end_pos = bracket_pos - 1  # Position just before the space and bracket
+                    count_end_pos = (
+                        bracket_pos - 1
+                    )  # Position just before the space and bracket
                     count_positions.append(count_end_pos)
-        
+
         # All counts should end at the same position (right-aligned)
         if len(count_positions) > 1:
             first_position = count_positions[0]
             for pos in count_positions[1:]:
-                assert pos == first_position, \
+                assert pos == first_position, (
                     f"Count values not right-aligned: positions {count_positions}"
+                )
 
 
 # Unit tests for specific edge cases and examples
 
+
 def test_processing_statistics_initialization():
     """Test that ProcessingStatistics initializes with correct default values."""
     stats = ProcessingStatistics()
-    
+
     assert stats.ready_pairs_count == 0
     assert stats.unpaired_genomic_count == 0
     assert stats.unpaired_clinical_count == 0
@@ -302,9 +331,9 @@ def test_gepado_operations_total():
         gepado_genomic_updates=10,
         gepado_clinical_updates=15,
         gepado_no_updates_needed=0,
-        gepado_errors=3
+        gepado_errors=3,
     )
-    
+
     expected_total = 10 + 15 + 3
     assert stats.get_total_gepado_operations() == expected_total
 
@@ -314,15 +343,15 @@ def test_progress_bar_edge_cases():
     # Zero total
     bar = render_progress_bar(5, 0, 10)
     assert bar == "[░░░░░░░░░░]"
-    
+
     # Zero count
     bar = render_progress_bar(0, 10, 10)
     assert bar == "[░░░░░░░░░░]"
-    
+
     # Full bar
     bar = render_progress_bar(10, 10, 10)
     assert bar == "[██████████]"
-    
+
     # Half bar
     bar = render_progress_bar(5, 10, 10)
     assert bar == "[█████░░░░░]"
@@ -338,13 +367,13 @@ def test_display_statistics_output(capsys):
         gepado_genomic_updates=8,
         gepado_clinical_updates=7,
         gepado_no_updates_needed=0,
-        gepado_errors=1
+        gepado_errors=1,
     )
-    
+
     # Test without GEPADO
     display_statistics(stats, gepado_enabled=False)
     captured = capsys.readouterr()
-    
+
     assert "PROCESSING SUMMARY" in captured.out
     assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
@@ -352,19 +381,19 @@ def test_display_statistics_output(capsys):
     assert "Ignored files:" in captured.out
     assert "GEPADO OPERATIONS:" not in captured.out
     # Verify 80-character width
-    assert "="*80 in captured.out
-    
+    assert "=" * 80 in captured.out
+
     # Test with GEPADO
     display_statistics(stats, gepado_enabled=True)
     captured = capsys.readouterr()
-    
+
     assert "PROCESSING SUMMARY" in captured.out
     assert "GEPADO OPERATIONS:" in captured.out
     assert "Updated genomic data:" in captured.out
     assert "Updated clinical data:" in captured.out
     assert "Errors during ops:" in captured.out
     # Verify 80-character width
-    assert "="*80 in captured.out
+    assert "=" * 80 in captured.out
 
 
 def test_display_statistics_gepado_disabled_mode(capsys):
@@ -377,27 +406,27 @@ def test_display_statistics_gepado_disabled_mode(capsys):
         gepado_genomic_updates=10,  # These should not appear in output
         gepado_clinical_updates=5,
         gepado_no_updates_needed=0,
-        gepado_errors=2
+        gepado_errors=2,
     )
-    
+
     display_statistics(stats, gepado_enabled=False)
     captured = capsys.readouterr()
-    
+
     # Should contain file statistics
     assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
     assert "Unpaired clinical:" in captured.out
     assert "Ignored files:" in captured.out
-    
+
     # Should NOT contain GEPADO statistics
     assert "GEPADO OPERATIONS:" not in captured.out
     assert "Updated genomic data:" not in captured.out
     assert "Updated clinical data:" not in captured.out
     assert "Errors during ops:" not in captured.out
-    
+
     # Should have proper visual separators
-    lines = captured.out.split('\n')
-    separator_lines = [line for line in lines if line.strip() == "="*80]
+    lines = captured.out.split("\n")
+    separator_lines = [line for line in lines if line.strip() == "=" * 80]
     assert len(separator_lines) >= 2, "Should have opening and closing separators"
 
 
@@ -411,39 +440,41 @@ def test_display_statistics_gepado_enabled_mode(capsys):
         gepado_genomic_updates=9,
         gepado_clinical_updates=8,
         gepado_no_updates_needed=0,
-        gepado_errors=1
+        gepado_errors=1,
     )
-    
+
     display_statistics(stats, gepado_enabled=True)
     captured = capsys.readouterr()
-    
+
     # Should contain file statistics
     assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
     assert "Unpaired clinical:" in captured.out
     assert "Ignored files:" in captured.out
-    
+
     # Should contain GEPADO statistics
     assert "GEPADO OPERATIONS:" in captured.out
     assert "Updated genomic data:" in captured.out
     assert "Updated clinical data:" in captured.out
     assert "Errors during ops:" in captured.out
-    
+
     # Should have proper visual separators
-    lines = captured.out.split('\n')
-    separator_lines = [line for line in lines if line.strip() == "="*80]
+    lines = captured.out.split("\n")
+    separator_lines = [line for line in lines if line.strip() == "=" * 80]
     assert len(separator_lines) >= 2, "Should have opening and closing separators"
-    
+
     # GEPADO section should be separated from file statistics
     gepado_line_index = None
     for i, line in enumerate(lines):
         if "GEPADO OPERATIONS:" in line:
             gepado_line_index = i
             break
-    
+
     assert gepado_line_index is not None, "GEPADO OPERATIONS section should be present"
     # There should be an empty line before GEPADO section
-    assert lines[gepado_line_index - 1].strip() == "", "Should have empty line before GEPADO section"
+    assert lines[gepado_line_index - 1].strip() == "", (
+        "Should have empty line before GEPADO section"
+    )
 
 
 def test_display_statistics_visual_separator_placement(capsys):
@@ -456,38 +487,43 @@ def test_display_statistics_visual_separator_placement(capsys):
         gepado_genomic_updates=4,
         gepado_clinical_updates=3,
         gepado_no_updates_needed=0,
-        gepado_errors=0
+        gepado_errors=0,
     )
-    
+
     display_statistics(stats, gepado_enabled=True)
     captured = capsys.readouterr()
-    
-    lines = captured.out.split('\n')
-    
+
+    lines = captured.out.split("\n")
+
     # Find separator lines
     separator_indices = []
     for i, line in enumerate(lines):
-        if line.strip() == "="*80:
+        if line.strip() == "=" * 80:
             separator_indices.append(i)
-    
-    assert len(separator_indices) >= 2, "Should have at least opening and closing separators"
-    
+
+    assert len(separator_indices) >= 2, (
+        "Should have at least opening and closing separators"
+    )
+
     # First separator should be near the beginning
     assert separator_indices[0] <= 2, "Opening separator should be at the beginning"
-    
+
     # Last separator should be at the end
-    assert separator_indices[-1] >= len(lines) - 3, "Closing separator should be at the end"
-    
+    assert separator_indices[-1] >= len(lines) - 3, (
+        "Closing separator should be at the end"
+    )
+
     # Check that title is centered between separators
     title_line_index = None
     for i, line in enumerate(lines):
         if "PROCESSING SUMMARY" in line:
             title_line_index = i
             break
-    
+
     assert title_line_index is not None, "Should have PROCESSING SUMMARY title"
-    assert separator_indices[0] < title_line_index < separator_indices[-1], \
+    assert separator_indices[0] < title_line_index < separator_indices[-1], (
         "Title should be between separators"
+    )
 
 
 def test_display_statistics_zero_counts(capsys):
@@ -500,12 +536,12 @@ def test_display_statistics_zero_counts(capsys):
         gepado_genomic_updates=0,
         gepado_clinical_updates=0,
         gepado_no_updates_needed=0,
-        gepado_errors=0
+        gepado_errors=0,
     )
-    
+
     display_statistics(stats, gepado_enabled=True)
     captured = capsys.readouterr()
-    
+
     # Should still display all categories with zero counts
     assert "Ready pairs:" in captured.out
     assert "Unpaired genomic:" in captured.out
@@ -515,40 +551,42 @@ def test_display_statistics_zero_counts(capsys):
     assert "Updated genomic data:" in captured.out
     assert "Updated clinical data:" in captured.out
     assert "Errors during ops:" in captured.out
-    
+
     # All progress bars should be empty (all ░ characters)
-    lines = captured.out.split('\n')
-    stat_lines = [line for line in lines if '[' in line and ']' in line]
-    
+    lines = captured.out.split("\n")
+    stat_lines = [line for line in lines if "[" in line and "]" in line]
+
     for line in stat_lines:
         # Extract progress bar content
-        start_bracket = line.find('[')
-        end_bracket = line.find(']')
+        start_bracket = line.find("[")
+        end_bracket = line.find("]")
         if start_bracket != -1 and end_bracket != -1:
-            bar_content = line[start_bracket+1:end_bracket]
+            bar_content = line[start_bracket + 1 : end_bracket]
             # Should be all empty characters
-            assert all(c == '░' for c in bar_content), \
+            assert all(c == "░" for c in bar_content), (
                 f"Progress bar should be empty for zero counts: '{bar_content}'"
+            )
 
 
 # Error handling tests
+
 
 def test_processing_statistics_invalid_initialization():
     """Test ProcessingStatistics initialization with invalid values."""
     # Test negative values
     with pytest.raises(ValueError, match="must be non-negative"):
         ProcessingStatistics(ready_pairs_count=-1)
-    
+
     with pytest.raises(ValueError, match="must be non-negative"):
         ProcessingStatistics(unpaired_genomic_count=-5)
-    
+
     with pytest.raises(ValueError, match="must be non-negative"):
         ProcessingStatistics(gepado_errors=-2)
-    
+
     # Test non-integer values
     with pytest.raises(ValueError, match="must be an integer"):
         ProcessingStatistics(ready_pairs_count=3.14)
-    
+
     with pytest.raises(ValueError, match="must be an integer"):
         ProcessingStatistics(unpaired_clinical_count="invalid")
 
@@ -556,27 +594,27 @@ def test_processing_statistics_invalid_initialization():
 def test_processing_statistics_safe_increment_methods():
     """Test safe increment methods with error handling."""
     stats = ProcessingStatistics()
-    
+
     # Test valid increments
     stats.increment_ready_pairs(5)
     assert stats.ready_pairs_count == 5
-    
+
     stats.increment_unpaired_genomic(3)
     assert stats.unpaired_genomic_count == 3
-    
+
     stats.increment_gepado_errors(2)
     assert stats.gepado_errors == 2
-    
+
     # Test invalid increment values
     with pytest.raises(ValueError, match="must be non-negative"):
         stats.increment_ready_pairs(-1)
-    
+
     with pytest.raises(ValueError, match="must be an integer"):
         stats.increment_unpaired_clinical(3.5)
-    
+
     with pytest.raises(ValueError, match="must be an integer"):
         stats.increment_ignored("invalid")
-    
+
     # Verify counts remain unchanged after failed increments
     assert stats.ready_pairs_count == 5
     assert stats.unpaired_genomic_count == 3
@@ -587,14 +625,14 @@ def test_processing_statistics_validation_in_totals():
     """Test that total calculation methods handle invalid data gracefully."""
     # Create stats with valid data first
     stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
-    
+
     # Manually corrupt the data to test error handling
     stats.ready_pairs_count = -1  # This should trigger validation error
-    
+
     # get_total_files should handle the error gracefully and return 0
     total = stats.get_total_files()
     assert total == 0  # Should return fallback value
-    
+
     # Same for GEPADO operations
     stats.gepado_genomic_updates = -5
     gepado_total = stats.get_total_gepado_operations()
@@ -604,31 +642,31 @@ def test_processing_statistics_validation_in_totals():
 def test_render_progress_bar_invalid_inputs():
     """Test progress bar rendering with invalid inputs."""
     from mvh_copy_mb.statistics import render_progress_bar
-    
+
     # Test with non-integer inputs (should be converted)
     bar = render_progress_bar("5", "10", "20")
     assert len(bar) == 22  # 20 + 2 brackets
-    assert bar.startswith('[') and bar.endswith(']')
-    
+    assert bar.startswith("[") and bar.endswith("]")
+
     # Test with negative values (should be clamped to 0)
     bar = render_progress_bar(-5, 10, 20)
     assert bar == "[" + "░" * 20 + "]"  # Should be empty bar
-    
+
     # Test with negative total (should be clamped to 0)
     bar = render_progress_bar(5, -10, 20)
     assert bar == "[" + "░" * 20 + "]"  # Should be empty bar
-    
+
     # Test with zero or negative width (should use fallback)
     bar = render_progress_bar(5, 10, 0)
     assert len(bar) == 22  # Should use fallback width of 20
-    
+
     bar = render_progress_bar(5, 10, -5)
     assert len(bar) == 22  # Should use fallback width of 20
-    
+
     # Test with invalid types that can't be converted
     bar = render_progress_bar(None, 10, 20)
     assert bar == "[" + "░" * 20 + "]"  # Should handle gracefully
-    
+
     bar = render_progress_bar(5, [], 20)
     assert bar == "[" + "░" * 20 + "]"  # Should handle gracefully
 
@@ -636,22 +674,22 @@ def test_render_progress_bar_invalid_inputs():
 def test_render_progress_bar_edge_cases():
     """Test progress bar rendering edge cases and error conditions."""
     from mvh_copy_mb.statistics import render_progress_bar
-    
+
     # Test division by zero (total = 0)
     bar = render_progress_bar(5, 0, 10)
     assert bar == "[░░░░░░░░░░]"
-    
+
     # Test count exceeding total (should be clamped)
     bar = render_progress_bar(15, 10, 10)
     expected_filled = 10  # Should be clamped to total
     assert bar.count("█") == 10  # Should be fully filled
-    assert bar.count("░") == 0   # No empty chars
-    
+    assert bar.count("░") == 0  # No empty chars
+
     # Test very large numbers (potential overflow)
     bar = render_progress_bar(999999999, 1000000000, 10)
     assert len(bar) == 12  # Should still work
-    assert bar.startswith('[') and bar.endswith(']')
-    
+    assert bar.startswith("[") and bar.endswith("]")
+
     # Test floating point inputs (should be converted to int)
     bar = render_progress_bar(5.7, 10.3, 20.9)
     assert len(bar) == 22  # Should handle conversion
@@ -660,10 +698,10 @@ def test_render_progress_bar_edge_cases():
 def test_display_statistics_none_input(capsys):
     """Test display_statistics with None input."""
     from mvh_copy_mb.statistics import display_statistics
-    
+
     display_statistics(None, gepado_enabled=False)
     captured = capsys.readouterr()
-    
+
     # Should display warning message
     assert "Warning: No statistics available to display" in captured.err
     assert "PROCESSING SUMMARY" in captured.err
@@ -672,11 +710,11 @@ def test_display_statistics_none_input(capsys):
 def test_display_statistics_invalid_object_type(capsys):
     """Test display_statistics with invalid object type."""
     from mvh_copy_mb.statistics import display_statistics
-    
+
     # Pass a string instead of ProcessingStatistics
     display_statistics("invalid", gepado_enabled=False)
     captured = capsys.readouterr()
-    
+
     # Should display warning about invalid type
     assert "Warning: Invalid statistics object type" in captured.err
 
@@ -684,17 +722,17 @@ def test_display_statistics_invalid_object_type(capsys):
 def test_display_statistics_corrupted_data(capsys):
     """Test display_statistics with corrupted statistics data."""
     from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
-    
+
     # Create valid stats then corrupt them
     stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
-    
+
     # Manually corrupt the data
     stats.ready_pairs_count = -1
     stats.unpaired_genomic_count = "invalid"
-    
+
     display_statistics(stats, gepado_enabled=False)
     captured = capsys.readouterr()
-    
+
     # Should display warning about invalid data but still attempt to show something
     assert "Warning: Invalid statistics data" in captured.err
     assert "PROCESSING SUMMARY" in captured.out  # Should still show the summary
@@ -704,40 +742,49 @@ def test_display_statistics_terminal_width_detection():
     """Test display_statistics adapts to terminal width."""
     from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
     import unittest.mock
-    
+
     stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
-    
+
     # Mock narrow terminal
-    with unittest.mock.patch('shutil.get_terminal_size') as mock_size:
+    with unittest.mock.patch("shutil.get_terminal_size") as mock_size:
         mock_size.return_value.columns = 40  # Narrow terminal
-        
+
         # Should not raise an error and should adapt
         try:
             display_statistics(stats, gepado_enabled=False)
         except Exception as e:
-            pytest.fail(f"display_statistics should handle narrow terminals gracefully: {e}")
-    
+            pytest.fail(
+                f"display_statistics should handle narrow terminals gracefully: {e}"
+            )
+
     # Mock terminal size detection failure
-    with unittest.mock.patch('shutil.get_terminal_size', side_effect=OSError("No terminal")):
+    with unittest.mock.patch(
+        "shutil.get_terminal_size", side_effect=OSError("No terminal")
+    ):
         # Should fall back to default width
         try:
             display_statistics(stats, gepado_enabled=False)
         except Exception as e:
-            pytest.fail(f"display_statistics should handle terminal detection failure: {e}")
+            pytest.fail(
+                f"display_statistics should handle terminal detection failure: {e}"
+            )
 
 
 def test_display_statistics_progress_bar_errors(capsys):
     """Test display_statistics handles progress bar rendering errors gracefully."""
     from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
     import unittest.mock
-    
+
     stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
-    
+
     # Mock render_progress_bar to raise an exception
-    with unittest.mock.patch('mvh_copy_mb.statistics.render_progress_bar', side_effect=Exception("Render error")):
+    with unittest.mock.patch(
+        "mvh_copy_mb.statistics.render_progress_bar",
+        side_effect=Exception("Render error"),
+    ):
         display_statistics(stats, gepado_enabled=False)
         captured = capsys.readouterr()
-        
+
         # Should display error messages but continue with the display
         assert "Ready pairs:" in captured.out
         assert "[Error: Render error]" in captured.out
@@ -747,7 +794,7 @@ def test_display_statistics_progress_bar_errors(capsys):
 def test_processing_statistics_increment_all_methods():
     """Test all increment methods work correctly."""
     stats = ProcessingStatistics()
-    
+
     # Test all increment methods
     stats.increment_ready_pairs(2)
     stats.increment_unpaired_genomic(3)
@@ -756,7 +803,7 @@ def test_processing_statistics_increment_all_methods():
     stats.increment_gepado_genomic(6)
     stats.increment_gepado_clinical(7)
     stats.increment_gepado_errors(8)
-    
+
     assert stats.ready_pairs_count == 2
     assert stats.unpaired_genomic_count == 3
     assert stats.unpaired_clinical_count == 4
@@ -764,7 +811,7 @@ def test_processing_statistics_increment_all_methods():
     assert stats.gepado_genomic_updates == 6
     assert stats.gepado_clinical_updates == 7
     assert stats.gepado_errors == 8
-    
+
     # Test default increment (should be 1)
     stats.increment_ready_pairs()
     assert stats.ready_pairs_count == 3
@@ -781,22 +828,22 @@ def test_processing_statistics_validation_edge_cases():
         gepado_genomic_updates=0,
         gepado_clinical_updates=0,
         gepado_no_updates_needed=0,
-        gepado_errors=0
+        gepado_errors=0,
     )
-    
+
     # Should not raise any errors
     assert stats.get_total_files() == 0
     assert stats.get_total_gepado_operations() == 0
-    
+
     # Test with very large values
     large_value = 999999999
     stats = ProcessingStatistics(
         ready_pairs_count=large_value,
         unpaired_genomic_count=large_value,
         unpaired_clinical_count=large_value,
-        ignored_count=large_value
+        ignored_count=large_value,
     )
-    
+
     # Should handle large numbers without overflow
     total = stats.get_total_files()
     expected = large_value * 2 + large_value * 3  # ready counted twice
@@ -808,32 +855,41 @@ def test_processing_statistics_validation_edge_cases():
 @settings(max_examples=100)
 @given(
     has_case_id=st.booleans(),
-    ergebnis_qc=st.sampled_from(['0', '1']),  # QC result: 1 = passed, 0 = failed
-    typ_der_meldung=st.sampled_from(['0', '1', '2']),  # Message type: 0 = initial, others = non-initial
-    art_der_daten=st.sampled_from(['G', 'C', 'X']),  # Data type: G = genomic, C = clinical, X = unknown
-    parsing_success=st.booleans()  # Whether parsing of Meldebestaetigung succeeds
+    ergebnis_qc=st.sampled_from(["0", "1"]),  # QC result: 1 = passed, 0 = failed
+    typ_der_meldung=st.sampled_from(
+        ["0", "1", "2"]
+    ),  # Message type: 0 = initial, others = non-initial
+    art_der_daten=st.sampled_from(
+        ["G", "C", "X"]
+    ),  # Data type: G = genomic, C = clinical, X = unknown
+    parsing_success=st.booleans(),  # Whether parsing of Meldebestaetigung succeeds
 )
 def test_file_categorization_accuracy(
     has_case_id: bool,
     ergebnis_qc: str,
     typ_der_meldung: str,
     art_der_daten: str,
-    parsing_success: bool
+    parsing_success: bool,
 ):
     """
     Property 5: File categorization accuracy
-    
+
     For any processed file, it should be counted in exactly one category
     (Ready, Unpaired genomic, Unpaired clinical, or Ignored) based on its processing results
-    
+
     This test verifies that:
     1. Files are categorized based on QC results, message type, and Case ID resolution
     2. Each file is counted in exactly one category
     3. Categorization logic follows the requirements specification
     """
     stats = ProcessingStatistics()
-    initial_total = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count + stats.ignored_count
-    
+    initial_total = (
+        stats.ready_pairs_count
+        + stats.unpaired_genomic_count
+        + stats.unpaired_clinical_count
+        + stats.ignored_count
+    )
+
     # Simulate file processing logic based on the CLI implementation
     if not parsing_success:
         # Parsing failure -> Ignored
@@ -853,44 +909,82 @@ def test_file_categorization_accuracy(
         expected_category = "ready"
     else:
         # No Case ID resolved -> Unpaired based on data type
-        if art_der_daten.upper() == 'G':
+        if art_der_daten.upper() == "G":
             stats.unpaired_genomic_count += 1
             expected_category = "unpaired_genomic"
-        elif art_der_daten.upper() == 'C':
+        elif art_der_daten.upper() == "C":
             stats.unpaired_clinical_count += 1
             expected_category = "unpaired_clinical"
         else:
             # Unknown data type -> Ignored
             stats.ignored_count += 1
             expected_category = "ignored"
-    
+
     # Verify exactly one file was added to exactly one category
-    final_total = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count + stats.ignored_count
-    assert final_total == initial_total + 1, \
+    final_total = (
+        stats.ready_pairs_count
+        + stats.unpaired_genomic_count
+        + stats.unpaired_clinical_count
+        + stats.ignored_count
+    )
+    assert final_total == initial_total + 1, (
         f"Exactly one file should be categorized, but total changed from {initial_total} to {final_total}"
-    
+    )
+
     # Verify the file was categorized correctly based on expected logic
     if expected_category == "ready":
-        assert stats.ready_pairs_count == 1, f"File should be categorized as ready, but ready_count = {stats.ready_pairs_count}"
-        assert stats.unpaired_genomic_count == 0, "File categorized as ready should not be unpaired genomic"
-        assert stats.unpaired_clinical_count == 0, "File categorized as ready should not be unpaired clinical"
-        assert stats.ignored_count == 0, "File categorized as ready should not be ignored"
+        assert stats.ready_pairs_count == 1, (
+            f"File should be categorized as ready, but ready_count = {stats.ready_pairs_count}"
+        )
+        assert stats.unpaired_genomic_count == 0, (
+            "File categorized as ready should not be unpaired genomic"
+        )
+        assert stats.unpaired_clinical_count == 0, (
+            "File categorized as ready should not be unpaired clinical"
+        )
+        assert stats.ignored_count == 0, (
+            "File categorized as ready should not be ignored"
+        )
     elif expected_category == "unpaired_genomic":
-        assert stats.unpaired_genomic_count == 1, f"File should be categorized as unpaired genomic, but count = {stats.unpaired_genomic_count}"
-        assert stats.ready_pairs_count == 0, "File categorized as unpaired genomic should not be ready"
-        assert stats.unpaired_clinical_count == 0, "File categorized as unpaired genomic should not be unpaired clinical"
-        assert stats.ignored_count == 0, "File categorized as unpaired genomic should not be ignored"
+        assert stats.unpaired_genomic_count == 1, (
+            f"File should be categorized as unpaired genomic, but count = {stats.unpaired_genomic_count}"
+        )
+        assert stats.ready_pairs_count == 0, (
+            "File categorized as unpaired genomic should not be ready"
+        )
+        assert stats.unpaired_clinical_count == 0, (
+            "File categorized as unpaired genomic should not be unpaired clinical"
+        )
+        assert stats.ignored_count == 0, (
+            "File categorized as unpaired genomic should not be ignored"
+        )
     elif expected_category == "unpaired_clinical":
-        assert stats.unpaired_clinical_count == 1, f"File should be categorized as unpaired clinical, but count = {stats.unpaired_clinical_count}"
-        assert stats.ready_pairs_count == 0, "File categorized as unpaired clinical should not be ready"
-        assert stats.unpaired_genomic_count == 0, "File categorized as unpaired clinical should not be unpaired genomic"
-        assert stats.ignored_count == 0, "File categorized as unpaired clinical should not be ignored"
+        assert stats.unpaired_clinical_count == 1, (
+            f"File should be categorized as unpaired clinical, but count = {stats.unpaired_clinical_count}"
+        )
+        assert stats.ready_pairs_count == 0, (
+            "File categorized as unpaired clinical should not be ready"
+        )
+        assert stats.unpaired_genomic_count == 0, (
+            "File categorized as unpaired clinical should not be unpaired genomic"
+        )
+        assert stats.ignored_count == 0, (
+            "File categorized as unpaired clinical should not be ignored"
+        )
     elif expected_category == "ignored":
-        assert stats.ignored_count == 1, f"File should be categorized as ignored, but ignored_count = {stats.ignored_count}"
-        assert stats.ready_pairs_count == 0, "File categorized as ignored should not be ready"
-        assert stats.unpaired_genomic_count == 0, "File categorized as ignored should not be unpaired genomic"
-        assert stats.unpaired_clinical_count == 0, "File categorized as ignored should not be unpaired clinical"
-    
+        assert stats.ignored_count == 1, (
+            f"File should be categorized as ignored, but ignored_count = {stats.ignored_count}"
+        )
+        assert stats.ready_pairs_count == 0, (
+            "File categorized as ignored should not be ready"
+        )
+        assert stats.unpaired_genomic_count == 0, (
+            "File categorized as ignored should not be unpaired genomic"
+        )
+        assert stats.unpaired_clinical_count == 0, (
+            "File categorized as ignored should not be unpaired clinical"
+        )
+
     # Verify mutual exclusivity - file should be in exactly one category
     categories_with_files = 0
     if stats.ready_pairs_count > 0:
@@ -901,9 +995,10 @@ def test_file_categorization_accuracy(
         categories_with_files += 1
     if stats.ignored_count > 0:
         categories_with_files += 1
-    
-    assert categories_with_files == 1, \
+
+    assert categories_with_files == 1, (
         f"File should be in exactly one category, but found in {categories_with_files} categories"
+    )
 
 
 # Feature: cli-summary-statistics, Property 6: GEPADO statistics accuracy
@@ -911,24 +1006,26 @@ def test_file_categorization_accuracy(
 @settings(max_examples=100)
 @given(
     operation_success=st.booleans(),
-    art_der_daten=st.sampled_from(['G', 'C', 'X']),  # Data type: G = genomic, C = clinical, X = unknown
+    art_der_daten=st.sampled_from(
+        ["G", "C", "X"]
+    ),  # Data type: G = genomic, C = clinical, X = unknown
     has_updates_needed=st.booleans(),  # Whether the operation requires actual updates
     record_found=st.booleans(),  # Whether a GEPADO record was found
-    valid_processing_criteria=st.booleans()  # Whether QC and message type criteria are met
+    valid_processing_criteria=st.booleans(),  # Whether QC and message type criteria are met
 )
 def test_gepado_statistics_accuracy(
     operation_success: bool,
     art_der_daten: str,
     has_updates_needed: bool,
     record_found: bool,
-    valid_processing_criteria: bool
+    valid_processing_criteria: bool,
 ):
     """
     Property 6: GEPADO statistics accuracy
-    
+
     For any GEPADO update operation, it should be counted as either successful
     (genomic or clinical) or failed, but not both
-    
+
     This test verifies that:
     1. Each GEPADO operation is counted in exactly one category (success or error)
     2. Successful operations are categorized by data type (genomic vs clinical)
@@ -940,7 +1037,7 @@ def test_gepado_statistics_accuracy(
     initial_clinical = stats.gepado_clinical_updates
     initial_errors = stats.gepado_errors
     initial_total = stats.get_total_gepado_operations()
-    
+
     # Simulate GEPADO operation logic based on the implementation
     if not valid_processing_criteria:
         # Doesn't meet QC/message type criteria -> Error
@@ -950,64 +1047,90 @@ def test_gepado_statistics_accuracy(
         # No GEPADO record found -> Error
         stats.gepado_errors += 1
         expected_category = "error"
-    elif art_der_daten.upper() not in ['G', 'C']:
+    elif art_der_daten.upper() not in ["G", "C"]:
         # Invalid data type -> Error
         stats.gepado_errors += 1
         expected_category = "error"
     elif operation_success:
         # Successful operation -> Count based on data type
-        if art_der_daten.upper() == 'G':
+        if art_der_daten.upper() == "G":
             stats.gepado_genomic_updates += 1
             expected_category = "genomic_success"
-        elif art_der_daten.upper() == 'C':
+        elif art_der_daten.upper() == "C":
             stats.gepado_clinical_updates += 1
             expected_category = "clinical_success"
     else:
         # Operation failed (e.g., database update failed) -> Error
         stats.gepado_errors += 1
         expected_category = "error"
-    
+
     # Verify exactly one operation was counted
     final_total = stats.get_total_gepado_operations()
-    assert final_total == initial_total + 1, \
+    assert final_total == initial_total + 1, (
         f"Exactly one GEPADO operation should be counted, but total changed from {initial_total} to {final_total}"
-    
+    )
+
     # Verify the operation was categorized correctly
     genomic_increase = stats.gepado_genomic_updates - initial_genomic
     clinical_increase = stats.gepado_clinical_updates - initial_clinical
     error_increase = stats.gepado_errors - initial_errors
-    
+
     if expected_category == "genomic_success":
-        assert genomic_increase == 1, f"Should have 1 genomic success, got {genomic_increase}"
-        assert clinical_increase == 0, "Genomic operation should not increase clinical count"
-        assert error_increase == 0, "Successful operation should not increase error count"
+        assert genomic_increase == 1, (
+            f"Should have 1 genomic success, got {genomic_increase}"
+        )
+        assert clinical_increase == 0, (
+            "Genomic operation should not increase clinical count"
+        )
+        assert error_increase == 0, (
+            "Successful operation should not increase error count"
+        )
     elif expected_category == "clinical_success":
-        assert clinical_increase == 1, f"Should have 1 clinical success, got {clinical_increase}"
-        assert genomic_increase == 0, "Clinical operation should not increase genomic count"
-        assert error_increase == 0, "Successful operation should not increase error count"
+        assert clinical_increase == 1, (
+            f"Should have 1 clinical success, got {clinical_increase}"
+        )
+        assert genomic_increase == 0, (
+            "Clinical operation should not increase genomic count"
+        )
+        assert error_increase == 0, (
+            "Successful operation should not increase error count"
+        )
     elif expected_category == "error":
         assert error_increase == 1, f"Should have 1 error, got {error_increase}"
-        assert genomic_increase == 0, "Failed operation should not increase genomic count"
-        assert clinical_increase == 0, "Failed operation should not increase clinical count"
-    
+        assert genomic_increase == 0, (
+            "Failed operation should not increase genomic count"
+        )
+        assert clinical_increase == 0, (
+            "Failed operation should not increase clinical count"
+        )
+
     # Verify mutual exclusivity - operation should be in exactly one category
     total_increases = genomic_increase + clinical_increase + error_increase
-    assert total_increases == 1, \
+    assert total_increases == 1, (
         f"Operation should be counted in exactly one category, but total increases = {total_increases}"
-    
+    )
+
     # Verify that successful operations are properly distinguished by data type
     if operation_success and valid_processing_criteria and record_found:
-        if art_der_daten.upper() == 'G':
-            assert genomic_increase == 1 and clinical_increase == 0 and error_increase == 0, \
-                "Successful genomic operation should only increment genomic counter"
-        elif art_der_daten.upper() == 'C':
-            assert clinical_increase == 1 and genomic_increase == 0 and error_increase == 0, \
-                "Successful clinical operation should only increment clinical counter"
-    
+        if art_der_daten.upper() == "G":
+            assert (
+                genomic_increase == 1 and clinical_increase == 0 and error_increase == 0
+            ), "Successful genomic operation should only increment genomic counter"
+        elif art_der_daten.upper() == "C":
+            assert (
+                clinical_increase == 1 and genomic_increase == 0 and error_increase == 0
+            ), "Successful clinical operation should only increment clinical counter"
+
     # Verify that failed operations are counted as errors regardless of data type
-    if not operation_success or not valid_processing_criteria or not record_found or art_der_daten.upper() not in ['G', 'C']:
-        assert error_increase == 1 and genomic_increase == 0 and clinical_increase == 0, \
-            "Failed operations should only increment error counter"
+    if (
+        not operation_success
+        or not valid_processing_criteria
+        or not record_found
+        or art_der_daten.upper() not in ["G", "C"]
+    ):
+        assert (
+            error_increase == 1 and genomic_increase == 0 and clinical_increase == 0
+        ), "Failed operations should only increment error counter"
 
 
 # Feature: cli-summary-statistics, Property 7: Mathematical consistency
@@ -1020,7 +1143,7 @@ def test_gepado_statistics_accuracy(
     ignored_count=st.integers(min_value=0, max_value=1000),
     gepado_genomic_updates=st.integers(min_value=0, max_value=1000),
     gepado_clinical_updates=st.integers(min_value=0, max_value=1000),
-    gepado_errors=st.integers(min_value=0, max_value=1000)
+    gepado_errors=st.integers(min_value=0, max_value=1000),
 )
 def test_mathematical_consistency(
     ready_count: int,
@@ -1029,14 +1152,14 @@ def test_mathematical_consistency(
     ignored_count: int,
     gepado_genomic_updates: int,
     gepado_clinical_updates: int,
-    gepado_errors: int
+    gepado_errors: int,
 ):
     """
     Property 7: Mathematical consistency
-    
+
     For any statistics display, the sum of individual counts should equal
     the total used for progress bar calculations
-    
+
     This test verifies that:
     1. File statistics sum equals the total used for file progress bars
     2. GEPADO statistics sum equals the total used for GEPADO progress bars
@@ -1051,76 +1174,102 @@ def test_mathematical_consistency(
         gepado_genomic_updates=gepado_genomic_updates,
         gepado_clinical_updates=gepado_clinical_updates,
         gepado_no_updates_needed=0,
-        gepado_errors=gepado_errors
+        gepado_errors=gepado_errors,
     )
-    
+
     # Test file statistics mathematical consistency
     calculated_file_total = stats.get_total_files()
-    manual_file_total = ready_count * 2 + unpaired_genomic_count + unpaired_clinical_count + ignored_count
-    
-    assert calculated_file_total == manual_file_total, \
+    manual_file_total = (
+        ready_count * 2
+        + unpaired_genomic_count
+        + unpaired_clinical_count
+        + ignored_count
+    )
+
+    assert calculated_file_total == manual_file_total, (
         f"File total calculation inconsistent: method returned {calculated_file_total}, manual calculation {manual_file_total}"
-    
+    )
+
     # Test GEPADO statistics mathematical consistency
     calculated_gepado_total = stats.get_total_gepado_operations()
-    manual_gepado_total = gepado_genomic_updates + gepado_clinical_updates + gepado_errors
-    
-    assert calculated_gepado_total == manual_gepado_total, \
+    manual_gepado_total = (
+        gepado_genomic_updates + gepado_clinical_updates + gepado_errors
+    )
+
+    assert calculated_gepado_total == manual_gepado_total, (
         f"GEPADO total calculation inconsistent: method returned {calculated_gepado_total}, manual calculation {manual_gepado_total}"
-    
+    )
+
     # Test that individual counts are preserved (no loss or corruption)
-    assert stats.ready_pairs_count == ready_count, \
+    assert stats.ready_pairs_count == ready_count, (
         f"Ready count not preserved: expected {ready_count}, got {stats.ready_pairs_count}"
-    assert stats.unpaired_genomic_count == unpaired_genomic_count, \
+    )
+    assert stats.unpaired_genomic_count == unpaired_genomic_count, (
         f"Unpaired genomic count not preserved: expected {unpaired_genomic_count}, got {stats.unpaired_genomic_count}"
-    assert stats.unpaired_clinical_count == unpaired_clinical_count, \
+    )
+    assert stats.unpaired_clinical_count == unpaired_clinical_count, (
         f"Unpaired clinical count not preserved: expected {unpaired_clinical_count}, got {stats.unpaired_clinical_count}"
-    assert stats.ignored_count == ignored_count, \
+    )
+    assert stats.ignored_count == ignored_count, (
         f"Ignored count not preserved: expected {ignored_count}, got {stats.ignored_count}"
-    assert stats.gepado_genomic_updates == gepado_genomic_updates, \
+    )
+    assert stats.gepado_genomic_updates == gepado_genomic_updates, (
         f"GEPADO genomic updates not preserved: expected {gepado_genomic_updates}, got {stats.gepado_genomic_updates}"
-    assert stats.gepado_clinical_updates == gepado_clinical_updates, \
+    )
+    assert stats.gepado_clinical_updates == gepado_clinical_updates, (
         f"GEPADO clinical updates not preserved: expected {gepado_clinical_updates}, got {stats.gepado_clinical_updates}"
-    assert stats.gepado_errors == gepado_errors, \
+    )
+    assert stats.gepado_errors == gepado_errors, (
         f"GEPADO errors not preserved: expected {gepado_errors}, got {stats.gepado_errors}"
-    
+    )
+
     # Test that totals are non-negative (mathematical sanity check)
-    assert calculated_file_total >= 0, \
+    assert calculated_file_total >= 0, (
         f"File total should be non-negative, got {calculated_file_total}"
-    assert calculated_gepado_total >= 0, \
+    )
+    assert calculated_gepado_total >= 0, (
         f"GEPADO total should be non-negative, got {calculated_gepado_total}"
-    
+    )
+
     # Test that ready files contribute exactly double to the total
     if ready_count > 0:
         stats_without_ready = ProcessingStatistics(
             ready_pairs_count=0,
             unpaired_genomic_count=unpaired_genomic_count,
             unpaired_clinical_count=unpaired_clinical_count,
-            ignored_count=ignored_count
+            ignored_count=ignored_count,
         )
         total_without_ready = stats_without_ready.get_total_files()
         ready_contribution = calculated_file_total - total_without_ready
-        
-        assert ready_contribution == ready_count * 2, \
+
+        assert ready_contribution == ready_count * 2, (
             f"Ready files should contribute {ready_count * 2} to total, but contributed {ready_contribution}"
-    
+        )
+
     # Test that each GEPADO operation type contributes exactly once to the total
     if gepado_genomic_updates > 0 or gepado_clinical_updates > 0 or gepado_errors > 0:
         # Verify each component contributes exactly its count
         component_sum = gepado_genomic_updates + gepado_clinical_updates + gepado_errors
-        assert component_sum == calculated_gepado_total, \
+        assert component_sum == calculated_gepado_total, (
             f"GEPADO component sum {component_sum} should equal total {calculated_gepado_total}"
-    
+        )
+
     # Test mathematical properties (commutativity, associativity)
     # File total should be the same regardless of calculation order
-    alt_file_total = (ready_count * 2) + (unpaired_genomic_count + unpaired_clinical_count + ignored_count)
-    assert alt_file_total == calculated_file_total, \
+    alt_file_total = (ready_count * 2) + (
+        unpaired_genomic_count + unpaired_clinical_count + ignored_count
+    )
+    assert alt_file_total == calculated_file_total, (
         f"File total calculation should be commutative: {alt_file_total} != {calculated_file_total}"
-    
+    )
+
     # GEPADO total should be the same regardless of calculation order
-    alt_gepado_total = (gepado_genomic_updates + gepado_clinical_updates) + gepado_errors
-    assert alt_gepado_total == calculated_gepado_total, \
+    alt_gepado_total = (
+        gepado_genomic_updates + gepado_clinical_updates
+    ) + gepado_errors
+    assert alt_gepado_total == calculated_gepado_total, (
         f"GEPADO total calculation should be commutative: {alt_gepado_total} != {calculated_gepado_total}"
+    )
 
 
 def test_display_statistics_specific_known_data(capsys):
@@ -1135,36 +1284,39 @@ def test_display_statistics_specific_known_data(capsys):
         gepado_genomic_updates=18,
         gepado_clinical_updates=15,
         gepado_no_updates_needed=0,
-        gepado_errors=2
+        gepado_errors=2,
     )
-    
+
     display_statistics(stats, gepado_enabled=True)
     captured = capsys.readouterr()
-    
+
     # Verify specific counts are displayed
     assert "20" in captured.out  # Ready count
     assert "10" in captured.out  # Unpaired genomic count
-    assert "5" in captured.out   # Unpaired clinical count
-    assert "2" in captured.out   # Ignored count
+    assert "5" in captured.out  # Unpaired clinical count
+    assert "2" in captured.out  # Ignored count
     assert "18" in captured.out  # GEPADO genomic updates
     assert "15" in captured.out  # GEPADO clinical updates
-    
+
     # Verify progress bars are present for each statistic
-    lines = captured.out.split('\n')
-    stat_lines = [line for line in lines if '[' in line and ']' in line]
-    
+    lines = captured.out.split("\n")
+    stat_lines = [line for line in lines if "[" in line and "]" in line]
+
     # Should have 7 statistics lines (4 file stats + 3 GEPADO stats)
     assert len(stat_lines) == 8, f"Expected 8 statistics lines, got {len(stat_lines)}"
-    
+
     # Each line should have a progress bar with filled and empty characters
     for line in stat_lines:
-        assert '[' in line and ']' in line, f"Line should contain progress bar: '{line}'"
-        start_bracket = line.find('[')
-        end_bracket = line.find(']')
-        bar_content = line[start_bracket+1:end_bracket]
+        assert "[" in line and "]" in line, (
+            f"Line should contain progress bar: '{line}'"
+        )
+        start_bracket = line.find("[")
+        end_bracket = line.find("]")
+        bar_content = line[start_bracket + 1 : end_bracket]
         # Should contain valid progress bar characters
-        assert all(c in '█░' for c in bar_content), \
+        assert all(c in "█░" for c in bar_content), (
             f"Progress bar should only contain valid characters: '{bar_content}'"
+        )
 
 
 # Feature: cli-summary-statistics, Property 1: Pairing logic accuracy
@@ -1173,20 +1325,24 @@ def test_display_statistics_specific_known_data(capsys):
 @given(
     case_ids_with_types=st.lists(
         st.tuples(
-            st.text(min_size=1, max_size=20, alphabet=st.characters(min_codepoint=65, max_codepoint=90)),  # Case ID
-            st.sampled_from(['G', 'C'])  # Data type
+            st.text(
+                min_size=1,
+                max_size=20,
+                alphabet=st.characters(min_codepoint=65, max_codepoint=90),
+            ),  # Case ID
+            st.sampled_from(["G", "C"]),  # Data type
         ),
         min_size=0,
-        max_size=50
+        max_size=50,
     )
 )
 def test_pairing_logic_accuracy(case_ids_with_types):
     """
     Property 1: Pairing logic accuracy
-    
+
     For any set of files with resolved Case IDs, a Case ID should be counted as a ready pair
     if and only if it has both genomic (G) and clinical (C) files, matching the web interface logic.
-    
+
     This test verifies that:
     1. Case IDs with both G and C files are counted as ready pairs
     2. Case IDs with only G files are counted as unpaired genomic
@@ -1194,65 +1350,80 @@ def test_pairing_logic_accuracy(case_ids_with_types):
     4. The pairing logic is mathematically consistent
     """
     stats = ProcessingStatistics()
-    
+
     # Track expected results based on the input data
     case_id_types = {}
     for case_id, data_type in case_ids_with_types:
         if case_id not in case_id_types:
-            case_id_types[case_id] = {'genomic': False, 'clinical': False}
-        
-        if data_type == 'G':
-            case_id_types[case_id]['genomic'] = True
-        elif data_type == 'C':
-            case_id_types[case_id]['clinical'] = True
-    
+            case_id_types[case_id] = {"genomic": False, "clinical": False}
+
+        if data_type == "G":
+            case_id_types[case_id]["genomic"] = True
+        elif data_type == "C":
+            case_id_types[case_id]["clinical"] = True
+
     # Add all resolved case IDs to the statistics tracker
     for case_id, data_type in case_ids_with_types:
         stats.add_resolved_case_id(case_id, data_type)
-    
+
     # Finalize pairing statistics
     stats.finalize_pairing_statistics()
-    
+
     # Calculate expected counts based on pairing logic
     expected_ready_pairs = 0
     expected_unpaired_genomic = 0
     expected_unpaired_clinical = 0
-    
+
     for case_id, types in case_id_types.items():
-        has_genomic = types['genomic']
-        has_clinical = types['clinical']
-        
+        has_genomic = types["genomic"]
+        has_clinical = types["clinical"]
+
         if has_genomic and has_clinical:
             expected_ready_pairs += 1
         elif has_genomic and not has_clinical:
             expected_unpaired_genomic += 1
         elif has_clinical and not has_genomic:
             expected_unpaired_clinical += 1
-    
+
     # Verify the pairing logic produces expected results
-    assert stats.ready_pairs_count == expected_ready_pairs, \
+    assert stats.ready_pairs_count == expected_ready_pairs, (
         f"Ready pairs count mismatch: expected {expected_ready_pairs}, got {stats.ready_pairs_count}"
-    
-    assert stats.unpaired_genomic_count == expected_unpaired_genomic, \
+    )
+
+    assert stats.unpaired_genomic_count == expected_unpaired_genomic, (
         f"Unpaired genomic count mismatch: expected {expected_unpaired_genomic}, got {stats.unpaired_genomic_count}"
-    
-    assert stats.unpaired_clinical_count == expected_unpaired_clinical, \
+    )
+
+    assert stats.unpaired_clinical_count == expected_unpaired_clinical, (
         f"Unpaired clinical count mismatch: expected {expected_unpaired_clinical}, got {stats.unpaired_clinical_count}"
-    
+    )
+
     # Verify mathematical consistency: each unique case ID should be counted exactly once
     total_unique_case_ids = len(case_id_types)
-    total_counted = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count
-    
-    assert total_counted == total_unique_case_ids, \
+    total_counted = (
+        stats.ready_pairs_count
+        + stats.unpaired_genomic_count
+        + stats.unpaired_clinical_count
+    )
+
+    assert total_counted == total_unique_case_ids, (
         f"Total counted case IDs ({total_counted}) should equal unique case IDs ({total_unique_case_ids})"
-    
+    )
+
     # Verify that ready pairs are counted correctly in file totals (each pair = 2 files)
-    expected_file_contribution = expected_ready_pairs * 2 + expected_unpaired_genomic + expected_unpaired_clinical
-    actual_file_total = stats.get_total_files()  # Should equal expected since ignored_count = 0
-    
-    assert actual_file_total == expected_file_contribution, \
+    expected_file_contribution = (
+        expected_ready_pairs * 2
+        + expected_unpaired_genomic
+        + expected_unpaired_clinical
+    )
+    actual_file_total = (
+        stats.get_total_files()
+    )  # Should equal expected since ignored_count = 0
+
+    assert actual_file_total == expected_file_contribution, (
         f"File total ({actual_file_total}) should match expected contribution ({expected_file_contribution})"
-    
+    )
+
     # Verify that duplicate entries for the same case ID and data type don't affect counts
     # (This tests idempotency of the add_resolved_case_id method)
     if case_ids_with_types:
@@ -1260,14 +1431,18 @@ def test_pairing_logic_accuracy(case_ids_with_types):
         first_case_id, first_data_type = case_ids_with_types[0]
         stats.add_resolved_case_id(first_case_id, first_data_type)
         stats.finalize_pairing_statistics()
-        
+
         # Counts should remain the same (idempotent)
-        assert stats.ready_pairs_count == expected_ready_pairs, \
+        assert stats.ready_pairs_count == expected_ready_pairs, (
             f"Duplicate addition changed ready pairs: expected {expected_ready_pairs}, got {stats.ready_pairs_count}"
-        assert stats.unpaired_genomic_count == expected_unpaired_genomic, \
+        )
+        assert stats.unpaired_genomic_count == expected_unpaired_genomic, (
             f"Duplicate addition changed unpaired genomic: expected {expected_unpaired_genomic}, got {stats.unpaired_genomic_count}"
-        assert stats.unpaired_clinical_count == expected_unpaired_clinical, \
+        )
+        assert stats.unpaired_clinical_count == expected_unpaired_clinical, (
             f"Duplicate addition changed unpaired clinical: expected {expected_unpaired_clinical}, got {stats.unpaired_clinical_count}"
+        )
+
 
 # Feature: cli-summary-statistics, Property 2: Unpaired file categorization
 # Validates: Requirements 5.2
@@ -1275,20 +1450,26 @@ def test_pairing_logic_accuracy(case_ids_with_types):
 @given(
     files_with_case_ids=st.lists(
         st.tuples(
-            st.text(min_size=1, max_size=20, alphabet=st.characters(min_codepoint=65, max_codepoint=90)),  # Case ID
-            st.sampled_from(['G', 'C'])  # Data type
+            st.text(
+                min_size=1,
+                max_size=20,
+                alphabet=st.characters(min_codepoint=65, max_codepoint=90),
+            ),  # Case ID
+            st.sampled_from(["G", "C"]),  # Data type
         ),
         min_size=1,
-        max_size=30
-    ).filter(lambda files: len(set(case_id for case_id, _ in files)) > 0)  # Ensure at least one unique case ID
+        max_size=30,
+    ).filter(
+        lambda files: len(set(case_id for case_id, _ in files)) > 0
+    )  # Ensure at least one unique case ID
 )
 def test_unpaired_file_categorization(files_with_case_ids):
     """
     Property 2: Unpaired file categorization
-    
+
     For any file with a resolved Case ID, it should be counted as unpaired genomic or unpaired clinical
     if it lacks a counterpart of the opposite data type.
-    
+
     This test verifies that:
     1. Files with resolved Case IDs that lack counterparts are correctly categorized as unpaired
     2. Genomic files without clinical counterparts are counted as unpaired genomic
@@ -1296,34 +1477,34 @@ def test_unpaired_file_categorization(files_with_case_ids):
     4. Files that do have counterparts are not counted as unpaired
     """
     stats = ProcessingStatistics()
-    
+
     # Track what data types exist for each case ID
     case_id_types = {}
     for case_id, data_type in files_with_case_ids:
         if case_id not in case_id_types:
-            case_id_types[case_id] = {'genomic': False, 'clinical': False}
-        
-        if data_type == 'G':
-            case_id_types[case_id]['genomic'] = True
-        elif data_type == 'C':
-            case_id_types[case_id]['clinical'] = True
-    
+            case_id_types[case_id] = {"genomic": False, "clinical": False}
+
+        if data_type == "G":
+            case_id_types[case_id]["genomic"] = True
+        elif data_type == "C":
+            case_id_types[case_id]["clinical"] = True
+
     # Add all resolved case IDs to the statistics tracker
     for case_id, data_type in files_with_case_ids:
         stats.add_resolved_case_id(case_id, data_type)
-    
+
     # Finalize pairing statistics
     stats.finalize_pairing_statistics()
-    
+
     # Calculate expected unpaired counts
     expected_unpaired_genomic = 0
     expected_unpaired_clinical = 0
     expected_ready_pairs = 0
-    
+
     for case_id, types in case_id_types.items():
-        has_genomic = types['genomic']
-        has_clinical = types['clinical']
-        
+        has_genomic = types["genomic"]
+        has_clinical = types["clinical"]
+
         if has_genomic and has_clinical:
             # Complete pair - not unpaired
             expected_ready_pairs += 1
@@ -1333,54 +1514,69 @@ def test_unpaired_file_categorization(files_with_case_ids):
         elif has_clinical and not has_genomic:
             # Clinical file without genomic counterpart - unpaired clinical
             expected_unpaired_clinical += 1
-    
+
     # Verify unpaired categorization is correct
-    assert stats.unpaired_genomic_count == expected_unpaired_genomic, \
+    assert stats.unpaired_genomic_count == expected_unpaired_genomic, (
         f"Unpaired genomic count mismatch: expected {expected_unpaired_genomic}, got {stats.unpaired_genomic_count}"
-    
-    assert stats.unpaired_clinical_count == expected_unpaired_clinical, \
+    )
+
+    assert stats.unpaired_clinical_count == expected_unpaired_clinical, (
         f"Unpaired clinical count mismatch: expected {expected_unpaired_clinical}, got {stats.unpaired_clinical_count}"
-    
+    )
+
     # Verify that files with counterparts are NOT counted as unpaired
-    assert stats.ready_pairs_count == expected_ready_pairs, \
+    assert stats.ready_pairs_count == expected_ready_pairs, (
         f"Ready pairs count mismatch: expected {expected_ready_pairs}, got {stats.ready_pairs_count}"
-    
+    )
+
     # Verify mutual exclusivity: files should be either paired or unpaired, not both
     total_case_ids = len(case_id_types)
-    total_categorized = stats.ready_pairs_count + stats.unpaired_genomic_count + stats.unpaired_clinical_count
-    
-    assert total_categorized == total_case_ids, \
+    total_categorized = (
+        stats.ready_pairs_count
+        + stats.unpaired_genomic_count
+        + stats.unpaired_clinical_count
+    )
+
+    assert total_categorized == total_case_ids, (
         f"Total categorized case IDs ({total_categorized}) should equal unique case IDs ({total_case_ids})"
-    
+    )
+
     # Verify that unpaired files are correctly identified by data type
     for case_id, types in case_id_types.items():
-        has_genomic = types['genomic']
-        has_clinical = types['clinical']
-        
+        has_genomic = types["genomic"]
+        has_clinical = types["clinical"]
+
         if has_genomic and not has_clinical:
             # This case ID should contribute to unpaired genomic count
-            assert stats.unpaired_genomic_count > 0, \
+            assert stats.unpaired_genomic_count > 0, (
                 f"Case ID {case_id} has genomic but no clinical, should contribute to unpaired genomic count"
-        
+            )
+
         if has_clinical and not has_genomic:
             # This case ID should contribute to unpaired clinical count
-            assert stats.unpaired_clinical_count > 0, \
+            assert stats.unpaired_clinical_count > 0, (
                 f"Case ID {case_id} has clinical but no genomic, should contribute to unpaired clinical count"
-        
+            )
+
         if has_genomic and has_clinical:
             # This case ID should contribute to ready pairs count
-            assert stats.ready_pairs_count > 0, \
+            assert stats.ready_pairs_count > 0, (
                 f"Case ID {case_id} has both genomic and clinical, should contribute to ready pairs count"
-    
+            )
+
     # Test edge case: if all files are unpaired, ready pairs should be zero
     if expected_ready_pairs == 0:
-        assert stats.ready_pairs_count == 0, \
+        assert stats.ready_pairs_count == 0, (
             f"When no complete pairs exist, ready pairs count should be 0, got {stats.ready_pairs_count}"
-    
+        )
+
     # Test edge case: if all files are paired, unpaired counts should be zero
     if expected_unpaired_genomic == 0 and expected_unpaired_clinical == 0:
-        assert stats.unpaired_genomic_count == 0 and stats.unpaired_clinical_count == 0, \
+        assert (
+            stats.unpaired_genomic_count == 0 and stats.unpaired_clinical_count == 0
+        ), (
             f"When all files are paired, unpaired counts should be 0, got genomic={stats.unpaired_genomic_count}, clinical={stats.unpaired_clinical_count}"
+        )
 
 
 # Feature: cli-summary-statistics, Property 4: GEPADO operation categorization
@@ -1388,24 +1584,26 @@ def test_unpaired_file_categorization(files_with_case_ids):
 @settings(max_examples=100)
 @given(
     operation_success=st.booleans(),
-    art_der_daten=st.sampled_from(['G', 'C', 'X']),  # Data type: G = genomic, C = clinical, X = unknown
+    art_der_daten=st.sampled_from(
+        ["G", "C", "X"]
+    ),  # Data type: G = genomic, C = clinical, X = unknown
     has_updates_needed=st.booleans(),  # Whether the operation requires actual updates
     record_found=st.booleans(),  # Whether a GEPADO record was found
-    valid_processing_criteria=st.booleans()  # Whether QC and message type criteria are met
+    valid_processing_criteria=st.booleans(),  # Whether QC and message type criteria are met
 )
 def test_gepado_operation_categorization(
     operation_success: bool,
     art_der_daten: str,
     has_updates_needed: bool,
     record_found: bool,
-    valid_processing_criteria: bool
+    valid_processing_criteria: bool,
 ):
     """
     Property 4: GEPADO operation categorization
-    
+
     For any GEPADO operation, it should be counted in exactly one category:
     actual update (genomic or clinical), no update needed, or error.
-    
+
     This test verifies that:
     1. Each GEPADO operation is counted in exactly one category
     2. Actual updates are categorized by data type (genomic vs clinical)
@@ -1419,7 +1617,7 @@ def test_gepado_operation_categorization(
     initial_no_updates = stats.gepado_no_updates_needed
     initial_errors = stats.gepado_errors
     initial_total = stats.get_total_gepado_operations()
-    
+
     # Simulate GEPADO operation logic based on the implementation
     if not valid_processing_criteria:
         # Doesn't meet QC/message type criteria -> Error
@@ -1429,7 +1627,7 @@ def test_gepado_operation_categorization(
         # No GEPADO record found -> Error
         stats.gepado_errors += 1
         expected_category = "error"
-    elif art_der_daten.upper() not in ['G', 'C']:
+    elif art_der_daten.upper() not in ["G", "C"]:
         # Invalid data type -> Error
         stats.gepado_errors += 1
         expected_category = "error"
@@ -1443,51 +1641,85 @@ def test_gepado_operation_categorization(
         expected_category = "no_updates_needed"
     else:
         # Successful operation with updates needed -> Count based on data type
-        if art_der_daten.upper() == 'G':
+        if art_der_daten.upper() == "G":
             stats.gepado_genomic_updates += 1
             expected_category = "genomic_update"
-        elif art_der_daten.upper() == 'C':
+        elif art_der_daten.upper() == "C":
             stats.gepado_clinical_updates += 1
             expected_category = "clinical_update"
-    
+
     # Verify exactly one operation was counted
     final_total = stats.get_total_gepado_operations()
-    assert final_total == initial_total + 1, \
+    assert final_total == initial_total + 1, (
         f"Exactly one GEPADO operation should be counted, but total changed from {initial_total} to {final_total}"
-    
+    )
+
     # Verify the operation was categorized correctly
     genomic_increase = stats.gepado_genomic_updates - initial_genomic
     clinical_increase = stats.gepado_clinical_updates - initial_clinical
     no_updates_increase = stats.gepado_no_updates_needed - initial_no_updates
     error_increase = stats.gepado_errors - initial_errors
-    
+
     # Verify exactly one category was incremented
-    total_increases = genomic_increase + clinical_increase + no_updates_increase + error_increase
-    assert total_increases == 1, \
+    total_increases = (
+        genomic_increase + clinical_increase + no_updates_increase + error_increase
+    )
+    assert total_increases == 1, (
         f"Exactly one category should be incremented, but {total_increases} categories were incremented"
-    
+    )
+
     # Verify the correct category was incremented
     if expected_category == "genomic_update":
-        assert genomic_increase == 1, f"Expected genomic update, but genomic_increase = {genomic_increase}"
-        assert clinical_increase == 0, "Expected genomic update, but clinical was also incremented"
-        assert no_updates_increase == 0, "Expected genomic update, but no_updates was also incremented"
-        assert error_increase == 0, "Expected genomic update, but error was also incremented"
+        assert genomic_increase == 1, (
+            f"Expected genomic update, but genomic_increase = {genomic_increase}"
+        )
+        assert clinical_increase == 0, (
+            "Expected genomic update, but clinical was also incremented"
+        )
+        assert no_updates_increase == 0, (
+            "Expected genomic update, but no_updates was also incremented"
+        )
+        assert error_increase == 0, (
+            "Expected genomic update, but error was also incremented"
+        )
     elif expected_category == "clinical_update":
-        assert clinical_increase == 1, f"Expected clinical update, but clinical_increase = {clinical_increase}"
-        assert genomic_increase == 0, "Expected clinical update, but genomic was also incremented"
-        assert no_updates_increase == 0, "Expected clinical update, but no_updates was also incremented"
-        assert error_increase == 0, "Expected clinical update, but error was also incremented"
+        assert clinical_increase == 1, (
+            f"Expected clinical update, but clinical_increase = {clinical_increase}"
+        )
+        assert genomic_increase == 0, (
+            "Expected clinical update, but genomic was also incremented"
+        )
+        assert no_updates_increase == 0, (
+            "Expected clinical update, but no_updates was also incremented"
+        )
+        assert error_increase == 0, (
+            "Expected clinical update, but error was also incremented"
+        )
     elif expected_category == "no_updates_needed":
-        assert no_updates_increase == 1, f"Expected no updates needed, but no_updates_increase = {no_updates_increase}"
-        assert genomic_increase == 0, "Expected no updates needed, but genomic was also incremented"
-        assert clinical_increase == 0, "Expected no updates needed, but clinical was also incremented"
-        assert error_increase == 0, "Expected no updates needed, but error was also incremented"
+        assert no_updates_increase == 1, (
+            f"Expected no updates needed, but no_updates_increase = {no_updates_increase}"
+        )
+        assert genomic_increase == 0, (
+            "Expected no updates needed, but genomic was also incremented"
+        )
+        assert clinical_increase == 0, (
+            "Expected no updates needed, but clinical was also incremented"
+        )
+        assert error_increase == 0, (
+            "Expected no updates needed, but error was also incremented"
+        )
     elif expected_category == "error":
-        assert error_increase == 1, f"Expected error, but error_increase = {error_increase}"
+        assert error_increase == 1, (
+            f"Expected error, but error_increase = {error_increase}"
+        )
         assert genomic_increase == 0, "Expected error, but genomic was also incremented"
-        assert clinical_increase == 0, "Expected error, but clinical was also incremented"
-        assert no_updates_increase == 0, "Expected error, but no_updates was also incremented"
-    
+        assert clinical_increase == 0, (
+            "Expected error, but clinical was also incremented"
+        )
+        assert no_updates_increase == 0, (
+            "Expected error, but no_updates was also incremented"
+        )
+
     # Verify mutual exclusivity across all categories
     categories_incremented = 0
     if genomic_increase > 0:
@@ -1498,11 +1730,18 @@ def test_gepado_operation_categorization(
         categories_incremented += 1
     if error_increase > 0:
         categories_incremented += 1
-    
-    assert categories_incremented == 1, \
+
+    assert categories_incremented == 1, (
         f"Operation should be in exactly one category, but found in {categories_incremented} categories"
-    
+    )
+
     # Verify that the total is consistent with the sum of all categories
-    expected_total = stats.gepado_genomic_updates + stats.gepado_clinical_updates + stats.gepado_no_updates_needed + stats.gepado_errors
-    assert final_total == expected_total, \
+    expected_total = (
+        stats.gepado_genomic_updates
+        + stats.gepado_clinical_updates
+        + stats.gepado_no_updates_needed
+        + stats.gepado_errors
+    )
+    assert final_total == expected_total, (
         f"Total GEPADO operations ({final_total}) should equal sum of categories ({expected_total})"
+    )

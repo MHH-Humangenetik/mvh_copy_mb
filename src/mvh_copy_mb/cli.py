@@ -7,7 +7,13 @@ from typing import Optional, cast
 
 import click
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    BarColumn,
+    TextColumn,
+    TimeRemainingColumn,
+)
 from zeep import Client
 from zeep.transports import Transport
 from requests import Session
@@ -29,11 +35,23 @@ console = Console()
 
 # Configure loguru logger
 logger.remove()  # Remove default handler
-logger.add(sys.stderr, level="INFO", format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+logger.add(
+    sys.stderr,
+    level="INFO",
+    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+)
 
 
 class GpasClient:
-    def __init__(self, endpoint: str, username: str, password: str, grz: str, kdk: str, verify_ssl: bool = True):
+    def __init__(
+        self,
+        endpoint: str,
+        username: str,
+        password: str,
+        grz: str,
+        kdk: str,
+        verify_ssl: bool = True,
+    ):
         self.endpoint = endpoint
         self.username = username
         self.password = password
@@ -46,30 +64,31 @@ class GpasClient:
             session = Session()
             session.auth = HTTPBasicAuth(self.username, self.password)
             session.verify = self.verify_ssl
-            
+
             if not self.verify_ssl:
                 # Suppress InsecureRequestWarning
                 import urllib3
+
                 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
             # Ensure the endpoint points to the WSDL
             wsdl_url = self.endpoint
-            if not wsdl_url.endswith('?wsdl'):
-                if 'gpasService' in wsdl_url:
+            if not wsdl_url.endswith("?wsdl"):
+                if "gpasService" in wsdl_url:
                     wsdl_url = f"{wsdl_url}?wsdl"
                 else:
                     wsdl_url = f"{wsdl_url.rstrip('/')}/gpas/gpasService?wsdl"
-            
+
             logger.debug(f"Initializing gPAS SOAP client with WSDL: {wsdl_url}")
             client = Client(wsdl_url, transport=Transport(session=session))
 
             # Force the service address to match the WSDL URL (minus ?wsdl)
             # This fixes issues where the WSDL contains an internal IP or HTTP URL
             # or if the service is behind a proxy/gateway that the WSDL doesn't know about.
-            service_url = wsdl_url.replace('?wsdl', '')
+            service_url = wsdl_url.replace("?wsdl", "")
             if client.service:
-                 client.service._binding_options['address'] = service_url
-                 logger.debug(f"Forced service address to: {service_url}")
+                client.service._binding_options["address"] = service_url
+                logger.debug(f"Forced service address to: {service_url}")
 
             return client
         except Exception as e:
@@ -90,20 +109,23 @@ class GpasClient:
             try:
                 # Use getValueFor as specified in the gPAS manual (Section 7.3)
                 # Arguments: psn (the pseudonym), domainName (the domain)
-                response = self.client.service.getValueFor(psn=pseudonym, domainName=domain)
+                response = self.client.service.getValueFor(
+                    psn=pseudonym, domainName=domain
+                )
                 logger.info(f"Response from '{domain}': {response}")
-                
+
                 if response:
                     # Zeep might return the value directly or an object
-                    if hasattr(response, 'value'):
+                    if hasattr(response, "value"):
                         return response.value
                     return response
-            
+
             except Exception as e:
                 # Log warning to see why it fails
                 logger.warning(f"Failed to resolve in domain '{domain}': {e}")
 
         return None
+
 
 def parse_meldebestaetigung(mb_string: str) -> dict:
     """
@@ -114,22 +136,26 @@ def parse_meldebestaetigung(mb_string: str) -> dict:
     try:
         # Split by '+' to get the Hash-String (index 2)
         # Example: IBE+A123456789+A123456789&...
-        parts = mb_string.split('+')
+        parts = mb_string.split("+")
         if len(parts) < 3:
-            logger.warning(f"Invalid Meldebestaetigung format (not enough '+' segments): {mb_string}")
+            logger.warning(
+                f"Invalid Meldebestaetigung format (not enough '+' segments): {mb_string}"
+            )
             return {}
-        
+
         hash_string = parts[2]
-        
+
         # Split Hash-String by '&'
         # Indices:
         # 4: Typ der Meldung
         # 5: Indikationsbereich
         # 8: Art der Daten
         # 10: Ergebnis QC
-        hash_parts = hash_string.split('&')
+        hash_parts = hash_string.split("&")
         if len(hash_parts) < 11:
-            logger.warning(f"Invalid Hash-String format (not enough '&' segments): {hash_string}")
+            logger.warning(
+                f"Invalid Hash-String format (not enough '&' segments): {hash_string}"
+            )
             return {}
 
         # Extract Leistungsdatum from hash string
@@ -137,28 +163,44 @@ def parse_meldebestaetigung(mb_string: str) -> dict:
         try:
             output_date = parse_leistungsdatum(hash_string)
             if output_date:
-                logger.debug(f"Successfully extracted Leistungsdatum: {output_date} from hash string")
+                logger.debug(
+                    f"Successfully extracted Leistungsdatum: {output_date} from hash string"
+                )
             else:
-                logger.debug(f"Could not extract valid Leistungsdatum from hash string: {hash_string}")
+                logger.debug(
+                    f"Could not extract valid Leistungsdatum from hash string: {hash_string}"
+                )
         except Exception as e:
-            logger.warning(f"Error extracting Leistungsdatum from hash string '{hash_string}': {e}")
+            logger.warning(
+                f"Error extracting Leistungsdatum from hash string '{hash_string}': {e}"
+            )
 
         return {
-            'Typ der Meldung': hash_parts[4],
-            'Indikationsbereich': hash_parts[5],
-            'Art der Daten': hash_parts[8],
-            'Ergebnis QC': hash_parts[10],
-            'output_date': output_date
+            "Typ der Meldung": hash_parts[4],
+            "Indikationsbereich": hash_parts[5],
+            "Art der Daten": hash_parts[8],
+            "Ergebnis QC": hash_parts[10],
+            "output_date": output_date,
         }
     except Exception as e:
         logger.error(f"Error parsing Meldebestaetigung '{mb_string}': {e}")
         return {}
 
-def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None, stats: Optional[ProcessingStatistics] = None):
+
+def process_row(
+    row: dict,
+    source_file: Path,
+    root_dir: Path,
+    gpas_client: GpasClient,
+    db: Optional[MeldebestaetigungDatabase] = None,
+    update_gepado: bool = False,
+    gepado_client=None,
+    stats: Optional[ProcessingStatistics] = None,
+):
     try:
         # Extract Vorgangsnummer directly
-        vorgangsnummer = row.get('Vorgangsnummer')
-        meldebestaetigung = row.get('Meldebestaetigung')
+        vorgangsnummer = row.get("Vorgangsnummer")
+        meldebestaetigung = row.get("Meldebestaetigung")
 
         if not vorgangsnummer or not meldebestaetigung:
             logger.warning(f"Missing Vorgangsnummer or Meldebestaetigung in row: {row}")
@@ -166,19 +208,23 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
 
         # Parse Meldebestaetigung for other fields
         mb_data = parse_meldebestaetigung(meldebestaetigung)
-        
-        indikationsbereich = mb_data.get('Indikationsbereich')
-        art_der_daten = mb_data.get('Art der Daten')
-        typ_der_meldung = mb_data.get('Typ der Meldung')
-        ergebnis_qc = mb_data.get('Ergebnis QC')
-        output_date = mb_data.get('output_date')
+
+        indikationsbereich = mb_data.get("Indikationsbereich")
+        art_der_daten = mb_data.get("Art der Daten")
+        typ_der_meldung = mb_data.get("Typ der Meldung")
+        ergebnis_qc = mb_data.get("Ergebnis QC")
+        output_date = mb_data.get("output_date")
 
         # Ensure required string types for later use
-        typ_der_meldung_str = cast(str, typ_der_meldung) if typ_der_meldung is not None else ""
+        typ_der_meldung_str = (
+            cast(str, typ_der_meldung) if typ_der_meldung is not None else ""
+        )
         ergebnis_qc_str = cast(str, ergebnis_qc) if ergebnis_qc is not None else ""
 
         if not all([indikationsbereich, art_der_daten, typ_der_meldung, ergebnis_qc]):
-            logger.warning(f"Could not extract all required fields from Meldebestaetigung: {meldebestaetigung}")
+            logger.warning(
+                f"Could not extract all required fields from Meldebestaetigung: {meldebestaetigung}"
+            )
             # Track as ignored file due to parsing failure
             if stats:
                 stats.ignored_count += 1
@@ -186,9 +232,13 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
 
         # Log Leistungsdatum extraction status
         if output_date:
-            logger.debug(f"Extracted output_date {output_date} for vorgangsnummer {vorgangsnummer}")
+            logger.debug(
+                f"Extracted output_date {output_date} for vorgangsnummer {vorgangsnummer}"
+            )
         else:
-            logger.debug(f"No valid output_date extracted for vorgangsnummer {vorgangsnummer} - will store NULL")
+            logger.debug(
+                f"No valid output_date extracted for vorgangsnummer {vorgangsnummer} - will store NULL"
+            )
 
         # Cast to string to satisfy type checker
         vorgangsnummer_str = cast(str, vorgangsnummer)
@@ -204,7 +254,7 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         # Ergebnis QC: 1 = bestanden
         prefix = ""
         is_ignored = False
-        
+
         if ergebnis_qc_str != "1":
             prefix = "QC_FAILED_"
             is_ignored = True
@@ -219,22 +269,24 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
         # Resolve Case ID from gPAS
         case_id = gpas_client.get_original_value(vorgangsnummer_str)
         gpas_domain = None
-        
+
         # Determine which domain resolved the pseudonym (if any)
-        if case_id and getattr(gpas_client, 'client', None):
+        if case_id and getattr(gpas_client, "client", None):
             # Try to determine which domain resolved the pseudonym (if any)
             for domain in gpas_client.domains:
                 try:
-                    svc = getattr(gpas_client.client, 'service', None)
+                    svc = getattr(gpas_client.client, "service", None)
                     if not svc:
                         break
-                    response = svc.getValueFor(psn=vorgangsnummer_str, domainName=domain)
+                    response = svc.getValueFor(
+                        psn=vorgangsnummer_str, domainName=domain
+                    )
                     if response:
                         gpas_domain = domain
                         break
                 except Exception:
                     continue
-        
+
         # Store record in database if database is available
         if db:
             try:
@@ -249,23 +301,29 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                     case_id=case_id,
                     gpas_domain=gpas_domain,
                     processed_at=datetime.now(),
-                    output_date=output_date
+                    output_date=output_date,
                 )
                 db.upsert_record(record)
-                logger.debug(f"Stored record in database for vorgangsnummer: {vorgangsnummer_str}")
+                logger.debug(
+                    f"Stored record in database for vorgangsnummer: {vorgangsnummer_str}"
+                )
             except Exception as e:
-                logger.error(f"Failed to store record in database for vorgangsnummer {vorgangsnummer_str}: {e}")
+                logger.error(
+                    f"Failed to store record in database for vorgangsnummer {vorgangsnummer_str}: {e}"
+                )
                 # Continue processing even if database storage fails
-        
+
         # Update gepado database if enabled and client is available
         if update_gepado and gepado_client and case_id:
             try:
                 # Extract HL7 case ID from GPAS-resolved case_id (which contains HUMGEN pattern)
                 hl7_case_id = extract_hl7_case_id(case_id)
-                
+
                 if hl7_case_id:
-                    logger.info(f"Extracted HL7 case ID: {hl7_case_id} from GPAS-resolved case ID: {case_id}")
-                    
+                    logger.info(
+                        f"Extracted HL7 case ID: {hl7_case_id} from GPAS-resolved case ID: {case_id}"
+                    )
+
                     # Update gepado record with validation
                     success = validate_and_update_record(
                         gepado_client,
@@ -276,53 +334,75 @@ def process_row(row: dict, source_file: Path, root_dir: Path, gpas_client: GpasC
                         ergebnis_qc_str,
                         typ_der_meldung_str,
                         output_date,  # Pass the extracted Leistungsdatum
-                        stats  # Pass statistics for tracking
+                        stats,  # Pass statistics for tracking
                     )
-                    
+
                     if success:
-                        logger.info(f"Successfully processed gepado update for HL7 case ID: {hl7_case_id}")
+                        logger.info(
+                            f"Successfully processed gepado update for HL7 case ID: {hl7_case_id}"
+                        )
                     else:
-                        logger.warning(f"Gepado update was skipped or failed for HL7 case ID: {hl7_case_id}")
+                        logger.warning(
+                            f"Gepado update was skipped or failed for HL7 case ID: {hl7_case_id}"
+                        )
                 else:
-                    logger.warning(f"Could not extract HL7 case ID from GPAS-resolved case ID: {case_id}")
-                    
+                    logger.warning(
+                        f"Could not extract HL7 case ID from GPAS-resolved case ID: {case_id}"
+                    )
+
             except Exception as e:
-                logger.error(f"Error during gepado processing for vorgangsnummer {vorgangsnummer_str}: {e}")
+                logger.error(
+                    f"Error during gepado processing for vorgangsnummer {vorgangsnummer_str}: {e}"
+                )
                 # Continue processing even if gepado update fails
         elif update_gepado and gepado_client and not case_id:
-            logger.warning(f"Gepado update skipped - no case ID resolved from GPAS for vorgangsnummer: {vorgangsnummer_str}")
-        
+            logger.warning(
+                f"Gepado update skipped - no case ID resolved from GPAS for vorgangsnummer: {vorgangsnummer_str}"
+            )
+
         if case_id:
             # Track resolved Case ID and data type for pairing logic (if not ignored)
             if stats and not is_ignored:
                 stats.add_resolved_case_id(case_id, art_der_daten_str)
-            
+
             # Requirement: "Files should be named by their case id then."
             # We copy the source CSV file and rename it to {prefix}{case_id}.csv
             new_filename = f"{prefix}{case_id}.csv"
             target_path = target_dir / new_filename
-            
+
             shutil.copy2(source_file, target_path)
             logger.info(f"Copied {source_file.name} to {target_path}")
-            
+
         else:
             # No Case ID resolved - count as ignored
             if stats and not is_ignored:
                 stats.ignored_count += 1
-            
+
             # Fallback: Prepend "NOTFOUND_" to the original filename and copy
             new_filename = f"NOTFOUND_{prefix}{source_file.name}"
             target_path = target_dir / new_filename
-            
+
             shutil.copy2(source_file, target_path)
-            logger.warning(f"Could not resolve Case ID for Vorgangsnummer {vorgangsnummer}. Copied to {target_path}")
+            logger.warning(
+                f"Could not resolve Case ID for Vorgangsnummer {vorgangsnummer}. Copied to {target_path}"
+            )
 
     except Exception as e:
         logger.error(f"Error processing row: {e}")
-def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, db: Optional[MeldebestaetigungDatabase] = None, update_gepado: bool = False, gepado_client=None, stats: Optional[ProcessingStatistics] = None):
+
+
+def process_csv_file(
+    file_path: Path,
+    root_dir: Path,
+    gpas_client: GpasClient,
+    db: Optional[MeldebestaetigungDatabase] = None,
+    update_gepado: bool = False,
+    gepado_client=None,
+    stats: Optional[ProcessingStatistics] = None,
+):
     try:
         # Detect delimiter - assuming ';' for German CSVs usually, but let's try to be robust
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, "r", encoding="utf-8") as f:
             # Read a sample to sniff dialect
             sample = f.read(1024)
             f.seek(0)
@@ -331,47 +411,131 @@ def process_csv_file(file_path: Path, root_dir: Path, gpas_client: GpasClient, d
             except csv.Error:
                 # Fallback to semicolon if sniffing fails (common in German CSVs)
                 dialect = csv.excel()
-                dialect.delimiter = ';'
-            
+                dialect.delimiter = ";"
+
             reader = csv.DictReader(f, dialect=dialect)
-            
+
             for row in reader:
-                process_row(row, file_path, root_dir, gpas_client, db, update_gepado, gepado_client, stats)
-                
+                process_row(
+                    row,
+                    file_path,
+                    root_dir,
+                    gpas_client,
+                    db,
+                    update_gepado,
+                    gepado_client,
+                    stats,
+                )
+
     except Exception as e:
         logger.error(f"Failed to process file {file_path}: {e}")
+
+
 @click.command()
-@click.option('--input-dir', envvar='INPUT_DIR', type=click.Path(exists=True, file_okay=False), required=True, help='Directory containing .csv files')
-@click.option('--gpas-endpoint', envvar='GPAS_ENDPOINT', required=True, help='gPAS API Endpoint')
-@click.option('--gpas-user', envvar='GPAS_USER', required=True, help='gPAS Username')
-@click.option('--gpas-password', envvar='GPAS_PASSWORD', required=True, help='gPAS Password')
-@click.option('--gpas-grz', envvar='GPAS_GRZ', required=True, help='First gPAS Domain')
-@click.option('--gpas-kdk', envvar='GPAS_KDK', required=True, help='Second gPAS Domain')
-@click.option('--gpas-verify-ssl', envvar='GPAS_VERIFY_SSL', type=bool, default=True, show_default=True, help='Verify SSL certificate')
-@click.option('--log-level', envvar='LOG_LEVEL', default='INFO', show_default=True, help='Logging level')
-@click.option('--log-file', envvar='LOG_FILE', default='mvh_copy_mb.log', show_default=True, help='Log file path')
-@click.option('--archive-dir', envvar='ARCHIVE_DIR', type=click.Path(file_okay=False), help='Directory to move processed files to')
-@click.option('--db-path', envvar='DB_PATH', type=click.Path(), help='Path to DuckDB database file')
-@click.option('--update-gepado', envvar='UPDATE_GEPADO', is_flag=True, default=False, help='Enable gepado database updates with extracted HL7 case IDs')
-def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl, log_level, log_file, archive_dir, db_path, update_gepado):
+@click.option(
+    "--input-dir",
+    envvar="INPUT_DIR",
+    type=click.Path(exists=True, file_okay=False),
+    required=True,
+    help="Directory containing .csv files",
+)
+@click.option(
+    "--gpas-endpoint", envvar="GPAS_ENDPOINT", required=True, help="gPAS API Endpoint"
+)
+@click.option("--gpas-user", envvar="GPAS_USER", required=True, help="gPAS Username")
+@click.option(
+    "--gpas-password", envvar="GPAS_PASSWORD", required=True, help="gPAS Password"
+)
+@click.option("--gpas-grz", envvar="GPAS_GRZ", required=True, help="First gPAS Domain")
+@click.option("--gpas-kdk", envvar="GPAS_KDK", required=True, help="Second gPAS Domain")
+@click.option(
+    "--gpas-verify-ssl",
+    envvar="GPAS_VERIFY_SSL",
+    type=bool,
+    default=True,
+    show_default=True,
+    help="Verify SSL certificate",
+)
+@click.option(
+    "--log-level",
+    envvar="LOG_LEVEL",
+    default="INFO",
+    show_default=True,
+    help="Logging level",
+)
+@click.option(
+    "--log-file",
+    envvar="LOG_FILE",
+    default="mvh_copy_mb.log",
+    show_default=True,
+    help="Log file path",
+)
+@click.option(
+    "--archive-dir",
+    envvar="ARCHIVE_DIR",
+    type=click.Path(file_okay=False),
+    help="Directory to move processed files to",
+)
+@click.option(
+    "--db-path",
+    envvar="DB_PATH",
+    type=click.Path(),
+    help="Path to DuckDB database file",
+)
+@click.option(
+    "--update-gepado",
+    envvar="UPDATE_GEPADO",
+    is_flag=True,
+    default=False,
+    help="Enable gepado database updates with extracted HL7 case IDs",
+)
+def main(
+    input_dir,
+    gpas_endpoint,
+    gpas_user,
+    gpas_password,
+    gpas_grz,
+    gpas_kdk,
+    gpas_verify_ssl,
+    log_level,
+    log_file,
+    archive_dir,
+    db_path,
+    update_gepado,
+):
     """
     Process MVH Meldebestaetigung CSV files and organize them based on metadata, resolving pseudonyms via gPAS.
     """
     # Set loguru file handler with rotation and retention
     # Note: loguru does not support 'per run' rotation, so we use size-based rotation (e.g., 5 MB) as a practical alternative.
     logger.remove()
-    logger.add(log_file, rotation="5 MB", retention=10, encoding="utf-8", level=log_level.upper(), format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
-    logger.add(sys.stderr, level=log_level.upper(), format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
-    
+    logger.add(
+        log_file,
+        rotation="5 MB",
+        retention=10,
+        encoding="utf-8",
+        level=log_level.upper(),
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    )
+    logger.add(
+        sys.stderr,
+        level=log_level.upper(),
+        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+    )
+
     input_path = Path(input_dir)
-    gpas_client = GpasClient(gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl)
+    gpas_client = GpasClient(
+        gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl
+    )
 
     if archive_dir:
         try:
             Path(archive_dir).mkdir(parents=True, exist_ok=True)
         except Exception as e:
             logger.error(f"Failed to create archive directory {archive_dir}: {e}")
-            raise click.ClickException(f"Failed to create archive directory {archive_dir}: {e}")
+            raise click.ClickException(
+                f"Failed to create archive directory {archive_dir}: {e}"
+            )
 
     # Initialize database path
     if db_path:
@@ -379,10 +543,10 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
     else:
         # Default to input directory if not specified
         db_path = input_path / "meldebestaetigungen.duckdb"
-    
+
     # Create parent directory if it doesn't exist
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Initialize gepado client if update_gepado is enabled
     gepado_client = None
     if update_gepado:
@@ -390,10 +554,14 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
         if gepado_client:
             logger.info("Successfully initialized gepado client")
         else:
-            logger.error("Failed to initialize gepado client - missing environment variables")
-            raise click.ClickException("Failed to initialize gepado client. Please check MSSQL environment variables.")
-    
-    csv_files = list(input_path.glob('*.csv'))
+            logger.error(
+                "Failed to initialize gepado client - missing environment variables"
+            )
+            raise click.ClickException(
+                "Failed to initialize gepado client. Please check MSSQL environment variables."
+            )
+
+    csv_files = list(input_path.glob("*.csv"))
 
     # Initialize processing statistics
     stats = ProcessingStatistics()
@@ -406,13 +574,25 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
             TimeRemainingColumn(),
             TextColumn("{task.description}"),
             console=console,
-            transient=True
+            transient=True,
         ) as progress:
-            task = progress.add_task("[cyan]Processing CSV files...", total=len(csv_files))
+            task = progress.add_task(
+                "[cyan]Processing CSV files...", total=len(csv_files)
+            )
             for csv_file in csv_files:
                 # Update the progress description to show current file (keeps terminal output minimal)
-                progress.update(task, description=f"[cyan]Processing:[/cyan] {csv_file.name}")
-                process_csv_file(csv_file, input_path, gpas_client, db, update_gepado, gepado_client, stats)
+                progress.update(
+                    task, description=f"[cyan]Processing:[/cyan] {csv_file.name}"
+                )
+                process_csv_file(
+                    csv_file,
+                    input_path,
+                    gpas_client,
+                    db,
+                    update_gepado,
+                    gepado_client,
+                    stats,
+                )
                 progress.advance(task)  # advance after processing
 
                 if archive_dir:
@@ -423,8 +603,12 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
                         shutil.move(str(csv_file), archive_dir)
                         logger.info(f"Moved {csv_file.name} to {archive_dir}")
                     except Exception as e:
-                        logger.error(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
-                        raise click.ClickException(f"Failed to move {csv_file.name} to {archive_dir}: {e}")
+                        logger.error(
+                            f"Failed to move {csv_file.name} to {archive_dir}: {e}"
+                        )
+                        raise click.ClickException(
+                            f"Failed to move {csv_file.name} to {archive_dir}: {e}"
+                        )
 
     # Finalize pairing statistics after all files processed
     stats.finalize_pairing_statistics()
@@ -439,5 +623,6 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
         except Exception as e:
             logger.warning(f"Error closing gepado connection: {e}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()  # type: ignore[arg-type]

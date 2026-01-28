@@ -18,6 +18,7 @@ from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRec
 
 # Test Helpers and Fixtures
 
+
 @contextmanager
 def temp_database():
     """Context manager for creating a temporary test database."""
@@ -29,28 +30,28 @@ def temp_database():
 def create_test_record(**overrides) -> MeldebestaetigungRecord:
     """
     Factory function for creating test records with sensible defaults.
-    
+
     Args:
         **overrides: Any fields to override from defaults
-        
+
     Returns:
         A MeldebestaetigungRecord with defaults applied
     """
     from datetime import datetime
-    
+
     defaults = {
-        'vorgangsnummer': 'TEST_VN',
-        'meldebestaetigung': 'test_mb',
-        'source_file': 'test.csv',
-        'typ_der_meldung': '0',
-        'indikationsbereich': 'R',
-        'art_der_daten': 'G',
-        'ergebnis_qc': '1',
-        'case_id': None,
-        'gpas_domain': None,
-        'processed_at': datetime(2023, 1, 1),
-        'is_done': False,
-        'output_date': None
+        "vorgangsnummer": "TEST_VN",
+        "meldebestaetigung": "test_mb",
+        "source_file": "test.csv",
+        "typ_der_meldung": "0",
+        "indikationsbereich": "R",
+        "art_der_daten": "G",
+        "ergebnis_qc": "1",
+        "case_id": None,
+        "gpas_domain": None,
+        "processed_at": datetime(2023, 1, 1),
+        "is_done": False,
+        "output_date": None,
     }
     defaults.update(overrides)
     return MeldebestaetigungRecord(**defaults)
@@ -63,10 +64,10 @@ def create_test_record(**overrides) -> MeldebestaetigungRecord:
 def test_database_file_creation_in_correct_location(dir_name: str):
     """
     Database file creation in correct location
-    
+
     For any valid input directory path, when the database is initialized,
     the database file should exist at the path {input_directory}/meldebestaetigungen.duckdb
-    
+
     This test verifies that:
     1. The database file is created in the specified directory
     2. The file exists after initialization
@@ -75,25 +76,27 @@ def test_database_file_creation_in_correct_location(dir_name: str):
     # Create a temporary directory for the test
     with tempfile.TemporaryDirectory() as tmpdir:
         # Sanitize the directory name to avoid filesystem issues
-        safe_dir_name = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in dir_name)
+        safe_dir_name = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_" for c in dir_name
+        )
         input_dir = Path(tmpdir) / safe_dir_name
         input_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Expected database path
         expected_db_path = input_dir / "meldebestaetigungen.duckdb"
-        
+
         # Verify file doesn't exist before initialization
         assert not expected_db_path.exists()
-        
+
         # Initialize database
         with MeldebestaetigungDatabase(expected_db_path) as db:
             # Verify the database file exists at the correct location
             assert expected_db_path.exists()
             assert expected_db_path.is_file()
-            
+
             # Verify the path matches what we expect
             assert db.db_path == expected_db_path
-            
+
             # Verify we can interact with the database
             assert db.conn is not None
 
@@ -105,10 +108,10 @@ def test_database_file_creation_in_correct_location(dir_name: str):
 def test_schema_persistence_across_sessions(db_name: str):
     """
     Schema persistence across sessions
-    
+
     For any database that has been created and closed, when reopened,
     the schema should still exist and be queryable.
-    
+
     This test verifies that:
     1. A database can be created with the schema
     2. The database can be closed
@@ -118,35 +121,37 @@ def test_schema_persistence_across_sessions(db_name: str):
     # Create a temporary directory for the test database
     with tempfile.TemporaryDirectory() as tmpdir:
         # Sanitize the database name to avoid filesystem issues
-        safe_db_name = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in db_name)
+        safe_db_name = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_" for c in db_name
+        )
         db_path = Path(tmpdir) / f"{safe_db_name}.duckdb"
-        
+
         # First session: create database and schema
         with MeldebestaetigungDatabase(db_path) as db:
             # Verify connection is established
             assert db.conn is not None
-            
+
             # Verify the table exists by querying the schema
             result = db.conn.execute(
                 "SELECT table_name FROM information_schema.tables WHERE table_name = 'meldebestaetigungen'"
             ).fetchall()
             assert len(result) == 1
-            assert result[0][0] == 'meldebestaetigungen'
-        
+            assert result[0][0] == "meldebestaetigungen"
+
         # Database is now closed (context manager exit)
-        
+
         # Second session: reopen the database
         with MeldebestaetigungDatabase(db_path) as db:
             # Verify connection is established
             assert db.conn is not None
-            
+
             # Verify the table still exists
             result = db.conn.execute(
                 "SELECT table_name FROM information_schema.tables WHERE table_name = 'meldebestaetigungen'"
             ).fetchall()
             assert len(result) == 1
-            assert result[0][0] == 'meldebestaetigungen'
-            
+            assert result[0][0] == "meldebestaetigungen"
+
             # Verify all expected columns exist
             columns_result = db.conn.execute(
                 """
@@ -156,23 +161,23 @@ def test_schema_persistence_across_sessions(db_name: str):
                 ORDER BY column_name
                 """
             ).fetchall()
-            
+
             column_names = [row[0] for row in columns_result]
             expected_columns = [
-                'art_der_daten',
-                'case_id',
-                'ergebnis_qc',
-                'gpas_domain',
-                'indikationsbereich',
-                'is_done',
-                'meldebestaetigung',
-                'output_date',
-                'processed_at',
-                'source_file',
-                'typ_der_meldung',
-                'vorgangsnummer'
+                "art_der_daten",
+                "case_id",
+                "ergebnis_qc",
+                "gpas_domain",
+                "indikationsbereich",
+                "is_done",
+                "meldebestaetigung",
+                "output_date",
+                "processed_at",
+                "source_file",
+                "typ_der_meldung",
+                "vorgangsnummer",
             ]
-            
+
             assert sorted(column_names) == sorted(expected_columns)
 
 
@@ -183,10 +188,10 @@ def test_schema_persistence_across_sessions(db_name: str):
 def test_database_connection_cleanup(db_name: str):
     """
     Database connection cleanup
-    
+
     For any database instance, when closed (either explicitly or via context manager exit),
     subsequent operations should fail or require reopening the connection.
-    
+
     This test verifies that:
     1. The connection is properly closed after context manager exit
     2. The connection is set to None after closing
@@ -195,41 +200,42 @@ def test_database_connection_cleanup(db_name: str):
     # Create a temporary directory for the test database
     with tempfile.TemporaryDirectory() as tmpdir:
         # Sanitize the database name to avoid filesystem issues
-        safe_db_name = "".join(c if c.isalnum() or c in ('-', '_') else '_' for c in db_name)
+        safe_db_name = "".join(
+            c if c.isalnum() or c in ("-", "_") else "_" for c in db_name
+        )
         db_path = Path(tmpdir) / f"{safe_db_name}.duckdb"
-        
+
         # Test 1: Context manager cleanup
         db = MeldebestaetigungDatabase(db_path)
         with db as db_context:
             # Verify connection is established
             assert db_context.conn is not None
             conn_before_exit = db_context.conn
-        
+
         # After context manager exit, connection should be closed
         assert db.conn is None
-        
+
         # Test 2: Explicit close() cleanup
         db2 = MeldebestaetigungDatabase(db_path)
         with db2:
             assert db2.conn is not None
-        
+
         # Call close explicitly (should be idempotent)
         db2.close()
         assert db2.conn is None
-        
+
         # Calling close again should not raise an error
         db2.close()
         assert db2.conn is None
-        
+
         # Test 3: Operations after close should fail
         db3 = MeldebestaetigungDatabase(db_path)
         with db3:
             assert db3.conn is not None
-        
+
         # After closing, attempting to create schema should fail
         with pytest.raises(RuntimeError, match="Database connection not established"):
             db3._create_schema()
-
 
 
 # Feature: duckdb-storage, Property 3: Complete record storage
@@ -245,7 +251,9 @@ def test_database_connection_cleanup(db_name: str):
     ergebnis_qc=st.text(min_size=1, max_size=50),
     case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
     gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
-    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1))
+    processed_at=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
 )
 def test_complete_record_storage(
     vorgangsnummer: str,
@@ -257,26 +265,26 @@ def test_complete_record_storage(
     ergebnis_qc: str,
     case_id: str,
     gpas_domain: str,
-    processed_at
+    processed_at,
 ):
     """
     Complete record storage
-    
+
     For any valid Meldebestaetigung record with all required fields,
     when stored in the database, retrieving the record should return
     all fields with their original values.
-    
+
     This test verifies that:
     1. All required fields are stored correctly
     2. Optional fields (case_id, gpas_domain) are stored correctly (including None)
     3. Retrieved values match the original values exactly
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create a record with all fields
         original_record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -288,31 +296,35 @@ def test_complete_record_storage(
             ergebnis_qc=ergebnis_qc,
             case_id=case_id,
             gpas_domain=gpas_domain,
-            processed_at=processed_at
+            processed_at=processed_at,
         )
-        
+
         # Store the record
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(original_record)
-            
+
             # Retrieve the record
             retrieved_record = db.get_record(vorgangsnummer)
-            
+
             # Verify the record was retrieved
             assert retrieved_record is not None
-            
+
             # Verify all fields match
             assert retrieved_record.vorgangsnummer == original_record.vorgangsnummer
-            assert retrieved_record.meldebestaetigung == original_record.meldebestaetigung
+            assert (
+                retrieved_record.meldebestaetigung == original_record.meldebestaetigung
+            )
             assert retrieved_record.source_file == original_record.source_file
             assert retrieved_record.typ_der_meldung == original_record.typ_der_meldung
-            assert retrieved_record.indikationsbereich == original_record.indikationsbereich
+            assert (
+                retrieved_record.indikationsbereich
+                == original_record.indikationsbereich
+            )
             assert retrieved_record.art_der_daten == original_record.art_der_daten
             assert retrieved_record.ergebnis_qc == original_record.ergebnis_qc
             assert retrieved_record.case_id == original_record.case_id
             assert retrieved_record.gpas_domain == original_record.gpas_domain
             assert retrieved_record.processed_at == original_record.processed_at
-
 
 
 # Feature: duckdb-storage, Property 4: Successful gPAS resolution storage
@@ -328,7 +340,9 @@ def test_complete_record_storage(
     ergebnis_qc=st.text(min_size=1, max_size=50),
     case_id=st.text(min_size=1, max_size=100),
     gpas_domain=st.text(min_size=1, max_size=100),
-    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1))
+    processed_at=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
 )
 def test_successful_gpas_resolution_storage(
     vorgangsnummer: str,
@@ -340,26 +354,26 @@ def test_successful_gpas_resolution_storage(
     ergebnis_qc: str,
     case_id: str,
     gpas_domain: str,
-    processed_at
+    processed_at,
 ):
     """
     Successful gPAS resolution storage
-    
+
     For any Meldebestaetigung where gPAS successfully resolves the Vorgangsnummer,
     when stored in the database, both the Case ID and the resolving domain name
     should be non-NULL and match the gPAS response.
-    
+
     This test verifies that:
     1. Successful gPAS resolutions store non-NULL case_id
     2. Successful gPAS resolutions store non-NULL gpas_domain
     3. The stored values match the original gPAS response
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create a record with successful gPAS resolution (non-NULL case_id and gpas_domain)
         record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -371,27 +385,26 @@ def test_successful_gpas_resolution_storage(
             ergebnis_qc=ergebnis_qc,
             case_id=case_id,  # Non-NULL indicates successful resolution
             gpas_domain=gpas_domain,  # Non-NULL indicates successful resolution
-            processed_at=processed_at
+            processed_at=processed_at,
         )
-        
+
         # Store the record
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
-            
+
             # Retrieve the record
             retrieved_record = db.get_record(vorgangsnummer)
-            
+
             # Verify the record was retrieved
             assert retrieved_record is not None
-            
+
             # Verify both case_id and gpas_domain are non-NULL
             assert retrieved_record.case_id is not None
             assert retrieved_record.gpas_domain is not None
-            
+
             # Verify they match the original gPAS response
             assert retrieved_record.case_id == case_id
             assert retrieved_record.gpas_domain == gpas_domain
-
 
 
 # Feature: duckdb-storage, Property 5: Failed gPAS resolution storage
@@ -405,7 +418,9 @@ def test_successful_gpas_resolution_storage(
     indikationsbereich=st.text(min_size=1, max_size=50),
     art_der_daten=st.text(min_size=1, max_size=50),
     ergebnis_qc=st.text(min_size=1, max_size=50),
-    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1))
+    processed_at=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
 )
 def test_failed_gpas_resolution_storage(
     vorgangsnummer: str,
@@ -415,26 +430,26 @@ def test_failed_gpas_resolution_storage(
     indikationsbereich: str,
     art_der_daten: str,
     ergebnis_qc: str,
-    processed_at
+    processed_at,
 ):
     """
     Failed gPAS resolution storage
-    
+
     For any Meldebestaetigung where gPAS fails to resolve the Vorgangsnummer,
     when stored in the database, both the Case ID and domain name fields
     should be NULL.
-    
+
     This test verifies that:
     1. Failed gPAS resolutions store NULL for case_id
     2. Failed gPAS resolutions store NULL for gpas_domain
     3. The record is still stored with all other fields intact
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create a record with failed gPAS resolution (NULL case_id and gpas_domain)
         record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -446,23 +461,23 @@ def test_failed_gpas_resolution_storage(
             ergebnis_qc=ergebnis_qc,
             case_id=None,  # NULL indicates failed resolution
             gpas_domain=None,  # NULL indicates failed resolution
-            processed_at=processed_at
+            processed_at=processed_at,
         )
-        
+
         # Store the record
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
-            
+
             # Retrieve the record
             retrieved_record = db.get_record(vorgangsnummer)
-            
+
             # Verify the record was retrieved
             assert retrieved_record is not None
-            
+
             # Verify both case_id and gpas_domain are NULL
             assert retrieved_record.case_id is None
             assert retrieved_record.gpas_domain is None
-            
+
             # Verify all other fields are still stored correctly
             assert retrieved_record.vorgangsnummer == vorgangsnummer
             assert retrieved_record.meldebestaetigung == meldebestaetigung
@@ -471,7 +486,6 @@ def test_failed_gpas_resolution_storage(
             assert retrieved_record.indikationsbereich == indikationsbereich
             assert retrieved_record.art_der_daten == art_der_daten
             assert retrieved_record.ergebnis_qc == ergebnis_qc
-
 
 
 # Feature: duckdb-storage, Property 6: Upsert prevents duplicates
@@ -489,8 +503,12 @@ def test_failed_gpas_resolution_storage(
     ergebnis_qc=st.text(min_size=1, max_size=50),
     case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
     gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
-    processed_at1=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),
-    processed_at2=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1))
+    processed_at1=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
+    processed_at2=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
 )
 def test_upsert_prevents_duplicates(
     vorgangsnummer: str,
@@ -505,26 +523,26 @@ def test_upsert_prevents_duplicates(
     case_id: str,
     gpas_domain: str,
     processed_at1,
-    processed_at2
+    processed_at2,
 ):
     """
     Upsert prevents duplicates
-    
+
     For any Meldebestaetigung record with a given Vorgangsnummer,
     when inserted multiple times (even from different source files),
     the database should contain exactly one record with that Vorgangsnummer.
-    
+
     This test verifies that:
     1. Inserting the same vorgangsnummer twice doesn't create duplicates
     2. The database contains exactly one record after multiple inserts
     3. The upsert mechanism works correctly
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create two records with the same vorgangsnummer but different data
         record1 = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -536,9 +554,9 @@ def test_upsert_prevents_duplicates(
             ergebnis_qc=ergebnis_qc,
             case_id=case_id,
             gpas_domain=gpas_domain,
-            processed_at=processed_at1
+            processed_at=processed_at1,
         )
-        
+
         record2 = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,  # Same vorgangsnummer
             meldebestaetigung=meldebestaetigung2,  # Different data
@@ -549,30 +567,29 @@ def test_upsert_prevents_duplicates(
             ergebnis_qc=ergebnis_qc,
             case_id=case_id,
             gpas_domain=gpas_domain,
-            processed_at=processed_at2  # Different timestamp
+            processed_at=processed_at2,  # Different timestamp
         )
-        
+
         # Store both records
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record1)
             db.upsert_record(record2)
-            
+
             # Count how many records exist with this vorgangsnummer
             count_result = db.conn.execute(
                 "SELECT COUNT(*) FROM meldebestaetigungen WHERE vorgangsnummer = ?",
-                [vorgangsnummer]
+                [vorgangsnummer],
             ).fetchone()
-            
+
             # Verify exactly one record exists
             assert count_result[0] == 1
-            
+
             # Verify the record is the second one (most recent)
             retrieved_record = db.get_record(vorgangsnummer)
             assert retrieved_record is not None
             assert retrieved_record.meldebestaetigung == meldebestaetigung2
             assert retrieved_record.source_file == source_file2
             assert retrieved_record.processed_at == processed_at2
-
 
 
 # Feature: duckdb-storage, Property 7: Update modifies existing records
@@ -590,8 +607,12 @@ def test_upsert_prevents_duplicates(
     original_gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
     updated_case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
     updated_gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
-    original_timestamp=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),
-    updated_timestamp=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1))
+    original_timestamp=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
+    updated_timestamp=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
 )
 def test_update_modifies_existing_records(
     vorgangsnummer: str,
@@ -606,26 +627,26 @@ def test_update_modifies_existing_records(
     updated_case_id: str,
     updated_gpas_domain: str,
     original_timestamp,
-    updated_timestamp
+    updated_timestamp,
 ):
     """
     Property 7: Update modifies existing records
-    
+
     For any existing database record, when updated with new values
     (timestamp or gPAS results), retrieving the record should return
     the updated values, not the original values.
-    
+
     This test verifies that:
     1. Updates modify existing records rather than creating new ones
     2. Updated values are persisted correctly
     3. The timestamp is updated to reflect the latest processing time
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create original record
         original_record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -637,9 +658,9 @@ def test_update_modifies_existing_records(
             ergebnis_qc=ergebnis_qc,
             case_id=original_case_id,
             gpas_domain=original_gpas_domain,
-            processed_at=original_timestamp
+            processed_at=original_timestamp,
         )
-        
+
         # Create updated record with same vorgangsnummer but different values
         updated_record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,  # Same vorgangsnummer
@@ -651,25 +672,25 @@ def test_update_modifies_existing_records(
             ergebnis_qc=ergebnis_qc,
             case_id=updated_case_id,  # Updated gPAS result
             gpas_domain=updated_gpas_domain,  # Updated gPAS domain
-            processed_at=updated_timestamp  # Updated timestamp
+            processed_at=updated_timestamp,  # Updated timestamp
         )
-        
+
         # Store original record, then update it
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(original_record)
             db.upsert_record(updated_record)
-            
+
             # Retrieve the record
             retrieved_record = db.get_record(vorgangsnummer)
-            
+
             # Verify the record was retrieved
             assert retrieved_record is not None
-            
+
             # Verify the values are the updated ones, not the original ones
             assert retrieved_record.case_id == updated_case_id
             assert retrieved_record.gpas_domain == updated_gpas_domain
             assert retrieved_record.processed_at == updated_timestamp
-            
+
             # Verify the values are NOT the original ones (if they differ)
             if updated_case_id != original_case_id:
                 assert retrieved_record.case_id != original_case_id
@@ -677,7 +698,6 @@ def test_update_modifies_existing_records(
                 assert retrieved_record.gpas_domain != original_gpas_domain
             if updated_timestamp != original_timestamp:
                 assert retrieved_record.processed_at != original_timestamp
-
 
 
 # Unit tests for record retrieval
@@ -699,14 +719,14 @@ def test_get_record_retrieves_existing_record():
         vorgangsnummer="TEST123",
         meldebestaetigung="test_mb_string",
         case_id="CASE456",
-        gpas_domain="test_domain"
+        gpas_domain="test_domain",
     )
-    
+
     with temp_database() as db_path:
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
             retrieved = db.get_record("TEST123")
-            
+
             assert retrieved is not None
             assert retrieved.vorgangsnummer == "TEST123"
             assert retrieved.meldebestaetigung == "test_mb_string"
@@ -719,21 +739,18 @@ def test_get_record_with_null_fields():
     Test that get_record correctly handles NULL fields.
     """
     record = create_test_record(
-        vorgangsnummer="TEST789",
-        case_id=None,
-        gpas_domain=None
+        vorgangsnummer="TEST789", case_id=None, gpas_domain=None
     )
-    
+
     with temp_database() as db_path:
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
             retrieved = db.get_record("TEST789")
-            
+
             assert retrieved is not None
             assert retrieved.case_id is None
             assert retrieved.gpas_domain is None
             assert retrieved.vorgangsnummer == "TEST789"
-
 
 
 # Feature: duckdb-storage, Property 9: Error resilience
@@ -741,10 +758,10 @@ def test_get_record_with_null_fields():
 def test_error_resilience_with_logging(caplog):
     """
     Error resilience
-    
+
     For any database operation that raises an exception, the system should
     log the error and continue processing subsequent records without terminating.
-    
+
     This test verifies that:
     1. Errors are logged appropriately
     2. The system can continue processing after an error
@@ -753,10 +770,10 @@ def test_error_resilience_with_logging(caplog):
     from mvh_copy_mb.database import MeldebestaetigungRecord
     from datetime import datetime
     import logging
-    
+
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create a valid record
         valid_record = MeldebestaetigungRecord(
             vorgangsnummer="VALID123",
@@ -768,22 +785,22 @@ def test_error_resilience_with_logging(caplog):
             ergebnis_qc="1",
             case_id="CASE123",
             gpas_domain="test_domain",
-            processed_at=datetime(2023, 1, 1, 12, 0, 0)
+            processed_at=datetime(2023, 1, 1, 12, 0, 0),
         )
-        
+
         with MeldebestaetigungDatabase(db_path) as db:
             # First, insert a valid record successfully
             db.upsert_record(valid_record)
-            
+
             # Verify it was inserted
             retrieved = db.get_record("VALID123")
             assert retrieved is not None
-            
+
             # Now try to cause an error by using a closed connection
             # Save the connection and close it
             original_conn = db.conn
             db.conn = None
-            
+
             # Try to insert a record with no connection - should raise RuntimeError
             with caplog.at_level(logging.ERROR):
                 try:
@@ -791,10 +808,10 @@ def test_error_resilience_with_logging(caplog):
                     assert False, "Should have raised RuntimeError"
                 except RuntimeError as e:
                     assert "Database connection not established" in str(e)
-            
+
             # Restore the connection
             db.conn = original_conn
-            
+
             # Verify we can continue processing after the error
             another_record = MeldebestaetigungRecord(
                 vorgangsnummer="VALID456",
@@ -806,12 +823,12 @@ def test_error_resilience_with_logging(caplog):
                 ergebnis_qc="1",
                 case_id="CASE456",
                 gpas_domain="test_domain",
-                processed_at=datetime(2023, 1, 2, 12, 0, 0)
+                processed_at=datetime(2023, 1, 2, 12, 0, 0),
             )
-            
+
             # This should succeed
             db.upsert_record(another_record)
-            
+
             # Verify the second record was inserted
             retrieved2 = db.get_record("VALID456")
             assert retrieved2 is not None
@@ -831,12 +848,16 @@ def test_error_resilience_with_logging(caplog):
     ergebnis_qc=st.text(min_size=1, max_size=50),
     case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
     gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
-    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),
+    processed_at=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
     output_date=st.one_of(
         st.none(),
-        st.dates(min_value=pytest.importorskip("datetime").date(2020, 1, 1), 
-                max_value=pytest.importorskip("datetime").date(2030, 12, 31))
-    )
+        st.dates(
+            min_value=pytest.importorskip("datetime").date(2020, 1, 1),
+            max_value=pytest.importorskip("datetime").date(2030, 12, 31),
+        ),
+    ),
 )
 def test_database_storage_consistency(
     vorgangsnummer: str,
@@ -849,21 +870,21 @@ def test_database_storage_consistency(
     case_id: str,
     gpas_domain: str,
     processed_at,
-    output_date
+    output_date,
 ):
     """
     **Feature: leistungsdatum-integration, Property 6: Database storage consistency**
-    
-    For any valid Leistungsdatum, storing it in the database should preserve 
+
+    For any valid Leistungsdatum, storing it in the database should preserve
     the date value accurately.
     **Validates: Requirements 2.2**
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create a record with output_date
         record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -876,26 +897,28 @@ def test_database_storage_consistency(
             case_id=case_id,
             gpas_domain=gpas_domain,
             processed_at=processed_at,
-            output_date=output_date
+            output_date=output_date,
         )
-        
+
         # Store the record
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
-            
+
             # Retrieve the record
             retrieved_record = db.get_record(vorgangsnummer)
-            
+
             # Verify the record was retrieved
             assert retrieved_record is not None
-            
+
             # Verify output_date is preserved accurately
             assert retrieved_record.output_date == output_date
-            
+
             # If output_date is not None, verify it's the same date object
             if output_date is not None:
                 assert retrieved_record.output_date == output_date
-                assert isinstance(retrieved_record.output_date, pytest.importorskip("datetime").date)
+                assert isinstance(
+                    retrieved_record.output_date, pytest.importorskip("datetime").date
+                )
             else:
                 assert retrieved_record.output_date is None
 
@@ -909,36 +932,42 @@ def test_database_storage_consistency(
             st.text(min_size=1, max_size=100),  # vorgangsnummer
             st.text(min_size=1, max_size=500),  # meldebestaetigung
             st.text(min_size=1, max_size=100),  # source_file
-            st.text(min_size=1, max_size=50),   # typ_der_meldung
-            st.text(min_size=1, max_size=50),   # indikationsbereich
-            st.text(min_size=1, max_size=50),   # art_der_daten
-            st.text(min_size=1, max_size=50),   # ergebnis_qc
+            st.text(min_size=1, max_size=50),  # typ_der_meldung
+            st.text(min_size=1, max_size=50),  # indikationsbereich
+            st.text(min_size=1, max_size=50),  # art_der_daten
+            st.text(min_size=1, max_size=50),  # ergebnis_qc
             st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # case_id
             st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # gpas_domain
-            st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),  # processed_at
+            st.datetimes(
+                min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+            ),  # processed_at
             st.one_of(
                 st.none(),
-                st.dates(min_value=pytest.importorskip("datetime").date(2020, 1, 1), 
-                        max_value=pytest.importorskip("datetime").date(2030, 12, 31))
-            )  # output_date
+                st.dates(
+                    min_value=pytest.importorskip("datetime").date(2020, 1, 1),
+                    max_value=pytest.importorskip("datetime").date(2030, 12, 31),
+                ),
+            ),  # output_date
         ),
-        min_size=1, max_size=10, unique_by=lambda x: x[0]  # Unique by vorgangsnummer
+        min_size=1,
+        max_size=10,
+        unique_by=lambda x: x[0],  # Unique by vorgangsnummer
     )
 )
 def test_query_result_completeness(records_data):
     """
     **Feature: leistungsdatum-integration, Property 7: Query result completeness**
-    
-    For any database query, the result set should include the output_date field 
+
+    For any database query, the result set should include the output_date field
     when records contain it.
     **Validates: Requirements 2.4**
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create records from the generated data
         records = []
         for data in records_data:
@@ -953,33 +982,35 @@ def test_query_result_completeness(records_data):
                 case_id=data[7],
                 gpas_domain=data[8],
                 processed_at=data[9],
-                output_date=data[10]
+                output_date=data[10],
             )
             records.append(record)
-        
+
         # Store all records
         with MeldebestaetigungDatabase(db_path) as db:
             for record in records:
                 db.upsert_record(record)
-            
+
             # Query all records and verify output_date is included
             query_sql = "SELECT vorgangsnummer, output_date FROM meldebestaetigungen ORDER BY vorgangsnummer"
             results = db.conn.execute(query_sql).fetchall()
-            
+
             # Verify we got all records
             assert len(results) == len(records)
-            
+
             # Verify each record includes output_date field
             for i, result in enumerate(results):
                 vorgangsnummer = result[0]
                 output_date_from_query = result[1]
-                
+
                 # Find the corresponding original record
-                original_record = next(r for r in records if r.vorgangsnummer == vorgangsnummer)
-                
+                original_record = next(
+                    r for r in records if r.vorgangsnummer == vorgangsnummer
+                )
+
                 # Verify output_date is included and matches
                 assert output_date_from_query == original_record.output_date
-                
+
                 # Also verify using get_record method
                 retrieved_record = db.get_record(vorgangsnummer)
                 assert retrieved_record is not None
@@ -999,7 +1030,9 @@ def test_query_result_completeness(records_data):
     ergebnis_qc=st.text(min_size=1, max_size=50),
     case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
     gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
-    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1))
+    processed_at=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
 )
 def test_null_storage_for_unparseable_dates(
     vorgangsnummer: str,
@@ -1011,21 +1044,21 @@ def test_null_storage_for_unparseable_dates(
     ergebnis_qc: str,
     case_id: str,
     gpas_domain: str,
-    processed_at
+    processed_at,
 ):
     """
     **Feature: leistungsdatum-integration, Property 8: NULL storage for unparseable dates**
-    
-    For any unparseable Leistungsdatum, the database should store NULL 
+
+    For any unparseable Leistungsdatum, the database should store NULL
     in the output_date column.
     **Validates: Requirements 2.5**
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create a record with NULL output_date (representing unparseable Leistungsdatum)
         record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -1038,22 +1071,22 @@ def test_null_storage_for_unparseable_dates(
             case_id=case_id,
             gpas_domain=gpas_domain,
             processed_at=processed_at,
-            output_date=None  # NULL for unparseable date
+            output_date=None,  # NULL for unparseable date
         )
-        
+
         # Store the record
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(record)
-            
+
             # Retrieve the record
             retrieved_record = db.get_record(vorgangsnummer)
-            
+
             # Verify the record was retrieved
             assert retrieved_record is not None
-            
+
             # Verify output_date is NULL
             assert retrieved_record.output_date is None
-            
+
             # Verify all other fields are preserved
             assert retrieved_record.vorgangsnummer == vorgangsnummer
             assert retrieved_record.meldebestaetigung == meldebestaetigung
@@ -1065,9 +1098,11 @@ def test_null_storage_for_unparseable_dates(
             assert retrieved_record.case_id == case_id
             assert retrieved_record.gpas_domain == gpas_domain
             assert retrieved_record.processed_at == processed_at
-            
+
             # Verify NULL is stored in database by direct query
-            query_sql = "SELECT output_date FROM meldebestaetigungen WHERE vorgangsnummer = ?"
+            query_sql = (
+                "SELECT output_date FROM meldebestaetigungen WHERE vorgangsnummer = ?"
+            )
             result = db.conn.execute(query_sql, [vorgangsnummer]).fetchone()
             assert result is not None
             assert result[0] is None  # output_date should be NULL in database
@@ -1082,37 +1117,43 @@ def test_null_storage_for_unparseable_dates(
             st.text(min_size=1, max_size=100),  # vorgangsnummer
             st.text(min_size=1, max_size=500),  # meldebestaetigung
             st.text(min_size=1, max_size=100),  # source_file
-            st.text(min_size=1, max_size=50),   # typ_der_meldung
-            st.text(min_size=1, max_size=50),   # indikationsbereich
-            st.text(min_size=1, max_size=50),   # art_der_daten
-            st.text(min_size=1, max_size=50),   # ergebnis_qc
+            st.text(min_size=1, max_size=50),  # typ_der_meldung
+            st.text(min_size=1, max_size=50),  # indikationsbereich
+            st.text(min_size=1, max_size=50),  # art_der_daten
+            st.text(min_size=1, max_size=50),  # ergebnis_qc
             st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # case_id
             st.one_of(st.none(), st.text(min_size=1, max_size=100)),  # gpas_domain
-            st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),  # processed_at
+            st.datetimes(
+                min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+            ),  # processed_at
             st.booleans(),  # is_done
             st.one_of(
                 st.none(),
-                st.dates(min_value=pytest.importorskip("datetime").date(2020, 1, 1), 
-                        max_value=pytest.importorskip("datetime").date(2030, 12, 31))
-            )  # output_date
+                st.dates(
+                    min_value=pytest.importorskip("datetime").date(2020, 1, 1),
+                    max_value=pytest.importorskip("datetime").date(2030, 12, 31),
+                ),
+            ),  # output_date
         ),
-        min_size=1, max_size=10, unique_by=lambda x: x[0]  # Unique by vorgangsnummer
+        min_size=1,
+        max_size=10,
+        unique_by=lambda x: x[0],  # Unique by vorgangsnummer
     )
 )
 def test_migration_data_preservation(records_data):
     """
     **Feature: leistungsdatum-integration, Property 16: Migration data preservation**
-    
+
     For any existing record during migration, existing output_date values should be preserved.
     **Validates: Requirements 5.5**
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
     import duckdb
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create records from the generated data
         records = []
         for data in records_data:
@@ -1128,13 +1169,13 @@ def test_migration_data_preservation(records_data):
                 gpas_domain=data[8],
                 processed_at=data[9],
                 is_done=data[10],
-                output_date=data[11]
+                output_date=data[11],
             )
             records.append(record)
-        
+
         # Step 1: Create a database with the old schema (without output_date column)
         conn = duckdb.connect(str(db_path))
-        
+
         # Create table without output_date column (simulating old schema)
         old_schema_sql = """
         CREATE TABLE meldebestaetigungen (
@@ -1152,7 +1193,7 @@ def test_migration_data_preservation(records_data):
         )
         """
         conn.execute(old_schema_sql)
-        
+
         # Insert records without output_date (simulating existing data)
         for record in records:
             insert_sql = """
@@ -1162,16 +1203,26 @@ def test_migration_data_preservation(records_data):
                 gpas_domain, processed_at, is_done
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
-            conn.execute(insert_sql, [
-                record.vorgangsnummer, record.source_file, record.meldebestaetigung,
-                record.typ_der_meldung, record.indikationsbereich, record.art_der_daten,
-                record.ergebnis_qc, record.case_id, record.gpas_domain,
-                record.processed_at, record.is_done
-            ])
-        
+            conn.execute(
+                insert_sql,
+                [
+                    record.vorgangsnummer,
+                    record.source_file,
+                    record.meldebestaetigung,
+                    record.typ_der_meldung,
+                    record.indikationsbereich,
+                    record.art_der_daten,
+                    record.ergebnis_qc,
+                    record.case_id,
+                    record.gpas_domain,
+                    record.processed_at,
+                    record.is_done,
+                ],
+            )
+
         conn.commit()
         conn.close()
-        
+
         # Step 2: Open database with new schema (triggers migration)
         with MeldebestaetigungDatabase(db_path) as db:
             # Verify migration occurred by checking column exists
@@ -1183,28 +1234,36 @@ def test_migration_data_preservation(records_data):
             """
             result = db.conn.execute(column_check_sql).fetchall()
             assert len(result) == 1, "output_date column should exist after migration"
-            
+
             # Step 3: Verify all existing data is preserved
             for original_record in records:
                 retrieved_record = db.get_record(original_record.vorgangsnummer)
                 assert retrieved_record is not None
-                
+
                 # Verify all original fields are preserved
                 assert retrieved_record.vorgangsnummer == original_record.vorgangsnummer
-                assert retrieved_record.meldebestaetigung == original_record.meldebestaetigung
+                assert (
+                    retrieved_record.meldebestaetigung
+                    == original_record.meldebestaetigung
+                )
                 assert retrieved_record.source_file == original_record.source_file
-                assert retrieved_record.typ_der_meldung == original_record.typ_der_meldung
-                assert retrieved_record.indikationsbereich == original_record.indikationsbereich
+                assert (
+                    retrieved_record.typ_der_meldung == original_record.typ_der_meldung
+                )
+                assert (
+                    retrieved_record.indikationsbereich
+                    == original_record.indikationsbereich
+                )
                 assert retrieved_record.art_der_daten == original_record.art_der_daten
                 assert retrieved_record.ergebnis_qc == original_record.ergebnis_qc
                 assert retrieved_record.case_id == original_record.case_id
                 assert retrieved_record.gpas_domain == original_record.gpas_domain
                 assert retrieved_record.processed_at == original_record.processed_at
                 assert retrieved_record.is_done == original_record.is_done
-                
+
                 # Verify output_date is NULL for migrated records (since old schema didn't have it)
                 assert retrieved_record.output_date is None
-            
+
             # Step 4: Verify we can still insert new records with output_date
             new_record = MeldebestaetigungRecord(
                 vorgangsnummer="NEW_RECORD_AFTER_MIGRATION",
@@ -1218,13 +1277,15 @@ def test_migration_data_preservation(records_data):
                 gpas_domain="test_domain",
                 processed_at=pytest.importorskip("datetime").datetime(2023, 1, 1),
                 is_done=False,
-                output_date=pytest.importorskip("datetime").date(2023, 1, 15)
+                output_date=pytest.importorskip("datetime").date(2023, 1, 15),
             )
-            
+
             db.upsert_record(new_record)
             retrieved_new = db.get_record("NEW_RECORD_AFTER_MIGRATION")
             assert retrieved_new is not None
-            assert retrieved_new.output_date == pytest.importorskip("datetime").date(2023, 1, 15)
+            assert retrieved_new.output_date == pytest.importorskip("datetime").date(
+                2023, 1, 15
+            )
 
 
 # Feature: web-frontend, Property 11: Done status changes persist to database
@@ -1240,9 +1301,11 @@ def test_migration_data_preservation(records_data):
     ergebnis_qc=st.text(min_size=1, max_size=50),
     case_id=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
     gpas_domain=st.one_of(st.none(), st.text(min_size=1, max_size=100)),
-    processed_at=st.datetimes(min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)),
+    processed_at=st.datetimes(
+        min_value=pytest.importorskip("datetime").datetime(2000, 1, 1)
+    ),
     initial_done=st.booleans(),
-    updated_done=st.booleans()
+    updated_done=st.booleans(),
 )
 def test_done_status_changes_persist_to_database(
     vorgangsnummer: str,
@@ -1256,25 +1319,25 @@ def test_done_status_changes_persist_to_database(
     gpas_domain: str,
     processed_at,
     initial_done: bool,
-    updated_done: bool
+    updated_done: bool,
 ):
     """
     Done status changes persist to database
-    
+
     For any done status update operation, when querying the database after the update,
     the is_done field should reflect the new value.
-    
+
     This test verifies that:
     1. Initial done status is stored correctly
     2. Updated done status is persisted correctly
     3. Retrieved done status matches the updated value
     """
     from mvh_copy_mb.database import MeldebestaetigungRecord
-    
+
     # Create a temporary database
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test.duckdb"
-        
+
         # Create a record with initial done status
         initial_record = MeldebestaetigungRecord(
             vorgangsnummer=vorgangsnummer,
@@ -1287,18 +1350,18 @@ def test_done_status_changes_persist_to_database(
             case_id=case_id,
             gpas_domain=gpas_domain,
             processed_at=processed_at,
-            is_done=initial_done
+            is_done=initial_done,
         )
-        
+
         # Store the record with initial done status
         with MeldebestaetigungDatabase(db_path) as db:
             db.upsert_record(initial_record)
-            
+
             # Retrieve and verify initial done status
             retrieved_initial = db.get_record(vorgangsnummer)
             assert retrieved_initial is not None
             assert retrieved_initial.is_done == initial_done
-            
+
             # Update the record with new done status
             updated_record = MeldebestaetigungRecord(
                 vorgangsnummer=vorgangsnummer,
@@ -1311,16 +1374,16 @@ def test_done_status_changes_persist_to_database(
                 case_id=case_id,
                 gpas_domain=gpas_domain,
                 processed_at=processed_at,
-                is_done=updated_done
+                is_done=updated_done,
             )
-            
+
             db.upsert_record(updated_record)
-            
+
             # Retrieve and verify updated done status
             retrieved_updated = db.get_record(vorgangsnummer)
             assert retrieved_updated is not None
             assert retrieved_updated.is_done == updated_done
-            
+
             # Verify the done status changed if initial and updated differ
             if initial_done != updated_done:
                 assert retrieved_updated.is_done != initial_done
