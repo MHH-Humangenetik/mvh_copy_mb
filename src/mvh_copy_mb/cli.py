@@ -1,6 +1,7 @@
 import csv
 import shutil
-import logging
+import sys
+from loguru import logger
 from pathlib import Path
 from typing import Optional, cast
 
@@ -26,9 +27,10 @@ load_dotenv()
 # Initialize rich console
 console = Console()
 
-# Configure logging
-logger = logging.getLogger(__name__)
-logging.getLogger('zeep.wsdl.bindings.soap').setLevel(logging.ERROR)
+# Configure loguru logger
+logger.remove()  # Remove default handler
+logger.add(sys.stderr, level="INFO", format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+
 
 class GpasClient:
     def __init__(self, endpoint: str, username: str, password: str, grz: str, kdk: str, verify_ssl: bool = True):
@@ -355,13 +357,11 @@ def main(input_dir, gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk,
     """
     Process MVH Meldebestaetigung CSV files and organize them based on metadata, resolving pseudonyms via gPAS.
     """
-    logging.basicConfig(
-        filename=log_file,
-        filemode='w',
-        encoding='utf-8',
-        level=log_level.upper(),
-        format='%(asctime)s - %(levelname)s - %(message)s'
-    )
+    # Set loguru file handler with rotation and retention
+    # Note: loguru does not support 'per run' rotation, so we use size-based rotation (e.g., 5 MB) as a practical alternative.
+    logger.remove()
+    logger.add(log_file, rotation="5 MB", retention=10, encoding="utf-8", level=log_level.upper(), format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
+    logger.add(sys.stderr, level=log_level.upper(), format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>")
     
     input_path = Path(input_dir)
     gpas_client = GpasClient(gpas_endpoint, gpas_user, gpas_password, gpas_grz, gpas_kdk, gpas_verify_ssl)
