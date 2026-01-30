@@ -6,12 +6,24 @@ priority group calculation, and batch done status updates.
 """
 
 import logging
+from logging.handlers import RotatingFileHandler
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional
 
 from .database import MeldebestaetigungDatabase, MeldebestaetigungRecord
 
+log_file = os.environ.get("MVH_LOG_FILE", "mvh_web.log")
+file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=10, encoding="utf-8")
+file_handler.setFormatter(logging.Formatter(
+    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+))
+logging.basicConfig(
+    level="INFO",
+    handlers=[file_handler]
+)
 logger = logging.getLogger(__name__)
 
 

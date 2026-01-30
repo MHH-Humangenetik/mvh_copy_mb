@@ -5,7 +5,7 @@ This module provides functionality for tracking and displaying processing statis
 during CLI execution, including file counts, pairing status, and GEPADO update results.
 """
 
-import sys
+from rich.console import Console
 from dataclasses import dataclass
 from typing import Optional
 
@@ -75,6 +75,7 @@ class ProcessingStatistics:
 
         Args:
             count: Number to increment by (default: 1)
+        import os
 
         Raises:
             ValueError: If count is negative or not an integer
@@ -280,7 +281,7 @@ class ProcessingStatistics:
             )
         except ValueError as e:
             # Log error but return a safe fallback value
-            print(f"Warning: Invalid statistics data detected: {e}", file=sys.stderr)
+            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid statistics data detected: {e}")
             return 0
 
     def get_total_gepado_operations(self) -> int:
@@ -303,10 +304,7 @@ class ProcessingStatistics:
             )
         except ValueError as e:
             # Log error but return a safe fallback value
-            print(
-                f"Warning: Invalid GEPADO statistics data detected: {e}",
-                file=sys.stderr,
-            )
+            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid GEPADO statistics data detected: {e}")
             return 0
 
 
@@ -330,41 +328,35 @@ def render_progress_bar(count: int, total: int, width: int = 20) -> str:
         try:
             count = int(count)
         except (ValueError, TypeError):
-            print(f"Warning: Invalid count value '{count}', using 0", file=sys.stderr)
+            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid count value '{count}', using 0")
             count = 0
 
     if not isinstance(total, int):
         try:
             total = int(total)
         except (ValueError, TypeError):
-            print(f"Warning: Invalid total value '{total}', using 0", file=sys.stderr)
+            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid total value '{total}', using 0")
             total = 0
 
     if not isinstance(width, int):
         try:
             width = int(width)
         except (ValueError, TypeError):
-            print(f"Warning: Invalid width value '{width}', using 20", file=sys.stderr)
+            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid width value '{width}', using 20")
             width = 20
 
     # Validate width is positive
     if width <= 0:
-        print(
-            f"Warning: Width must be positive, got {width}, using 20", file=sys.stderr
-        )
+        Console(stderr=True).print(f"[yellow]Warning:[/] Width must be positive, got {width}, using 20")
         width = 20
 
     # Ensure counts are non-negative
     if count < 0:
-        print(
-            f"Warning: Count cannot be negative, got {count}, using 0", file=sys.stderr
-        )
+        Console(stderr=True).print(f"[yellow]Warning:[/] Count cannot be negative, got {count}, using 0")
         count = 0
 
     if total < 0:
-        print(
-            f"Warning: Total cannot be negative, got {total}, using 0", file=sys.stderr
-        )
+        Console(stderr=True).print(f"[yellow]Warning:[/] Total cannot be negative, got {total}, using 0")
         total = 0
 
     # Handle division by zero case
@@ -389,10 +381,7 @@ def render_progress_bar(count: int, total: int, width: int = 20) -> str:
         return "[" + "█" * filled_width + "░" * empty_width + "]"
 
     except (ZeroDivisionError, OverflowError, ValueError) as e:
-        print(
-            f"Warning: Error calculating progress bar: {e}, returning empty bar",
-            file=sys.stderr,
-        )
+        Console(stderr=True).print(f"[yellow]Warning:[/] Error calculating progress bar: {e}, returning empty bar")
         return "[" + "░" * width + "]"
 
 
@@ -408,29 +397,27 @@ def display_statistics(
     """
     # Handle missing statistics gracefully
     if stats is None:
-        print("\n" + "=" * 80, file=sys.stderr)
-        print("PROCESSING SUMMARY".center(80), file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
-        print("Warning: No statistics available to display", file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
+        rich_console = Console()
+        rich_console.print("\n" + "=" * 80)
+        rich_console.print("PROCESSING SUMMARY".center(80))
+        rich_console.print("=" * 80)
+        rich_console.print("[yellow]Warning:[/] No statistics available to display")
+        rich_console.print("=" * 80)
         return
 
     # Validate statistics object
     try:
         if not isinstance(stats, ProcessingStatistics):
-            print(
-                f"Warning: Invalid statistics object type: {type(stats)}",
-                file=sys.stderr,
-            )
+            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid statistics object type: {type(stats)}")
             return
 
         # Attempt to validate the statistics data
         stats._validate_counts()
     except ValueError as e:
-        print(f"Warning: Invalid statistics data: {e}", file=sys.stderr)
-        print("Attempting to display available data...", file=sys.stderr)
+        Console(stderr=True).print(f"[yellow]Warning:[/] Invalid statistics data: {e}")
+        Console(stderr=True).print("Attempting to display available data...")
     except AttributeError:
-        print("Warning: Statistics object missing validation method", file=sys.stderr)
+        Console(stderr=True).print("[yellow]Warning:[/] Statistics object missing validation method")
 
     try:
         total_files = stats.get_total_files()
@@ -460,7 +447,6 @@ def display_statistics(
             bar_width = 47
 
         # If stdout is a terminal, use rich for a prettier summary
-        from rich.console import Console
         from rich.table import Table
         from rich import box
         from rich.progress_bar import ProgressBar
@@ -566,118 +552,92 @@ def display_statistics(
             return
 
         # Non-terminal fallback: keep original plain-text output for tests and non-interactive runs
-        print("\n" + "=" * separator_width)
-        print("PROCESSING SUMMARY".center(separator_width))
-        print("=" * separator_width)
+        rich_console = Console()
+        rich_console.print("\n" + "=" * separator_width)
+        rich_console.print("PROCESSING SUMMARY".center(separator_width))
+        rich_console.print("=" * separator_width)
 
         try:
             ready_bar = render_progress_bar(
                 stats.ready_pairs_count * 2, total_files, bar_width
             )
-            print(f"Ready pairs:            {stats.ready_pairs_count:>6} {ready_bar}")
+            rich_console.print(f"Ready pairs:            {stats.ready_pairs_count:>6} {ready_bar}")
         except Exception as e:
-            print(
-                f"Ready pairs:            {getattr(stats, 'ready_pairs_count', 0):>6} [Error: {e}]"
-            )
+            rich_console.print(f"Ready pairs:            {getattr(stats, 'ready_pairs_count', 0):>6} [Error: {e}]")
 
         try:
             genomic_bar = render_progress_bar(
                 stats.unpaired_genomic_count, total_files, bar_width
             )
-            print(
-                f"Unpaired genomic:       {stats.unpaired_genomic_count:>6} {genomic_bar}"
-            )
+            rich_console.print(f"Unpaired genomic:       {stats.unpaired_genomic_count:>6} {genomic_bar}")
         except Exception as e:
-            print(
-                f"Unpaired genomic:       {getattr(stats, 'unpaired_genomic_count', 0):>6} [Error: {e}]"
-            )
+            rich_console.print(f"Unpaired genomic:       {getattr(stats, 'unpaired_genomic_count', 0):>6} [Error: {e}]")
 
         try:
             clinical_bar = render_progress_bar(
                 stats.unpaired_clinical_count, total_files, bar_width
             )
-            print(
-                f"Unpaired clinical:      {stats.unpaired_clinical_count:>6} {clinical_bar}"
-            )
+            rich_console.print(f"Unpaired clinical:      {stats.unpaired_clinical_count:>6} {clinical_bar}")
         except Exception as e:
-            print(
-                f"Unpaired clinical:      {getattr(stats, 'unpaired_clinical_count', 0):>6} [Error: {e}]"
-            )
+            rich_console.print(f"Unpaired clinical:      {getattr(stats, 'unpaired_clinical_count', 0):>6} [Error: {e}]")
 
         try:
             ignored_bar = render_progress_bar(
                 stats.ignored_count, total_files, bar_width
             )
-            print(f"Ignored files:          {stats.ignored_count:>6} {ignored_bar}")
+            rich_console.print(f"Ignored files:          {stats.ignored_count:>6} {ignored_bar}")
         except Exception as e:
-            print(
-                f"Ignored files:          {getattr(stats, 'ignored_count', 0):>6} [Error: {e}]"
-            )
+            rich_console.print(f"Ignored files:          {getattr(stats, 'ignored_count', 0):>6} [Error: {e}]")
 
         # GEPADO statistics (if enabled) with error handling
         if gepado_enabled:
             try:
                 total_gepado = stats.get_total_gepado_operations()
-                print("\nGEPADO OPERATIONS:")
+                rich_console.print("\nGEPADO OPERATIONS:")
 
                 try:
                     genomic_updates_bar = render_progress_bar(
                         stats.gepado_genomic_updates, total_gepado, bar_width
                     )
-                    print(
-                        f"Updated genomic data:   {stats.gepado_genomic_updates:>6} {genomic_updates_bar}"
-                    )
+                    rich_console.print(f"Updated genomic data:   {stats.gepado_genomic_updates:>6} {genomic_updates_bar}")
                 except Exception as e:
-                    print(
-                        f"Updated genomic data:   {getattr(stats, 'gepado_genomic_updates', 0):>6} [Error: {e}]"
-                    )
+                    rich_console.print(f"Updated genomic data:   {getattr(stats, 'gepado_genomic_updates', 0):>6} [Error: {e}]")
 
                 try:
                     clinical_updates_bar = render_progress_bar(
                         stats.gepado_clinical_updates, total_gepado, bar_width
                     )
-                    print(
-                        f"Updated clinical data:  {stats.gepado_clinical_updates:>6} {clinical_updates_bar}"
-                    )
+                    rich_console.print(f"Updated clinical data:  {stats.gepado_clinical_updates:>6} {clinical_updates_bar}")
                 except Exception as e:
-                    print(
-                        f"Updated clinical data:  {getattr(stats, 'gepado_clinical_updates', 0):>6} [Error: {e}]"
-                    )
+                    rich_console.print(f"Updated clinical data:  {getattr(stats, 'gepado_clinical_updates', 0):>6} [Error: {e}]")
 
                 try:
                     no_updates_bar = render_progress_bar(
                         stats.gepado_no_updates_needed, total_gepado, bar_width
                     )
-                    print(
-                        f"No updates needed:      {stats.gepado_no_updates_needed:>6} {no_updates_bar}"
-                    )
+                    rich_console.print(f"No updates needed:      {stats.gepado_no_updates_needed:>6} {no_updates_bar}")
                 except Exception as e:
-                    print(
-                        f"No updates needed:      {getattr(stats, 'gepado_no_updates_needed', 0):>6} [Error: {e}]"
-                    )
+                    rich_console.print(f"No updates needed:      {getattr(stats, 'gepado_no_updates_needed', 0):>6} [Error: {e}]")
 
                 try:
                     errors_bar = render_progress_bar(
                         stats.gepado_errors, total_gepado, bar_width
                     )
-                    print(
-                        f"Errors during ops:      {stats.gepado_errors:>6} {errors_bar}"
-                    )
+                    rich_console.print(f"Errors during ops:      {stats.gepado_errors:>6} {errors_bar}")
                 except Exception as e:
-                    print(
-                        f"Errors during ops:      {getattr(stats, 'gepado_errors', 0):>6} [Error: {e}]"
-                    )
+                    rich_console.print(f"Errors during ops:      {getattr(stats, 'gepado_errors', 0):>6} [Error: {e}]")
 
             except Exception as e:
-                print(f"\nGEPADO OPERATIONS: [Error calculating totals: {e}]")
+                rich_console.print(f"\nGEPADO OPERATIONS: [Error calculating totals: {e}]")
 
-        print("=" * separator_width)
+        rich_console.print("=" * separator_width)
 
     except Exception as e:
         # Ultimate fallback - display basic error message
-        print("\n" + "=" * 80, file=sys.stderr)
-        print("PROCESSING SUMMARY".center(80), file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
-        print(f"Error displaying statistics: {e}", file=sys.stderr)
-        print("Statistics display failed - please check the data", file=sys.stderr)
-        print("=" * 80, file=sys.stderr)
+        rich_console = Console()
+        rich_console.print("\n" + "=" * 80)
+        rich_console.print("PROCESSING SUMMARY".center(80))
+        rich_console.print("=" * 80)
+        rich_console.print(f"[red]Error displaying statistics:[/] {e}")
+        rich_console.print("Statistics display failed - please check the data")
+        rich_console.print("=" * 80)

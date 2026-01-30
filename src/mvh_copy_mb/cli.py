@@ -33,14 +33,6 @@ load_dotenv()
 # Initialize rich console
 console = Console()
 
-# Configure loguru logger
-logger.remove()  # Remove default handler
-logger.add(
-    sys.stderr,
-    level="INFO",
-    format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-)
-
 
 class GpasClient:
     def __init__(
@@ -514,11 +506,6 @@ def main(
         rotation="5 MB",
         retention=10,
         encoding="utf-8",
-        level=log_level.upper(),
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    )
-    logger.add(
-        sys.stderr,
         level=log_level.upper(),
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
     )

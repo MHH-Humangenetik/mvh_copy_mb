@@ -702,9 +702,9 @@ def test_display_statistics_none_input(capsys):
     display_statistics(None, gepado_enabled=False)
     captured = capsys.readouterr()
 
-    # Should display warning message
-    assert "Warning: No statistics available to display" in captured.err
-    assert "PROCESSING SUMMARY" in captured.err
+    # Should display warning message in stdout
+    assert "Warning: No statistics available to display" in captured.out
+    assert "PROCESSING SUMMARY" in captured.out
 
 
 def test_display_statistics_invalid_object_type(capsys):

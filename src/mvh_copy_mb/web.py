@@ -7,6 +7,7 @@ marking records as done.
 """
 
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 from pathlib import Path
 from contextlib import asynccontextmanager
@@ -22,9 +23,16 @@ from fastapi.middleware.cors import CORSMiddleware
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Configure rotating file logging (no terminal output)
+log_file = os.environ.get("MVH_LOG_FILE", "mvh_web.log")
+file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=10, encoding="utf-8")
+file_handler.setFormatter(logging.Formatter(
+    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+))
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level="INFO",
+    handlers=[file_handler]
 )
 logger = logging.getLogger(__name__)
 

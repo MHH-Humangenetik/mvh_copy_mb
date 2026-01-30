@@ -8,8 +8,20 @@ numeric IDs are returned.
 
 import re
 import logging
+from logging.handlers import RotatingFileHandler
+import os
 from typing import Optional
 
+log_file = os.environ.get("MVH_LOG_FILE", "mvh_web.log")
+file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=10, encoding="utf-8")
+file_handler.setFormatter(logging.Formatter(
+    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+))
+logging.basicConfig(
+    level="INFO",
+    handlers=[file_handler]
+)
 logger = logging.getLogger(__name__)
 
 HUMGEN_PATTERN = re.compile(r"HUMGEN_\w+_(\d+).*")
