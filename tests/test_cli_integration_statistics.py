@@ -18,7 +18,6 @@ from mvh_copy_mb.cli import process_csv_file, GpasClient
 from mvh_copy_mb.statistics import (
     ProcessingStatistics,
     display_statistics,
-    render_progress_bar,
 )
 from mvh_copy_mb.database import MeldebestaetigungDatabase
 
@@ -624,31 +623,7 @@ class TestCLIIntegrationStatistics:
 
             # Verify progress bars are present
             lines = captured_output.split("\n")
-            progress_bar_lines = [line for line in lines if "[" in line and "]" in line]
-            assert len(progress_bar_lines) == 8, (
-                f"Expected 8 progress bar lines, got {len(progress_bar_lines)}"
-            )
-
-            # Verify all progress bars have consistent format
-            for line in progress_bar_lines:
-                assert line.count("[") == 1, (
-                    f"Each line should have exactly one opening bracket: '{line}'"
-                )
-                assert line.count("]") == 1, (
-                    f"Each line should have exactly one closing bracket: '{line}'"
-                )
-
-                # Extract progress bar content
-                start_bracket = line.find("[")
-                end_bracket = line.find("]")
-                bar_content = line[start_bracket + 1 : end_bracket]
-
-                # Verify progress bar contains only valid characters
-                valid_chars = set("█░")
-                actual_chars = set(bar_content)
-                assert actual_chars.issubset(valid_chars), (
-                    f"Progress bar contains invalid characters: {actual_chars - valid_chars} in '{bar_content}'"
-                )
+            # Progress bar assertions removed; output format is now plain counts.
 
     def test_statistics_display_without_gepado(self):
         """Test statistics display when GEPADO is disabled."""
@@ -696,10 +671,7 @@ class TestCLIIntegrationStatistics:
 
         # Verify only file statistics progress bars are present (4 lines)
         lines = captured_output.split("\n")
-        progress_bar_lines = [line for line in lines if "[" in line and "]" in line]
-        assert len(progress_bar_lines) == 4, (
-            f"Expected 4 progress bar lines (files only), got {len(progress_bar_lines)}"
-        )
+        # Progress bar assertions removed; output format is now plain counts.
 
     def test_error_handling_in_statistics_workflow(self):
         """Test error handling during statistics collection and display."""
@@ -1047,16 +1019,7 @@ class TestStatisticsAccuracyWithRealData:
 
             # Verify progress bar calculations are accurate
             # Test progress bar for unpaired genomic files (should show 3 out of 8 total)
-            genomic_bar = render_progress_bar(
-                stats.unpaired_genomic_count, actual_total, 20
-            )
-            expected_filled_chars = int((3 / 8) * 20)  # 3 out of 8 = 7.5 chars filled
-            actual_filled_chars = genomic_bar.count("█")
-
-            # Allow for rounding tolerance
-            assert abs(actual_filled_chars - expected_filled_chars) <= 1, (
-                f"Genomic files progress bar: expected ~{expected_filled_chars} filled chars, got {actual_filled_chars}"
-            )
+            # Progress bar assertions removed; output format is now plain counts.
 
             # Verify file organization matches expectations
             genomseq_g_dir = temp_dir / "GenomSeq" / "G"
@@ -1159,15 +1122,7 @@ class TestStatisticsAccuracyWithRealData:
             )
 
             # Verify progress bar calculations for unpaired clinical files
-            clinical_bar = render_progress_bar(
-                stats.unpaired_clinical_count, actual_total, 20
-            )
-            expected_filled_chars = int((2 / 6) * 20)  # 2 out of 6 = ~6.7 chars filled
-            actual_filled_chars = clinical_bar.count("█")
-
-            assert abs(actual_filled_chars - expected_filled_chars) <= 1, (
-                f"Unpaired clinical progress bar: expected ~{expected_filled_chars} filled chars, got {actual_filled_chars}"
-            )
+            # Progress bar assertions removed; output format is now plain counts.
 
     def test_mixed_realistic_batch_accuracy(self):
         """Test statistics accuracy with mixed realistic batch containing all scenarios."""
@@ -1256,25 +1211,7 @@ class TestStatisticsAccuracyWithRealData:
             )
 
             # Verify progress bars reflect these proportions accurately
-            bar_width = 20
-
-            ready_bar = render_progress_bar(
-                stats.ready_pairs_count * 2, actual_total, bar_width
-            )
-            ready_filled = ready_bar.count("█")
-            expected_ready_filled = int(ready_proportion * bar_width)
-            assert abs(ready_filled - expected_ready_filled) <= 1, (
-                f"Ready progress bar: expected ~{expected_ready_filled} filled, got {ready_filled}"
-            )
-
-            genomic_bar = render_progress_bar(
-                stats.unpaired_genomic_count, actual_total, bar_width
-            )
-            genomic_filled = genomic_bar.count("█")
-            expected_genomic_filled = int(genomic_proportion * bar_width)
-            assert abs(genomic_filled - expected_genomic_filled) <= 1, (
-                f"Genomic progress bar: expected ~{expected_genomic_filled} filled, got {genomic_filled}"
-            )
+            # Progress bar assertions removed; output format is now plain counts.
 
     @patch("mvh_copy_mb.cli.create_gepado_client_from_env")
     @patch("mvh_copy_mb.cli.validate_and_update_record")
@@ -1391,33 +1328,7 @@ class TestStatisticsAccuracyWithRealData:
                 f"Expected GEPADO total {expected_gepado_total}, got {actual_gepado_total}"
             )
 
-            # Verify GEPADO progress bar calculations
-            genomic_updates_bar = render_progress_bar(
-                stats.gepado_genomic_updates, actual_gepado_total, 20
-            )
-            expected_genomic_filled = int((2 / 4) * 20)  # 2 out of 4 = 50% = 10 chars
-            actual_genomic_filled = genomic_updates_bar.count("█")
-            assert actual_genomic_filled == expected_genomic_filled, (
-                f"GEPADO genomic progress bar: expected {expected_genomic_filled} filled, got {actual_genomic_filled}"
-            )
-
-            clinical_updates_bar = render_progress_bar(
-                stats.gepado_clinical_updates, actual_gepado_total, 20
-            )
-            expected_clinical_filled = int((1 / 4) * 20)  # 1 out of 4 = 25% = 5 chars
-            actual_clinical_filled = clinical_updates_bar.count("█")
-            assert actual_clinical_filled == expected_clinical_filled, (
-                f"GEPADO clinical progress bar: expected {expected_clinical_filled} filled, got {actual_clinical_filled}"
-            )
-
-            errors_bar = render_progress_bar(
-                stats.gepado_errors, actual_gepado_total, 20
-            )
-            expected_errors_filled = int((1 / 4) * 20)  # 1 out of 4 = 25% = 5 chars
-            actual_errors_filled = errors_bar.count("█")
-            assert actual_errors_filled == expected_errors_filled, (
-                f"GEPADO errors progress bar: expected {expected_errors_filled} filled, got {actual_errors_filled}"
-            )
+            # Progress bar assertions removed; output format is now plain counts.
 
     def test_large_batch_statistics_accuracy(self):
         """Test statistics accuracy with a larger, more realistic batch size."""
@@ -1552,46 +1463,7 @@ class TestStatisticsAccuracyWithRealData:
             )
 
             # Verify progress bar accuracy with larger numbers
-            bar_width = 20
-
-            # Ready pairs should dominate the progress bar (50/95 = ~53%)
-            ready_bar = render_progress_bar(
-                stats.ready_pairs_count * 2, actual_total, bar_width
-            )
-            ready_filled = ready_bar.count("█")
-            expected_ready_filled = int((50 / 95) * bar_width)  # ~10-11 chars
-            assert abs(ready_filled - expected_ready_filled) <= 1, (
-                f"Large batch ready progress bar: expected ~{expected_ready_filled} filled, got {ready_filled}"
-            )
-
-            # Unpaired genomic should be empty (0/95 = 0%)
-            genomic_bar = render_progress_bar(
-                stats.unpaired_genomic_count, actual_total, bar_width
-            )
-            genomic_filled = genomic_bar.count("█")
-            expected_genomic_filled = 0  # 0 chars
-            assert genomic_filled == expected_genomic_filled, (
-                f"Large batch genomic progress bar: expected {expected_genomic_filled} filled, got {genomic_filled}"
-            )
-
-            # Test that the sum of all progress bar segments makes sense
-            clinical_bar = render_progress_bar(
-                stats.unpaired_clinical_count, actual_total, bar_width
-            )
-            ignored_bar = render_progress_bar(
-                stats.ignored_count, actual_total, bar_width
-            )
-
-            total_filled_chars = (
-                ready_filled
-                + genomic_bar.count("█")
-                + clinical_bar.count("█")
-                + ignored_bar.count("█")
-            )
-            # Note: This won't equal bar_width exactly due to overlapping calculations, but should be reasonable
-            assert total_filled_chars <= bar_width * 4, (
-                "Total filled characters across all bars should be reasonable"
-            )
+            # Progress bar assertions removed; output format is now plain counts.
 
     def test_edge_case_statistics_accuracy(self):
         """Test statistics accuracy with edge cases and boundary conditions."""
@@ -1692,17 +1564,7 @@ class TestStatisticsAccuracyWithRealData:
             )
 
             # Verify progress bars work correctly with small numbers
-            bar_width = 20
-
-            # Each category should get proportional representation
-            genomic_bar = render_progress_bar(
-                stats.unpaired_genomic_count, actual_total, bar_width
-            )
-            genomic_filled = genomic_bar.count("█")
-            expected_genomic_filled = int((1 / 4) * bar_width)  # 25% = 5 chars
-            assert abs(genomic_filled - expected_genomic_filled) <= 1, (
-                f"Genomic files should get ~{expected_genomic_filled} chars, got {genomic_filled}"
-            )
+            # Progress bar assertions removed; output format is now plain counts.
 
             # Test zero case - all files ignored
             zero_ready_rows = [
@@ -1760,24 +1622,4 @@ class TestStatisticsAccuracyWithRealData:
             )
 
             # Verify progress bars handle zero cases correctly
-            ready_bar_zero = render_progress_bar(
-                stats_zero.ready_pairs_count * 2,
-                stats_zero.get_total_files(),
-                bar_width,
-            )
-            assert ready_bar_zero.count("█") == 0, (
-                "Zero ready pairs should result in empty progress bar"
-            )
-            assert ready_bar_zero.count("░") == bar_width, (
-                "Zero ready pairs should result in all empty characters"
-            )
-
-            ignored_bar_zero = render_progress_bar(
-                stats_zero.ignored_count, stats_zero.get_total_files(), bar_width
-            )
-            assert ignored_bar_zero.count("█") == bar_width, (
-                "All ignored files should result in full progress bar"
-            )
-            assert ignored_bar_zero.count("░") == 0, (
-                "All ignored files should result in no empty characters"
-            )
+            # Progress bar assertions removed; output format is now plain counts.
