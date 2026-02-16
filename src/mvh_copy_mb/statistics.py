@@ -308,81 +308,6 @@ class ProcessingStatistics:
             return 0
 
 
-def render_progress_bar(count: int, total: int, width: int = 20) -> str:
-    """
-    Render a progress bar for the given count and total.
-
-    Args:
-        count: Current count value
-        total: Maximum value for the progress bar
-        width: Width of the progress bar in characters (excluding brackets)
-
-    Returns:
-        String representation of the progress bar with brackets
-
-    Raises:
-        ValueError: If width is non-positive or parameters are invalid
-    """
-    # Validate input parameters
-    if not isinstance(count, int):
-        try:
-            count = int(count)
-        except (ValueError, TypeError):
-            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid count value '{count}', using 0")
-            count = 0
-
-    if not isinstance(total, int):
-        try:
-            total = int(total)
-        except (ValueError, TypeError):
-            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid total value '{total}', using 0")
-            total = 0
-
-    if not isinstance(width, int):
-        try:
-            width = int(width)
-        except (ValueError, TypeError):
-            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid width value '{width}', using 20")
-            width = 20
-
-    # Validate width is positive
-    if width <= 0:
-        Console(stderr=True).print(f"[yellow]Warning:[/] Width must be positive, got {width}, using 20")
-        width = 20
-
-    # Ensure counts are non-negative
-    if count < 0:
-        Console(stderr=True).print(f"[yellow]Warning:[/] Count cannot be negative, got {count}, using 0")
-        count = 0
-
-    if total < 0:
-        Console(stderr=True).print(f"[yellow]Warning:[/] Total cannot be negative, got {total}, using 0")
-        total = 0
-
-    # Handle division by zero case
-    if total == 0:
-        return "[" + "░" * width + "]"
-
-    # Ensure count doesn't exceed total for progress calculation
-    clamped_count = min(count, total)
-
-    try:
-        filled_width = int((clamped_count / total) * width)
-        empty_width = width - filled_width
-
-        # Ensure we don't exceed width due to rounding errors
-        if filled_width > width:
-            filled_width = width
-            empty_width = 0
-        elif filled_width < 0:
-            filled_width = 0
-            empty_width = width
-
-        return "[" + "█" * filled_width + "░" * empty_width + "]"
-
-    except (ZeroDivisionError, OverflowError, ValueError) as e:
-        Console(stderr=True).print(f"[yellow]Warning:[/] Error calculating progress bar: {e}, returning empty bar")
-        return "[" + "░" * width + "]"
 
 
 def display_statistics(
@@ -557,76 +482,20 @@ def display_statistics(
         rich_console.print("PROCESSING SUMMARY".center(separator_width))
         rich_console.print("=" * separator_width)
 
-        try:
-            ready_bar = render_progress_bar(
-                stats.ready_pairs_count * 2, total_files, bar_width
-            )
-            rich_console.print(f"Ready pairs:            {stats.ready_pairs_count:>6} {ready_bar}")
-        except Exception as e:
-            rich_console.print(f"Ready pairs:            {getattr(stats, 'ready_pairs_count', 0):>6} [Error: {e}]")
-
-        try:
-            genomic_bar = render_progress_bar(
-                stats.unpaired_genomic_count, total_files, bar_width
-            )
-            rich_console.print(f"Unpaired genomic:       {stats.unpaired_genomic_count:>6} {genomic_bar}")
-        except Exception as e:
-            rich_console.print(f"Unpaired genomic:       {getattr(stats, 'unpaired_genomic_count', 0):>6} [Error: {e}]")
-
-        try:
-            clinical_bar = render_progress_bar(
-                stats.unpaired_clinical_count, total_files, bar_width
-            )
-            rich_console.print(f"Unpaired clinical:      {stats.unpaired_clinical_count:>6} {clinical_bar}")
-        except Exception as e:
-            rich_console.print(f"Unpaired clinical:      {getattr(stats, 'unpaired_clinical_count', 0):>6} [Error: {e}]")
-
-        try:
-            ignored_bar = render_progress_bar(
-                stats.ignored_count, total_files, bar_width
-            )
-            rich_console.print(f"Ignored files:          {stats.ignored_count:>6} {ignored_bar}")
-        except Exception as e:
-            rich_console.print(f"Ignored files:          {getattr(stats, 'ignored_count', 0):>6} [Error: {e}]")
+        rich_console.print(f"Ready pairs:            {stats.ready_pairs_count:>6}")
+        rich_console.print(f"Unpaired genomic:       {stats.unpaired_genomic_count:>6}")
+        rich_console.print(f"Unpaired clinical:      {stats.unpaired_clinical_count:>6}")
+        rich_console.print(f"Ignored files:          {stats.ignored_count:>6}")
 
         # GEPADO statistics (if enabled) with error handling
         if gepado_enabled:
             try:
                 total_gepado = stats.get_total_gepado_operations()
                 rich_console.print("\nGEPADO OPERATIONS:")
-
-                try:
-                    genomic_updates_bar = render_progress_bar(
-                        stats.gepado_genomic_updates, total_gepado, bar_width
-                    )
-                    rich_console.print(f"Updated genomic data:   {stats.gepado_genomic_updates:>6} {genomic_updates_bar}")
-                except Exception as e:
-                    rich_console.print(f"Updated genomic data:   {getattr(stats, 'gepado_genomic_updates', 0):>6} [Error: {e}]")
-
-                try:
-                    clinical_updates_bar = render_progress_bar(
-                        stats.gepado_clinical_updates, total_gepado, bar_width
-                    )
-                    rich_console.print(f"Updated clinical data:  {stats.gepado_clinical_updates:>6} {clinical_updates_bar}")
-                except Exception as e:
-                    rich_console.print(f"Updated clinical data:  {getattr(stats, 'gepado_clinical_updates', 0):>6} [Error: {e}]")
-
-                try:
-                    no_updates_bar = render_progress_bar(
-                        stats.gepado_no_updates_needed, total_gepado, bar_width
-                    )
-                    rich_console.print(f"No updates needed:      {stats.gepado_no_updates_needed:>6} {no_updates_bar}")
-                except Exception as e:
-                    rich_console.print(f"No updates needed:      {getattr(stats, 'gepado_no_updates_needed', 0):>6} [Error: {e}]")
-
-                try:
-                    errors_bar = render_progress_bar(
-                        stats.gepado_errors, total_gepado, bar_width
-                    )
-                    rich_console.print(f"Errors during ops:      {stats.gepado_errors:>6} {errors_bar}")
-                except Exception as e:
-                    rich_console.print(f"Errors during ops:      {getattr(stats, 'gepado_errors', 0):>6} [Error: {e}]")
-
+                rich_console.print(f"Updated genomic data:   {stats.gepado_genomic_updates:>6}")
+                rich_console.print(f"Updated clinical data:  {stats.gepado_clinical_updates:>6}")
+                rich_console.print(f"No updates needed:      {stats.gepado_no_updates_needed:>6}")
+                rich_console.print(f"Errors during ops:      {stats.gepado_errors:>6}")
             except Exception as e:
                 rich_console.print(f"\nGEPADO OPERATIONS: [Error calculating totals: {e}]")
 

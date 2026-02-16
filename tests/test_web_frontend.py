@@ -160,9 +160,9 @@ def test_all_required_fields_are_displayed(num_pairs: int, record_types: list):
         # Render each pair to HTML and verify required fields
         for pair in pairs:
             html = render_pair_to_html(pair)
-            soup = BeautifulSoup(html, "html.parser")
 
             # Verify Case ID is present
+            soup = BeautifulSoup(html, "html.parser")
             case_id_cells = soup.find_all("td", class_="case-id-cell")
             assert len(case_id_cells) > 0, f"Case ID cell not found for {pair.case_id}"
             assert pair.case_id in case_id_cells[0].text
@@ -1079,7 +1079,6 @@ def test_property_web_display_formatting(num_pairs: int, output_dates: list):
         # Verify output_date formatting for each pair
         for pair in pairs:
             html = render_pair_to_html(pair)
-            soup = BeautifulSoup(html, "html.parser")
 
             # Check genomic record output_date display
             if pair.genomic and pair.genomic.output_date:
@@ -1140,7 +1139,6 @@ def test_property_chronological_sorting(num_pairs: int, sort_direction: str):
 
         # Create records with different output_date values
         with MeldebestaetigungDatabase(db_path) as db:
-            base_date = datetime(2023, 1, 1).date()
 
             for i in range(num_pairs):
                 case_id = f"CASE_{i:03d}"

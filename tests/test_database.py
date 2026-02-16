@@ -210,7 +210,6 @@ def test_database_connection_cleanup(db_name: str):
         with db as db_context:
             # Verify connection is established
             assert db_context.conn is not None
-            conn_before_exit = db_context.conn
 
         # After context manager exit, connection should be closed
         assert db.conn is None

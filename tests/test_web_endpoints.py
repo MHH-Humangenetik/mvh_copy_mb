@@ -150,7 +150,7 @@ def test_index_page_empty_database(monkeypatch):
         db_path = Path(tmpdir) / "empty.duckdb"
 
         # Create empty database
-        with MeldebestaetigungDatabase(db_path) as db:
+        with MeldebestaetigungDatabase(db_path):
             pass  # Just create the schema, no records
 
         # Set the database path in environment

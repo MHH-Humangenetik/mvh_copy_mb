@@ -6,12 +6,11 @@ correctness properties of the CLI statistics display functionality.
 """
 
 import pytest
-from hypothesis import given, settings, HealthCheck
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from mvh_copy_mb.statistics import (
     ProcessingStatistics,
-    render_progress_bar,
     display_statistics,
 )
 
@@ -77,236 +76,14 @@ def test_ready_file_total_calculation(
 
 # Feature: cli-summary-statistics, Property 2: Progress bar width consistency
 # Validates: Requirements 3.1, 3.2
-@settings(max_examples=100)
-@given(
-    count=st.integers(min_value=0, max_value=1000),
-    total=st.integers(min_value=0, max_value=1000),
-    width=st.integers(min_value=1, max_value=50),
-)
-def test_progress_bar_width_consistency(count: int, total: int, width: int):
-    """
-    Property 2: Progress bar width consistency
-
-    For any statistic display, all progress bars should be exactly width + 2 characters
-    wide (width characters plus opening and closing brackets)
-
-    This test verifies that:
-    1. Progress bars always have consistent width regardless of count/total
-    2. Brackets are always present
-    3. Width parameter is respected
-    """
-    progress_bar = render_progress_bar(count, total, width)
-
-    # Progress bar should always be width + 2 characters (for brackets)
-    expected_length = width + 2
-    actual_length = len(progress_bar)
-
-    assert actual_length == expected_length, (
-        f"Progress bar should be {expected_length} characters, got {actual_length}: '{progress_bar}'"
-    )
-
-    # Should start and end with brackets
-    assert progress_bar.startswith("["), (
-        f"Progress bar should start with '[': '{progress_bar}'"
-    )
-    assert progress_bar.endswith("]"), (
-        f"Progress bar should end with ']': '{progress_bar}'"
-    )
-
-    # Inner content should be exactly width characters
-    inner_content = progress_bar[1:-1]
-    assert len(inner_content) == width, (
-        f"Inner content should be {width} characters, got {len(inner_content)}: '{inner_content}'"
-    )
 
 
 # Feature: cli-summary-statistics, Property 3: Progress bar calculation accuracy
 # Validates: Requirements 3.3, 3.4, 3.5, 4.4
-@settings(max_examples=100)
-@given(
-    count=st.integers(min_value=0, max_value=1000),
-    total=st.integers(min_value=0, max_value=1000),
-    width=st.integers(min_value=1, max_value=50),
-)
-def test_progress_bar_calculation_accuracy(count: int, total: int, width: int):
-    """
-    Property 3: Progress bar calculation accuracy
-
-    For any statistic count and total, the progress bar should accurately represent
-    the proportion with appropriate filled and empty characters enclosed in brackets
-
-    This test verifies that:
-    1. Filled portion represents the correct proportion
-    2. Empty portion fills the remainder
-    3. Special case handling for zero totals
-    4. Characters are appropriate (filled vs empty)
-    """
-    progress_bar = render_progress_bar(count, total, width)
-    inner_content = progress_bar[1:-1]  # Remove brackets
-
-    if total == 0:
-        # Special case: when total is 0, should be all empty
-        assert inner_content == "░" * width, (
-            f"When total is 0, progress bar should be all empty: '{inner_content}'"
-        )
-    else:
-        # Calculate expected filled width (count is clamped to total)
-        clamped_count = min(count, total)
-        expected_filled_width = int((clamped_count / total) * width)
-        expected_empty_width = width - expected_filled_width
-
-        # Count actual filled and empty characters
-        filled_chars = inner_content.count("█")
-        empty_chars = inner_content.count("░")
-
-        assert filled_chars == expected_filled_width, (
-            f"Expected {expected_filled_width} filled chars, got {filled_chars}"
-        )
-
-        assert empty_chars == expected_empty_width, (
-            f"Expected {expected_empty_width} empty chars, got {empty_chars}"
-        )
-
-        # Verify total characters add up
-        assert filled_chars + empty_chars == width, (
-            f"Filled ({filled_chars}) + empty ({empty_chars}) should equal width ({width})"
-        )
-
-        # Verify only valid characters are used
-        valid_chars = set("█░")
-        actual_chars = set(inner_content)
-        assert actual_chars.issubset(valid_chars), (
-            f"Progress bar contains invalid characters: {actual_chars - valid_chars}"
-        )
-
-        # Verify proportion accuracy (within rounding tolerance)
-        actual_proportion = filled_chars / width
-        expected_proportion = clamped_count / total
-        # Allow for rounding errors due to integer division
-        tolerance = 1 / width  # One character worth of tolerance
-        assert abs(actual_proportion - expected_proportion) <= tolerance, (
-            f"Proportion accuracy: expected ~{expected_proportion:.3f}, got {actual_proportion:.3f}"
-        )
 
 
 # Feature: cli-summary-statistics, Property 4: Statistics formatting consistency
 # Validates: Requirements 4.1, 4.2
-@settings(max_examples=100, suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ready_count=st.integers(min_value=0, max_value=1000),
-    unpaired_genomic_count=st.integers(min_value=0, max_value=1000),
-    unpaired_clinical_count=st.integers(min_value=0, max_value=1000),
-    ignored_count=st.integers(min_value=0, max_value=1000),
-    gepado_genomic_updates=st.integers(min_value=0, max_value=1000),
-    gepado_clinical_updates=st.integers(min_value=0, max_value=1000),
-    gepado_no_updates_needed=st.integers(min_value=0, max_value=1000),
-    gepado_errors=st.integers(min_value=0, max_value=1000),
-    gepado_enabled=st.booleans(),
-)
-def test_statistics_formatting_consistency(
-    ready_count: int,
-    unpaired_genomic_count: int,
-    unpaired_clinical_count: int,
-    ignored_count: int,
-    gepado_genomic_updates: int,
-    gepado_clinical_updates: int,
-    gepado_no_updates_needed: int,
-    gepado_errors: int,
-    gepado_enabled: bool,
-):
-    """
-    Property 4: Statistics formatting consistency
-
-    For any statistics display, all labels and counts should follow the same
-    formatting pattern with aligned progress bars
-
-    This test verifies that:
-    1. All progress bars are aligned vertically
-    2. All count values are right-aligned consistently
-    3. Labels follow consistent formatting
-    4. Visual separators are properly placed
-    """
-    import io
-    from contextlib import redirect_stdout
-
-    stats = ProcessingStatistics(
-        ready_pairs_count=ready_count,
-        unpaired_genomic_count=unpaired_genomic_count,
-        unpaired_clinical_count=unpaired_clinical_count,
-        ignored_count=ignored_count,
-        gepado_genomic_updates=gepado_genomic_updates,
-        gepado_clinical_updates=gepado_clinical_updates,
-        gepado_no_updates_needed=gepado_no_updates_needed,
-        gepado_errors=gepado_errors,
-    )
-
-    # Capture output using redirect_stdout
-    output_buffer = io.StringIO()
-    with redirect_stdout(output_buffer):
-        display_statistics(stats, gepado_enabled=gepado_enabled)
-
-    captured_output = output_buffer.getvalue()
-    lines = captured_output.strip().split("\n")
-
-    # Find lines with statistics (contain progress bars)
-    stat_lines = [line for line in lines if "[" in line and "]" in line]
-
-    if len(stat_lines) > 0:
-        # Check that all progress bars are aligned (same position)
-        progress_bar_positions = []
-        for line in stat_lines:
-            bracket_pos = line.find("[")
-            if bracket_pos != -1:
-                progress_bar_positions.append(bracket_pos)
-
-        # All progress bars should start at the same column position
-        if len(progress_bar_positions) > 1:
-            first_position = progress_bar_positions[0]
-            for pos in progress_bar_positions[1:]:
-                assert pos == first_position, (
-                    f"Progress bars not aligned: positions {progress_bar_positions}"
-                )
-
-        # Check that all progress bars have the same length
-        progress_bar_lengths = []
-        for line in stat_lines:
-            start_bracket = line.find("[")
-            end_bracket = line.find("]")
-            if start_bracket != -1 and end_bracket != -1:
-                bar_length = end_bracket - start_bracket + 1
-                progress_bar_lengths.append(bar_length)
-
-        if len(progress_bar_lengths) > 1:
-            first_length = progress_bar_lengths[0]
-            for length in progress_bar_lengths[1:]:
-                assert length == first_length, (
-                    f"Progress bars have inconsistent lengths: {progress_bar_lengths}"
-                )
-
-        # Check that count values are right-aligned (consistent spacing before progress bar)
-        count_positions = []
-        for line in stat_lines:
-            # Find the number before the progress bar
-            bracket_pos = line.find("[")
-            if bracket_pos > 0:
-                # Extract the part before the bracket and find the last number
-                before_bracket = line[:bracket_pos].strip()
-                # The count should be the last token before the bracket
-                tokens = before_bracket.split()
-                if tokens and tokens[-1].isdigit():
-                    # Calculate position of the count relative to the bracket
-                    count_end_pos = (
-                        bracket_pos - 1
-                    )  # Position just before the space and bracket
-                    count_positions.append(count_end_pos)
-
-        # All counts should end at the same position (right-aligned)
-        if len(count_positions) > 1:
-            first_position = count_positions[0]
-            for pos in count_positions[1:]:
-                assert pos == first_position, (
-                    f"Count values not right-aligned: positions {count_positions}"
-                )
 
 
 # Unit tests for specific edge cases and examples
@@ -338,23 +115,7 @@ def test_gepado_operations_total():
     assert stats.get_total_gepado_operations() == expected_total
 
 
-def test_progress_bar_edge_cases():
-    """Test progress bar rendering for specific edge cases."""
-    # Zero total
-    bar = render_progress_bar(5, 0, 10)
-    assert bar == "[░░░░░░░░░░]"
-
-    # Zero count
-    bar = render_progress_bar(0, 10, 10)
-    assert bar == "[░░░░░░░░░░]"
-
-    # Full bar
-    bar = render_progress_bar(10, 10, 10)
-    assert bar == "[██████████]"
-
-    # Half bar
-    bar = render_progress_bar(5, 10, 10)
-    assert bar == "[█████░░░░░]"
+    pass  # Progress bar function removed; test no longer needed
 
 
 def test_display_statistics_output(capsys):
@@ -639,60 +400,8 @@ def test_processing_statistics_validation_in_totals():
     assert gepado_total == 0  # Should return fallback value
 
 
-def test_render_progress_bar_invalid_inputs():
-    """Test progress bar rendering with invalid inputs."""
-    from mvh_copy_mb.statistics import render_progress_bar
-
-    # Test with non-integer inputs (should be converted)
-    bar = render_progress_bar("5", "10", "20")
-    assert len(bar) == 22  # 20 + 2 brackets
-    assert bar.startswith("[") and bar.endswith("]")
-
-    # Test with negative values (should be clamped to 0)
-    bar = render_progress_bar(-5, 10, 20)
-    assert bar == "[" + "░" * 20 + "]"  # Should be empty bar
-
-    # Test with negative total (should be clamped to 0)
-    bar = render_progress_bar(5, -10, 20)
-    assert bar == "[" + "░" * 20 + "]"  # Should be empty bar
-
-    # Test with zero or negative width (should use fallback)
-    bar = render_progress_bar(5, 10, 0)
-    assert len(bar) == 22  # Should use fallback width of 20
-
-    bar = render_progress_bar(5, 10, -5)
-    assert len(bar) == 22  # Should use fallback width of 20
-
-    # Test with invalid types that can't be converted
-    bar = render_progress_bar(None, 10, 20)
-    assert bar == "[" + "░" * 20 + "]"  # Should handle gracefully
-
-    bar = render_progress_bar(5, [], 20)
-    assert bar == "[" + "░" * 20 + "]"  # Should handle gracefully
 
 
-def test_render_progress_bar_edge_cases():
-    """Test progress bar rendering edge cases and error conditions."""
-    from mvh_copy_mb.statistics import render_progress_bar
-
-    # Test division by zero (total = 0)
-    bar = render_progress_bar(5, 0, 10)
-    assert bar == "[░░░░░░░░░░]"
-
-    # Test count exceeding total (should be clamped)
-    bar = render_progress_bar(15, 10, 10)
-    expected_filled = 10  # Should be clamped to total
-    assert bar.count("█") == 10  # Should be fully filled
-    assert bar.count("░") == 0  # No empty chars
-
-    # Test very large numbers (potential overflow)
-    bar = render_progress_bar(999999999, 1000000000, 10)
-    assert len(bar) == 12  # Should still work
-    assert bar.startswith("[") and bar.endswith("]")
-
-    # Test floating point inputs (should be converted to int)
-    bar = render_progress_bar(5.7, 10.3, 20.9)
-    assert len(bar) == 22  # Should handle conversion
 
 
 def test_display_statistics_none_input(capsys):
@@ -770,25 +479,6 @@ def test_display_statistics_terminal_width_detection():
             )
 
 
-def test_display_statistics_progress_bar_errors(capsys):
-    """Test display_statistics handles progress bar rendering errors gracefully."""
-    from mvh_copy_mb.statistics import display_statistics, ProcessingStatistics
-    import unittest.mock
-
-    stats = ProcessingStatistics(ready_pairs_count=10, unpaired_genomic_count=5)
-
-    # Mock render_progress_bar to raise an exception
-    with unittest.mock.patch(
-        "mvh_copy_mb.statistics.render_progress_bar",
-        side_effect=Exception("Render error"),
-    ):
-        display_statistics(stats, gepado_enabled=False)
-        captured = capsys.readouterr()
-
-        # Should display error messages but continue with the display
-        assert "Ready pairs:" in captured.out
-        assert "[Error: Render error]" in captured.out
-        assert "PROCESSING SUMMARY" in captured.out
 
 
 def test_processing_statistics_increment_all_methods():
@@ -1298,25 +988,15 @@ def test_display_statistics_specific_known_data(capsys):
     assert "18" in captured.out  # GEPADO genomic updates
     assert "15" in captured.out  # GEPADO clinical updates
 
-    # Verify progress bars are present for each statistic
-    lines = captured.out.split("\n")
-    stat_lines = [line for line in lines if "[" in line and "]" in line]
-
-    # Should have 7 statistics lines (4 file stats + 3 GEPADO stats)
-    assert len(stat_lines) == 8, f"Expected 8 statistics lines, got {len(stat_lines)}"
-
-    # Each line should have a progress bar with filled and empty characters
-    for line in stat_lines:
-        assert "[" in line and "]" in line, (
-            f"Line should contain progress bar: '{line}'"
-        )
-        start_bracket = line.find("[")
-        end_bracket = line.find("]")
-        bar_content = line[start_bracket + 1 : end_bracket]
-        # Should contain valid progress bar characters
-        assert all(c in "█░" for c in bar_content), (
-            f"Progress bar should only contain valid characters: '{bar_content}'"
-        )
+    # Verify output contains the expected statistics counts
+    assert "Ready pairs:" in captured.out
+    assert "Unpaired genomic:" in captured.out
+    assert "Unpaired clinical:" in captured.out
+    assert "Ignored files:" in captured.out
+    assert "Updated genomic data:" in captured.out
+    assert "Updated clinical data:" in captured.out
+    assert "No updates needed:" in captured.out
+    assert "Errors during ops:" in captured.out
 
 
 # Feature: cli-summary-statistics, Property 1: Pairing logic accuracy

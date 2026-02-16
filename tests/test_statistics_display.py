@@ -864,7 +864,7 @@ def test_statistics_display_with_empty_dataset(monkeypatch):
         empty_db_path = Path(tmpdir) / "empty.duckdb"
 
         # Create empty database (just initialize it)
-        with MeldebestaetigungDatabase(empty_db_path) as db:
+        with MeldebestaetigungDatabase(empty_db_path):
             pass  # Database is created but empty
 
         # Set the database path in environment
@@ -1129,7 +1129,6 @@ def test_error_handling_with_invalid_json_data(test_db, monkeypatch):
     client = TestClient(app)
 
     # Mock the template rendering to inject invalid JSON
-    original_render = app.dependency_overrides.get("render_template", None)
 
     def mock_render_template_with_invalid_json(*args, **kwargs):
         # Get the normal response first
