@@ -333,7 +333,7 @@ def process_row(
                             f"Successfully processed gepado update for HL7 case ID: {hl7_case_id}"
                         )
                     else:
-                        logger.warning(
+                        logger.error(
                             f"Gepado update was skipped or failed for HL7 case ID: {hl7_case_id}"
                         )
                 else:
