@@ -480,7 +480,7 @@ def validate_and_update_record(
     """
     # Check if record should be processed
     if not should_process_record_for_gepado(ergebnis_qc, typ_der_meldung):
-        logger.warning(f"Skipping gepado update for HL7 case ID {hl7_case_id}")
+        logger.error(f"Skipping gepado update for HL7 case ID {hl7_case_id}")
         # Track as error since the record didn't meet processing criteria
         if stats:
             stats.gepado_errors += 1
@@ -514,7 +514,7 @@ def validate_and_update_record(
         # Query existing record using corrected case ID
         existing_record = client.query_record(corrected_case_id)
         if not existing_record:
-            logger.warning(
+            logger.error(
                 f"No gepado record found for corrected HL7 case ID: {corrected_case_id} (original: {hl7_case_id})"
             )
             # Track as error since no record was found
