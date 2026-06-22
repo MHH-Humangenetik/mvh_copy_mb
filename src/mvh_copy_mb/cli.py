@@ -7,6 +7,7 @@ from typing import Optional, cast
 import click
 from rich.console import Console
 from rich.progress import (
+    MofNCompleteColumn,
     Progress,
     SpinnerColumn,
     BarColumn,
@@ -558,6 +559,7 @@ def main(
             SpinnerColumn(),
             BarColumn(),
             TimeRemainingColumn(),
+            MofNCompleteColumn(),
             TextColumn("{task.description}"),
             console=console,
             transient=True,
