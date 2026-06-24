@@ -114,7 +114,6 @@ def test_gepado_operations_total():
     expected_total = 10 + 15 + 3
     assert stats.get_total_gepado_operations() == expected_total
 
-
     pass  # Progress bar function removed; test no longer needed
 
 
@@ -345,10 +344,10 @@ def test_processing_statistics_invalid_initialization():
         ProcessingStatistics(gepado_errors=-2)
 
     # Test non-integer values
-    with pytest.raises(ValueError, match="must be an integer"):
+    with pytest.raises(ValueError, match="must be non-negative integers"):
         ProcessingStatistics(ready_pairs_count=3.14)
 
-    with pytest.raises(ValueError, match="must be an integer"):
+    with pytest.raises(ValueError, match="must be non-negative integers"):
         ProcessingStatistics(unpaired_clinical_count="invalid")
 
 
@@ -357,24 +356,24 @@ def test_processing_statistics_safe_increment_methods():
     stats = ProcessingStatistics()
 
     # Test valid increments
-    stats.increment_ready_pairs(5)
+    stats.increment("ready_pairs_count", 5)
     assert stats.ready_pairs_count == 5
 
-    stats.increment_unpaired_genomic(3)
+    stats.increment("unpaired_genomic_count", 3)
     assert stats.unpaired_genomic_count == 3
 
-    stats.increment_gepado_errors(2)
+    stats.increment("gepado_errors", 2)
     assert stats.gepado_errors == 2
 
     # Test invalid increment values
-    with pytest.raises(ValueError, match="must be non-negative"):
-        stats.increment_ready_pairs(-1)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        stats.increment("ready_pairs_count", -1)
 
-    with pytest.raises(ValueError, match="must be an integer"):
-        stats.increment_unpaired_clinical(3.5)
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        stats.increment("unpaired_clinical_count", 3.5)
 
-    with pytest.raises(ValueError, match="must be an integer"):
-        stats.increment_ignored("invalid")
+    with pytest.raises(ValueError, match="must be a non-negative integer"):
+        stats.increment("ignored_count", "invalid")
 
     # Verify counts remain unchanged after failed increments
     assert stats.ready_pairs_count == 5
@@ -398,10 +397,6 @@ def test_processing_statistics_validation_in_totals():
     stats.gepado_genomic_updates = -5
     gepado_total = stats.get_total_gepado_operations()
     assert gepado_total == 0  # Should return fallback value
-
-
-
-
 
 
 def test_display_statistics_none_input(capsys):
@@ -479,20 +474,18 @@ def test_display_statistics_terminal_width_detection():
             )
 
 
-
-
 def test_processing_statistics_increment_all_methods():
     """Test all increment methods work correctly."""
     stats = ProcessingStatistics()
 
     # Test all increment methods
-    stats.increment_ready_pairs(2)
-    stats.increment_unpaired_genomic(3)
-    stats.increment_unpaired_clinical(4)
-    stats.increment_ignored(5)
-    stats.increment_gepado_genomic(6)
-    stats.increment_gepado_clinical(7)
-    stats.increment_gepado_errors(8)
+    stats.increment("ready_pairs_count", 2)
+    stats.increment("unpaired_genomic_count", 3)
+    stats.increment("unpaired_clinical_count", 4)
+    stats.increment("ignored_count", 5)
+    stats.increment("gepado_genomic_updates", 6)
+    stats.increment("gepado_clinical_updates", 7)
+    stats.increment("gepado_errors", 8)
 
     assert stats.ready_pairs_count == 2
     assert stats.unpaired_genomic_count == 3
@@ -503,7 +496,7 @@ def test_processing_statistics_increment_all_methods():
     assert stats.gepado_errors == 8
 
     # Test default increment (should be 1)
-    stats.increment_ready_pairs()
+    stats.increment("ready_pairs_count")
     assert stats.ready_pairs_count == 3
 
 

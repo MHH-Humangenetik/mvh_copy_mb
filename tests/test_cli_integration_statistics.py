@@ -72,10 +72,8 @@ class TestCLIIntegrationStatistics:
 
         # Mock the SOAP client for domain detection
         mock_soap_client = Mock()
-        mock_soap_client.service.getValueFor.side_effect = (
-            lambda psn, domainName: case_id_mapping.get(psn)
-            if psn in case_id_mapping
-            else None
+        mock_soap_client.service.getValueFor.side_effect = lambda psn, domainName: (
+            case_id_mapping.get(psn) if psn in case_id_mapping else None
         )
         mock_client.client = mock_soap_client
 
@@ -736,18 +734,20 @@ class TestCLIIntegrationStatistics:
         assert total == 5 * 2 + 3 + 2 + 1, "Valid statistics should calculate correctly"
 
         # Test increment methods
-        stats.increment_ready_pairs(2)
-        stats.increment_unpaired_genomic(1)
+        stats.increment("ready_pairs_count", 2)
+        stats.increment("unpaired_genomic_count", 1)
 
         assert stats.ready_pairs_count == 7, "Increment should work correctly"
         assert stats.unpaired_genomic_count == 4, "Increment should work correctly"
 
         # Test error handling for invalid increments
         with pytest.raises(ValueError):
-            stats.increment_ready_pairs(-1)  # Negative increment should fail
+            stats.increment("ready_pairs_count", -1)  # Negative increment should fail
 
         with pytest.raises(ValueError):
-            stats.increment_unpaired_clinical("invalid")  # Non-integer should fail
+            stats.increment(
+                "unpaired_clinical_count", "invalid"
+            )  # Non-integer should fail
 
 
 class TestStatisticsAccuracyWithRealData:
@@ -962,16 +962,14 @@ class TestStatisticsAccuracyWithRealData:
 
             # Mock gPAS client
             mock_gpas_client = Mock(spec=GpasClient)
-            mock_gpas_client.get_original_value.side_effect = (
-                lambda psn: case_id_mapping.get(psn)
+            mock_gpas_client.get_original_value.side_effect = lambda psn: (
+                case_id_mapping.get(psn)
             )
             mock_gpas_client.domains = ["GRZ", "KDK"]
 
             mock_soap_client = Mock()
-            mock_soap_client.service.getValueFor.side_effect = (
-                lambda psn, domainName: case_id_mapping.get(psn)
-                if psn in case_id_mapping
-                else None
+            mock_soap_client.service.getValueFor.side_effect = lambda psn, domainName: (
+                case_id_mapping.get(psn) if psn in case_id_mapping else None
             )
             mock_gpas_client.client = mock_soap_client
 
@@ -1066,16 +1064,14 @@ class TestStatisticsAccuracyWithRealData:
 
             # Mock gPAS client
             mock_gpas_client = Mock(spec=GpasClient)
-            mock_gpas_client.get_original_value.side_effect = (
-                lambda psn: case_id_mapping.get(psn)
+            mock_gpas_client.get_original_value.side_effect = lambda psn: (
+                case_id_mapping.get(psn)
             )
             mock_gpas_client.domains = ["GRZ", "KDK"]
 
             mock_soap_client = Mock()
-            mock_soap_client.service.getValueFor.side_effect = (
-                lambda psn, domainName: case_id_mapping.get(psn)
-                if psn in case_id_mapping
-                else None
+            mock_soap_client.service.getValueFor.side_effect = lambda psn, domainName: (
+                case_id_mapping.get(psn) if psn in case_id_mapping else None
             )
             mock_gpas_client.client = mock_soap_client
 
@@ -1140,16 +1136,14 @@ class TestStatisticsAccuracyWithRealData:
 
             # Mock gPAS client
             mock_gpas_client = Mock(spec=GpasClient)
-            mock_gpas_client.get_original_value.side_effect = (
-                lambda psn: case_id_mapping.get(psn)
+            mock_gpas_client.get_original_value.side_effect = lambda psn: (
+                case_id_mapping.get(psn)
             )
             mock_gpas_client.domains = ["GRZ", "KDK"]
 
             mock_soap_client = Mock()
-            mock_soap_client.service.getValueFor.side_effect = (
-                lambda psn, domainName: case_id_mapping.get(psn)
-                if psn in case_id_mapping
-                else None
+            mock_soap_client.service.getValueFor.side_effect = lambda psn, domainName: (
+                case_id_mapping.get(psn) if psn in case_id_mapping else None
             )
             mock_gpas_client.client = mock_soap_client
 
@@ -1233,16 +1227,14 @@ class TestStatisticsAccuracyWithRealData:
 
             # Mock gPAS client
             mock_gpas_client = Mock(spec=GpasClient)
-            mock_gpas_client.get_original_value.side_effect = (
-                lambda psn: case_id_mapping.get(psn)
+            mock_gpas_client.get_original_value.side_effect = lambda psn: (
+                case_id_mapping.get(psn)
             )
             mock_gpas_client.domains = ["GRZ", "KDK"]
 
             mock_soap_client = Mock()
-            mock_soap_client.service.getValueFor.side_effect = (
-                lambda psn, domainName: case_id_mapping.get(psn)
-                if psn in case_id_mapping
-                else None
+            mock_soap_client.service.getValueFor.side_effect = lambda psn, domainName: (
+                case_id_mapping.get(psn) if psn in case_id_mapping else None
             )
             mock_gpas_client.client = mock_soap_client
 
@@ -1409,16 +1401,14 @@ class TestStatisticsAccuracyWithRealData:
 
             # Mock gPAS client
             mock_gpas_client = Mock(spec=GpasClient)
-            mock_gpas_client.get_original_value.side_effect = (
-                lambda psn: case_id_mapping.get(psn)
+            mock_gpas_client.get_original_value.side_effect = lambda psn: (
+                case_id_mapping.get(psn)
             )
             mock_gpas_client.domains = ["GRZ", "KDK"]
 
             mock_soap_client = Mock()
-            mock_soap_client.service.getValueFor.side_effect = (
-                lambda psn, domainName: case_id_mapping.get(psn)
-                if psn in case_id_mapping
-                else None
+            mock_soap_client.service.getValueFor.side_effect = lambda psn, domainName: (
+                case_id_mapping.get(psn) if psn in case_id_mapping else None
             )
             mock_gpas_client.client = mock_soap_client
 
@@ -1510,16 +1500,14 @@ class TestStatisticsAccuracyWithRealData:
 
             # Mock gPAS client
             mock_gpas_client = Mock(spec=GpasClient)
-            mock_gpas_client.get_original_value.side_effect = (
-                lambda psn: case_id_mapping.get(psn)
+            mock_gpas_client.get_original_value.side_effect = lambda psn: (
+                case_id_mapping.get(psn)
             )
             mock_gpas_client.domains = ["GRZ", "KDK"]
 
             mock_soap_client = Mock()
-            mock_soap_client.service.getValueFor.side_effect = (
-                lambda psn, domainName: case_id_mapping.get(psn)
-                if psn in case_id_mapping
-                else None
+            mock_soap_client.service.getValueFor.side_effect = lambda psn, domainName: (
+                case_id_mapping.get(psn) if psn in case_id_mapping else None
             )
             mock_gpas_client.client = mock_soap_client
 

@@ -35,7 +35,7 @@ class ProcessingStatistics:
     gepado_clinical_updates: int = 0
     gepado_no_updates_needed: int = 0
     gepado_errors: int = 0
-    _resolved_case_ids: Optional[dict] = None
+    _resolved_case_ids: Optional[dict[str, dict[str, bool]]] = None
 
     def __post_init__(self):
         """Initialize internal tracking and validate statistics data after initialization."""
@@ -44,175 +44,32 @@ class ProcessingStatistics:
         self._validate_counts()
 
     def _validate_counts(self) -> None:
-        """
-        Validate that all counts are non-negative integers.
-
-        Raises:
-            ValueError: If any count is negative or not an integer
-        """
-        counts = {
-            "ready_pairs_count": self.ready_pairs_count,
-            "unpaired_genomic_count": self.unpaired_genomic_count,
-            "unpaired_clinical_count": self.unpaired_clinical_count,
-            "ignored_count": self.ignored_count,
-            "gepado_genomic_updates": self.gepado_genomic_updates,
-            "gepado_clinical_updates": self.gepado_clinical_updates,
-            "gepado_no_updates_needed": self.gepado_no_updates_needed,
-            "gepado_errors": self.gepado_errors,
-        }
-
-        for name, value in counts.items():
-            if not isinstance(value, int):
+        """Validate that all counts are non-negative integers."""
+        counts = [
+            self.ready_pairs_count,
+            self.unpaired_genomic_count,
+            self.unpaired_clinical_count,
+            self.ignored_count,
+            self.gepado_genomic_updates,
+            self.gepado_clinical_updates,
+            self.gepado_no_updates_needed,
+            self.gepado_errors,
+        ]
+        for value in counts:
+            if not isinstance(value, int) or value < 0:
                 raise ValueError(
-                    f"{name} must be an integer, got {type(value).__name__}: {value}"
+                    f"Statistics must be non-negative integers, got {value}"
                 )
-            if value < 0:
-                raise ValueError(f"{name} must be non-negative, got {value}")
 
-    def increment_ready_pairs(self, count: int = 1) -> None:
-        """
-        Safely increment ready pairs count.
-
-        Args:
-            count: Number to increment by (default: 1)
-        import os
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
+    def increment(self, field: str, count: int = 1) -> None:
+        """Safely increment a statistics field."""
+        if not hasattr(self, field):
+            raise AttributeError(f"Field {field} not found in ProcessingStatistics")
+        if not isinstance(count, int) or count < 0:
             raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
+                f"Increment count must be a non-negative integer, got {count}"
             )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.ready_pairs_count += count
-
-    def increment_unpaired_genomic(self, count: int = 1) -> None:
-        """
-        Safely increment unpaired genomic file count.
-
-        Args:
-            count: Number to increment by (default: 1)
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
-            raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
-            )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.unpaired_genomic_count += count
-
-    def increment_unpaired_clinical(self, count: int = 1) -> None:
-        """
-        Safely increment unpaired clinical file count.
-
-        Args:
-            count: Number to increment by (default: 1)
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
-            raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
-            )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.unpaired_clinical_count += count
-
-    def increment_ignored(self, count: int = 1) -> None:
-        """
-        Safely increment ignored file count.
-
-        Args:
-            count: Number to increment by (default: 1)
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
-            raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
-            )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.ignored_count += count
-
-    def increment_gepado_genomic(self, count: int = 1) -> None:
-        """
-        Safely increment GEPADO genomic update count.
-
-        Args:
-            count: Number to increment by (default: 1)
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
-            raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
-            )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.gepado_genomic_updates += count
-
-    def increment_gepado_clinical(self, count: int = 1) -> None:
-        """
-        Safely increment GEPADO clinical update count.
-
-        Args:
-            count: Number to increment by (default: 1)
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
-            raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
-            )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.gepado_clinical_updates += count
-
-    def increment_gepado_no_updates_needed(self, count: int = 1) -> None:
-        """
-        Safely increment GEPADO no updates needed count.
-
-        Args:
-            count: Number to increment by (default: 1)
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
-            raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
-            )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.gepado_no_updates_needed += count
-
-    def increment_gepado_errors(self, count: int = 1) -> None:
-        """
-        Safely increment GEPADO error count.
-
-        Args:
-            count: Number to increment by (default: 1)
-
-        Raises:
-            ValueError: If count is negative or not an integer
-        """
-        if not isinstance(count, int):
-            raise ValueError(
-                f"Increment count must be an integer, got {type(count).__name__}: {count}"
-            )
-        if count < 0:
-            raise ValueError(f"Increment count must be non-negative, got {count}")
-        self.gepado_errors += count
+        setattr(self, field, getattr(self, field) + count)
 
     def add_resolved_case_id(self, case_id: str, data_type: str) -> None:
         """
@@ -281,7 +138,9 @@ class ProcessingStatistics:
             )
         except ValueError as e:
             # Log error but return a safe fallback value
-            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid statistics data detected: {e}")
+            Console(stderr=True).print(
+                f"[yellow]Warning:[/] Invalid statistics data detected: {e}"
+            )
             return 0
 
     def get_total_gepado_operations(self) -> int:
@@ -304,10 +163,10 @@ class ProcessingStatistics:
             )
         except ValueError as e:
             # Log error but return a safe fallback value
-            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid GEPADO statistics data detected: {e}")
+            Console(stderr=True).print(
+                f"[yellow]Warning:[/] Invalid GEPADO statistics data detected: {e}"
+            )
             return 0
-
-
 
 
 def display_statistics(
@@ -333,7 +192,9 @@ def display_statistics(
     # Validate statistics object
     try:
         if not isinstance(stats, ProcessingStatistics):
-            Console(stderr=True).print(f"[yellow]Warning:[/] Invalid statistics object type: {type(stats)}")
+            Console(stderr=True).print(
+                f"[yellow]Warning:[/] Invalid statistics object type: {type(stats)}"
+            )
             return
 
         # Attempt to validate the statistics data
@@ -342,7 +203,9 @@ def display_statistics(
         Console(stderr=True).print(f"[yellow]Warning:[/] Invalid statistics data: {e}")
         Console(stderr=True).print("Attempting to display available data...")
     except AttributeError:
-        Console(stderr=True).print("[yellow]Warning:[/] Statistics object missing validation method")
+        Console(stderr=True).print(
+            "[yellow]Warning:[/] Statistics object missing validation method"
+        )
 
     try:
         total_files = stats.get_total_files()
@@ -484,7 +347,9 @@ def display_statistics(
 
         rich_console.print(f"Ready pairs:            {stats.ready_pairs_count:>6}")
         rich_console.print(f"Unpaired genomic:       {stats.unpaired_genomic_count:>6}")
-        rich_console.print(f"Unpaired clinical:      {stats.unpaired_clinical_count:>6}")
+        rich_console.print(
+            f"Unpaired clinical:      {stats.unpaired_clinical_count:>6}"
+        )
         rich_console.print(f"Ignored files:          {stats.ignored_count:>6}")
 
         # GEPADO statistics (if enabled) with error handling
@@ -492,12 +357,20 @@ def display_statistics(
             try:
                 total_gepado = stats.get_total_gepado_operations()
                 rich_console.print("\nGEPADO OPERATIONS:")
-                rich_console.print(f"Updated genomic data:   {stats.gepado_genomic_updates:>6}")
-                rich_console.print(f"Updated clinical data:  {stats.gepado_clinical_updates:>6}")
-                rich_console.print(f"No updates needed:      {stats.gepado_no_updates_needed:>6}")
+                rich_console.print(
+                    f"Updated genomic data:   {stats.gepado_genomic_updates:>6}"
+                )
+                rich_console.print(
+                    f"Updated clinical data:  {stats.gepado_clinical_updates:>6}"
+                )
+                rich_console.print(
+                    f"No updates needed:      {stats.gepado_no_updates_needed:>6}"
+                )
                 rich_console.print(f"Errors during ops:      {stats.gepado_errors:>6}")
             except Exception as e:
-                rich_console.print(f"\nGEPADO OPERATIONS: [Error calculating totals: {e}]")
+                rich_console.print(
+                    f"\nGEPADO OPERATIONS: [Error calculating totals: {e}]"
+                )
 
         rich_console.print("=" * separator_width)
 
