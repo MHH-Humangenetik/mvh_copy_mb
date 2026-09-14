@@ -7,24 +7,28 @@ find the correct case when needed. This correction applies only to GEPADO
 operations, preserving the original hl7_case_id for local storage and file naming.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-from .gepado import GepadoClient
+if TYPE_CHECKING:
+    from .gepado import GepadoClient
 
 log_file = os.environ.get("MVH_LOG_FILE", "mvh_web.log")
-file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=10, encoding="utf-8")
-file_handler.setFormatter(logging.Formatter(
-    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-))
-logging.basicConfig(
-    level="INFO",
-    handlers=[file_handler]
+file_handler = RotatingFileHandler(
+    log_file, maxBytes=5 * 1024 * 1024, backupCount=10, encoding="utf-8"
 )
+file_handler.setFormatter(
+    logging.Formatter(
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
+logging.basicConfig(level="INFO", handlers=[file_handler])
 logger = logging.getLogger(__name__)
 
 
@@ -64,12 +68,10 @@ def validate_hl7_case_sapvisitingtype(client: GepadoClient, hl7_case_id: str) ->
     Raises:
         Exception: If database query fails
     """
-    if not client._connection:
-        client.connect()
+    conn = client._connection or client.connect()
+    cursor = conn.cursor()
 
     try:
-        cursor = client._connection.cursor()
-
         # Query sapVisitingType for the given hl7_case_id
         query = """
             SELECT sapVisitingType 
@@ -101,8 +103,7 @@ def validate_hl7_case_sapvisitingtype(client: GepadoClient, hl7_case_id: str) ->
         )
         raise
     finally:
-        if cursor:
-            cursor.close()
+        cursor.close()
 
 
 def get_patient_guid_for_case(client: GepadoClient, hl7_case_id: str) -> Optional[str]:
@@ -119,12 +120,10 @@ def get_patient_guid_for_case(client: GepadoClient, hl7_case_id: str) -> Optiona
     Raises:
         Exception: If database query fails
     """
-    if not client._connection:
-        client.connect()
+    conn = client._connection or client.connect()
+    cursor = conn.cursor()
 
     try:
-        cursor = client._connection.cursor()
-
         # Query patient GUID for the given hl7_case_id
         query = """
             SELECT guid_patient 
@@ -148,12 +147,11 @@ def get_patient_guid_for_case(client: GepadoClient, hl7_case_id: str) -> Optiona
         logger.error(f"Failed to get patient GUID for HL7 case ID {hl7_case_id}: {e}")
         raise
     finally:
-        if cursor:
-            cursor.close()
+        cursor.close()
 
 
 def find_correct_genomic_case(
-    client: GepadoClient, patient_guid: str, original_case_id: str = None
+    client: GepadoClient, patient_guid: str, original_case_id: Optional[str] = None
 ) -> Optional[str]:
     """
     Find correct genomic sequencing case for a patient.
@@ -169,12 +167,10 @@ def find_correct_genomic_case(
     Raises:
         Exception: If database query fails
     """
-    if not client._connection:
-        client.connect()
+    conn = client._connection or client.connect()
+    cursor = conn.cursor()
 
     try:
-        cursor = client._connection.cursor()
-
         # Search for all cases with same patient GUID and sapVisitingType 'GS'
         query = """
             SELECT hl7fallid 
@@ -183,7 +179,7 @@ def find_correct_genomic_case(
         """
 
         cursor.execute(query, (patient_guid,))
-        rows = cursor.fetchall()
+        rows = cursor.fetchall() or []
 
         if len(rows) == 0:
             # Enhanced logging: Include patient GUID and original case ID when no correct cases exist
@@ -223,8 +219,7 @@ def find_correct_genomic_case(
         )
         raise
     finally:
-        if cursor:
-            cursor.close()
+        cursor.close()
 
 
 def correct_hl7_case_id_for_gepado(client: GepadoClient, hl7_case_id: str) -> str:

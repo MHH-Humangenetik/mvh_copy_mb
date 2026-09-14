@@ -1,29 +1,36 @@
 import csv
 import shutil
-from loguru import logger
+from datetime import date, datetime
 from pathlib import Path
-from typing import Optional, cast
+from typing import Any, Optional, cast
 
 import click
+from dotenv import load_dotenv
+from loguru import logger
+from requests import Session
+from requests.auth import HTTPBasicAuth
 from rich.console import Console
 from rich.progress import (
+    BarColumn,
     MofNCompleteColumn,
     Progress,
     SpinnerColumn,
-    BarColumn,
     TextColumn,
     TimeRemainingColumn,
 )
 from zeep import Client
 from zeep.transports import Transport
-from requests import Session
-from requests.auth import HTTPBasicAuth
-from datetime import datetime
-from dotenv import load_dotenv
 
 from mvh_copy_mb.database import MeldebestaetigungDatabase, MeldebestaetigungRecord
-from mvh_copy_mb.hl7_extraction import extract_hl7_case_id
-from mvh_copy_mb.gepado import create_gepado_client_from_env, validate_and_update_record
+from mvh_copy_mb.gepado import (
+    CorrectionCandidate,
+    CorrectionOverwrite,
+    apply_correction_update,
+    create_gepado_client_from_env,
+    select_latest_corrections,
+    validate_and_update_record,
+)
+from mvh_copy_mb.hl7_extraction import parse_mvh_id
 from mvh_copy_mb.leistungsdatum_extraction import parse_leistungsdatum
 from mvh_copy_mb.statistics import ProcessingStatistics, display_statistics
 
@@ -119,7 +126,7 @@ class GpasClient:
         return None
 
 
-def parse_meldebestaetigung(mb_string: str) -> dict:
+def parse_meldebestaetigung(mb_string: str) -> dict[str, Any]:
     """
     Parses the Meldebestaetigung string to extract metadata.
     Format: IBE+ID+HashString+...
@@ -180,7 +187,7 @@ def parse_meldebestaetigung(mb_string: str) -> dict:
 
 
 def process_row(
-    row: dict,
+    row: dict[str, str],
     source_file: Path,
     root_dir: Path,
     gpas_client: GpasClient,
@@ -188,6 +195,7 @@ def process_row(
     update_gepado: bool = False,
     gepado_client=None,
     stats: Optional[ProcessingStatistics] = None,
+    corrections: Optional[list[CorrectionCandidate]] = None,
 ):
     try:
         # Extract Vorgangsnummer directly
@@ -308,35 +316,57 @@ def process_row(
         # Update gepado database if enabled and client is available
         if update_gepado and gepado_client and case_id:
             try:
-                # Extract HL7 case ID from GPAS-resolved case_id (which contains HUMGEN pattern)
-                hl7_case_id = extract_hl7_case_id(case_id)
+                parsed = parse_mvh_id(case_id)
 
-                if hl7_case_id:
-                    logger.info(
-                        f"Extracted HL7 case ID: {hl7_case_id} from GPAS-resolved case ID: {case_id}"
-                    )
+                if parsed:
+                    hl7_case_id, suffix = parsed
 
-                    # Update gepado record with validation
-                    success = validate_and_update_record(
-                        gepado_client,
-                        hl7_case_id,
-                        vorgangsnummer_str,
-                        meldebestaetigung,  # Using meldebestaetigung as IBE string
-                        art_der_daten_str,
-                        ergebnis_qc_str,
-                        typ_der_meldung_str,
-                        output_date,  # Pass the extracted Leistungsdatum
-                        stats,  # Pass statistics for tracking
-                    )
-
-                    if success:
+                    if suffix is None:
                         logger.info(
-                            f"Successfully processed gepado update for HL7 case ID: {hl7_case_id}"
+                            f"Extracted HL7 case ID: {hl7_case_id} from GPAS-resolved case ID: {case_id}"
                         )
+
+                        success = validate_and_update_record(
+                            gepado_client,
+                            hl7_case_id,
+                            vorgangsnummer_str,
+                            meldebestaetigung,
+                            art_der_daten_str,
+                            ergebnis_qc_str,
+                            typ_der_meldung_str,
+                            output_date,
+                            stats,
+                        )
+
+                        if success:
+                            logger.info(
+                                f"Successfully processed gepado update for HL7 case ID: {hl7_case_id}"
+                            )
+                        else:
+                            logger.error(
+                                f"Gepado update was skipped or failed for HL7 case ID: {hl7_case_id}"
+                            )
                     else:
-                        logger.error(
-                            f"Gepado update was skipped or failed for HL7 case ID: {hl7_case_id}"
-                        )
+                        if corrections is not None:
+                            corrections.append(
+                                CorrectionCandidate(
+                                    base_hl7_case_id=hl7_case_id,
+                                    suffix=suffix,
+                                    mvh_id=case_id,
+                                    vorgangsnummer=vorgangsnummer_str,
+                                    meldebestaetigung=meldebestaetigung,
+                                    art_der_daten=art_der_daten_str,
+                                    ergebnis_qc=ergebnis_qc_str,
+                                    typ_der_meldung=typ_der_meldung_str,
+                                )
+                            )
+                            logger.info(
+                                f"Collected correction candidate: {case_id} (base {hl7_case_id}, suffix {suffix})"
+                            )
+                        else:
+                            logger.warning(
+                                f"Dropping correction candidate {case_id}: no corrections collector provided"
+                            )
                 else:
                     logger.warning(
                         f"Could not extract HL7 case ID from GPAS-resolved case ID: {case_id}"
@@ -391,6 +421,7 @@ def process_csv_file(
     update_gepado: bool = False,
     gepado_client=None,
     stats: Optional[ProcessingStatistics] = None,
+    corrections: Optional[list[CorrectionCandidate]] = None,
 ):
     try:
         # Detect delimiter - assuming ';' for German CSVs usually, but let's try to be robust
@@ -417,6 +448,7 @@ def process_csv_file(
                     update_gepado,
                     gepado_client,
                     stats,
+                    corrections,
                 )
 
     except Exception as e:
@@ -553,6 +585,9 @@ def main(
     # Initialize processing statistics
     stats = ProcessingStatistics()
 
+    # Collect correction meldebestaetigungen (_N suffixed mvh_ids)
+    corrections: list[CorrectionCandidate] = []
+
     # Use context manager for automatic database cleanup
     with MeldebestaetigungDatabase(db_path) as db:
         with Progress(
@@ -580,6 +615,7 @@ def main(
                     update_gepado,
                     gepado_client,
                     stats,
+                    corrections,
                 )
                 progress.advance(task)  # advance after processing
 
@@ -601,8 +637,18 @@ def main(
     # Finalize pairing statistics after all files processed
     stats.finalize_pairing_statistics()
 
+    # Process correction meldebestaetigungen (overwrite base case in gepado)
+    correction_overwrites: list[CorrectionOverwrite] = []
+    if update_gepado and corrections and gepado_client:
+        for c in select_latest_corrections(corrections):
+            o = apply_correction_update(gepado_client, c, stats)
+            if o is not None:
+                correction_overwrites.append(o)
+
     # Display processing statistics
-    display_statistics(stats, gepado_enabled=update_gepado)
+    display_statistics(
+        stats, gepado_enabled=update_gepado, corrections=correction_overwrites
+    )
 
     # Clean up gepado client connection
     if gepado_client:

@@ -619,8 +619,6 @@ class TestCLIIntegrationStatistics:
                 "Should contain GEPADO errors"
             )
 
-            # Verify progress bars are present
-            lines = captured_output.split("\n")
             # Progress bar assertions removed; output format is now plain counts.
 
     def test_statistics_display_without_gepado(self):
@@ -667,8 +665,6 @@ class TestCLIIntegrationStatistics:
             "Should not contain GEPADO errors"
         )
 
-        # Verify only file statistics progress bars are present (4 lines)
-        lines = captured_output.split("\n")
         # Progress bar assertions removed; output format is now plain counts.
 
     def test_error_handling_in_statistics_workflow(self):

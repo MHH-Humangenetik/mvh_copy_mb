@@ -7,7 +7,13 @@ during CLI execution, including file counts, pairing status, and GEPADO update r
 
 from rich.console import Console
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+import logging
+
+if TYPE_CHECKING:
+    from .gepado import CorrectionOverwrite
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -35,6 +41,7 @@ class ProcessingStatistics:
     gepado_clinical_updates: int = 0
     gepado_no_updates_needed: int = 0
     gepado_errors: int = 0
+    gepado_correction_overwrites: int = 0
     _resolved_case_ids: Optional[dict[str, dict[str, bool]]] = None
 
     def __post_init__(self):
@@ -54,6 +61,7 @@ class ProcessingStatistics:
             self.gepado_clinical_updates,
             self.gepado_no_updates_needed,
             self.gepado_errors,
+            self.gepado_correction_overwrites,
         ]
         for value in counts:
             if not isinstance(value, int) or value < 0:
@@ -160,6 +168,7 @@ class ProcessingStatistics:
                 + self.gepado_clinical_updates
                 + self.gepado_no_updates_needed
                 + self.gepado_errors
+                + self.gepado_correction_overwrites
             )
         except ValueError as e:
             # Log error but return a safe fallback value
@@ -169,8 +178,33 @@ class ProcessingStatistics:
             return 0
 
 
+def _print_correction_block(
+    rich_console: Console, corrections: list["CorrectionOverwrite"]
+) -> None:
+    block_width = 60
+    rich_console.print()
+    rich_console.print("=" * block_width)
+    rich_console.print(
+        "[bold bright_red]!!! GEPADO CORRECTION OVERWRITES - PLEASE COMMUNICATE !!![/bold bright_red]"
+    )
+    for c in corrections:
+        data_type = "genomic" if c.art_der_daten.upper() == "G" else "clinical"
+        old_vn_str = f"'{c.old_vn}'" if c.old_vn else "None"
+        rich_console.print(
+            f"  case {c.base_hl7_case_id} ({c.mvh_id}, {data_type}): "
+            f"{c.vn_field} {old_vn_str} -> '{c.new_vn}', {c.ibe_field} updated"
+        )
+        logger.info(
+            f"GEPADO correction overwrite - case {c.base_hl7_case_id} ({c.mvh_id}, {data_type}): "
+            f"{c.vn_field} {old_vn_str} -> '{c.new_vn}', {c.ibe_field} updated"
+        )
+    rich_console.print("=" * block_width)
+
+
 def display_statistics(
-    stats: Optional[ProcessingStatistics], gepado_enabled: bool = False
+    stats: Optional[ProcessingStatistics],
+    gepado_enabled: bool = False,
+    corrections: Optional[list["CorrectionOverwrite"]] = None,
 ) -> None:
     """
     Display formatted statistics with progress bars.
@@ -315,6 +349,12 @@ def display_statistics(
                 # Add a separator
                 tbl.add_section()
                 tbl.add_row("[bold]GEPADO[/bold]", "", "")
+                correction_bar = ProgressBar(
+                    total_gepado_for_bars,
+                    completed=stats.gepado_correction_overwrites,
+                    width=bar_width,
+                )
+
                 tbl.add_row(
                     "[green]Updated genomic data:[/green]",
                     f"[green]{stats.gepado_genomic_updates:>6}[/green]",
@@ -335,7 +375,15 @@ def display_statistics(
                     f"[red]{stats.gepado_errors:>6}[/red]",
                     errors_bar,
                 )
+                tbl.add_row(
+                    "[yellow]Correction overwrites:[/yellow]",
+                    f"[yellow]{stats.gepado_correction_overwrites:>6}[/yellow]",
+                    correction_bar,
+                )
             console.print(tbl)
+
+            if corrections:
+                _print_correction_block(console, corrections)
 
             return
 
@@ -367,12 +415,18 @@ def display_statistics(
                     f"No updates needed:      {stats.gepado_no_updates_needed:>6}"
                 )
                 rich_console.print(f"Errors during ops:      {stats.gepado_errors:>6}")
+                rich_console.print(
+                    f"Correction overwrites:  {stats.gepado_correction_overwrites:>6}"
+                )
             except Exception as e:
                 rich_console.print(
                     f"\nGEPADO OPERATIONS: [Error calculating totals: {e}]"
                 )
 
         rich_console.print("=" * separator_width)
+
+        if corrections:
+            _print_correction_block(rich_console, corrections)
 
     except Exception as e:
         # Ultimate fallback - display basic error message

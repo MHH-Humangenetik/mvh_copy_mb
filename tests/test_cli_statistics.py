@@ -1418,3 +1418,59 @@ def test_gepado_operation_categorization(
     assert final_total == expected_total, (
         f"Total GEPADO operations ({final_total}) should equal sum of categories ({expected_total})"
     )
+
+
+def test_display_statistics_contains_correction_overwrites_row(capsys):
+    """Test that statistics display contains 'Correction overwrites' row."""
+    stats = ProcessingStatistics(
+        ready_pairs_count=5,
+        unpaired_genomic_count=3,
+        unpaired_clinical_count=2,
+        ignored_count=1,
+        gepado_genomic_updates=4,
+        gepado_clinical_updates=3,
+        gepado_no_updates_needed=1,
+        gepado_errors=1,
+        gepado_correction_overwrites=2,
+    )
+
+    display_statistics(stats, gepado_enabled=True)
+    captured = capsys.readouterr()
+
+    assert "Correction overwrites:" in captured.out
+    assert "2" in captured.out
+
+
+def test_display_statistics_correction_lines_block(capsys):
+    """Test that correction lines block is printed when corrections passed."""
+    from mvh_copy_mb.gepado import CorrectionOverwrite
+
+    stats = ProcessingStatistics(
+        ready_pairs_count=1,
+        gepado_correction_overwrites=1,
+    )
+
+    corrections = [
+        CorrectionOverwrite(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="CASE001_HUMGEN_SE_12345_2",
+            art_der_daten="G",
+            vn_field="vng",
+            old_vn="OLD_VN",
+            new_vn="NEW_VN",
+            ibe_field="ibe_g",
+        ),
+    ]
+
+    display_statistics(stats, gepado_enabled=True, corrections=corrections)
+    captured = capsys.readouterr()
+
+    assert "GEPADO CORRECTION OVERWRITES" in captured.out
+    assert "PLEASE COMMUNICATE" in captured.out
+    assert "CASE001_HUMGEN_SE_12345_2" in captured.out
+    assert "genomic" in captured.out
+    assert "vng" in captured.out
+    assert "OLD_VN" in captured.out
+    assert "NEW_VN" in captured.out
+    assert "ibe_g" in captured.out

@@ -11,12 +11,17 @@ from hypothesis import given, strategies as st
 from mvh_copy_mb.gepado import (
     GepadoClient,
     GepadoRecord,
+    CorrectionCandidate,
+    CorrectionOverwrite,
     create_gepado_client_from_env,
     map_data_type_to_fields,
     compare_record_data,
     validate_and_update_record,
     should_process_record_for_gepado,
+    select_latest_corrections,
+    apply_correction_update,
 )
+from mvh_copy_mb.statistics import ProcessingStatistics
 
 
 class TestGepadoRecord:
@@ -2468,3 +2473,291 @@ class TestHL7CaseIdCorrectionIntegration:
             mock_client.update_record.assert_called_once_with(
                 corrected_case_id, expected_updates
             )
+
+
+class TestCorrectionFilter:
+    """Test cases for correction record processing filter."""
+
+    def test_correction_valid_qc_and_typ(self):
+        """Test correction with QC=1 and Typ=3 (valid correction)."""
+        result = should_process_record_for_gepado("1", "3", is_correction=True)
+        assert result is True
+
+    def test_correction_valid_qc_and_typ_0(self):
+        """Test correction with QC=1 and Typ=0 (also valid)."""
+        result = should_process_record_for_gepado("1", "0", is_correction=True)
+        assert result is True
+
+    def test_correction_failed_qc(self):
+        """Test correction with QC=0 should be False."""
+        result = should_process_record_for_gepado("0", "3", is_correction=True)
+        assert result is False
+
+    def test_correction_blacklisted_typ_test(self):
+        """Test correction with Typ='TEST' should be False."""
+        result = should_process_record_for_gepado("1", "TEST", is_correction=True)
+        assert result is False
+
+    def test_correction_blacklisted_typ_empty(self):
+        """Test correction with Typ='' should be False."""
+        result = should_process_record_for_gepado("1", "", is_correction=True)
+        assert result is False
+
+    def test_non_correction_still_requires_typ_0(self):
+        """Test non-correction with Typ != 0 should be False."""
+        result = should_process_record_for_gepado("1", "3", is_correction=False)
+        assert result is False
+
+
+class TestCorrectionApply:
+    """Test cases for apply_correction_update."""
+
+    @patch("mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado")
+    def test_overwrites_existing_values_genomic(self, mock_correction):
+        """Test that apply_correction_update overwrites existing vng+ibe_g."""
+        mock_client = Mock()
+        mock_correction.return_value = "12345"
+
+        mock_record = GepadoRecord(
+            hl7_case_id="12345",
+            vng="OLD_VN",
+            ibe_g="OLD_IBE",
+        )
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+
+        candidate = CorrectionCandidate(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="CASE001_HUMGEN_SE_12345_2",
+            vorgangsnummer="NEW_VN",
+            meldebestaetigung="NEW_IBE",
+            art_der_daten="G",
+            ergebnis_qc="1",
+            typ_der_meldung="3",
+        )
+
+        stats = ProcessingStatistics()
+        result = apply_correction_update(mock_client, candidate, stats)
+
+        assert result is not None
+        assert isinstance(result, CorrectionOverwrite)
+        assert result.base_hl7_case_id == "12345"
+        assert result.suffix == 2
+        assert result.vn_field == "vng"
+        assert result.old_vn == "OLD_VN"
+        assert result.new_vn == "NEW_VN"
+        assert result.ibe_field == "ibe_g"
+        assert stats.gepado_correction_overwrites == 1
+
+        mock_client.update_record.assert_called_once_with(
+            "12345", {"vng": "NEW_VN", "ibe_g": "NEW_IBE"}
+        )
+
+    @patch("mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado")
+    def test_overwrites_existing_values_clinical(self, mock_correction):
+        """Test that apply_correction_update overwrites existing vnk+ibe_k."""
+        mock_client = Mock()
+        mock_correction.return_value = "12345"
+
+        mock_record = GepadoRecord(
+            hl7_case_id="12345",
+            vnk="OLD_VN",
+            ibe_k="OLD_IBE",
+        )
+        mock_client.query_record.return_value = mock_record
+        mock_client.update_record.return_value = True
+
+        candidate = CorrectionCandidate(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="CASE001_HUMGEN_SE_12345_2",
+            vorgangsnummer="NEW_VN",
+            meldebestaetigung="NEW_IBE",
+            art_der_daten="C",
+            ergebnis_qc="1",
+            typ_der_meldung="3",
+        )
+
+        stats = ProcessingStatistics()
+        result = apply_correction_update(mock_client, candidate, stats)
+
+        assert result is not None
+        assert result.base_hl7_case_id == "12345"
+        assert result.vn_field == "vnk"
+        assert result.old_vn == "OLD_VN"
+        assert result.new_vn == "NEW_VN"
+        assert result.ibe_field == "ibe_k"
+        assert stats.gepado_correction_overwrites == 1
+
+        mock_client.update_record.assert_called_once_with(
+            "12345", {"vnk": "NEW_VN", "ibe_k": "NEW_IBE"}
+        )
+
+    @patch("mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado")
+    def test_base_record_missing_returns_none(self, mock_correction):
+        """Test that missing base record returns None and counts error."""
+        mock_client = Mock()
+        mock_correction.return_value = "12345"
+        mock_client.query_record.return_value = None
+
+        candidate = CorrectionCandidate(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="x",
+            vorgangsnummer="VN",
+            meldebestaetigung="IBE",
+            art_der_daten="G",
+            ergebnis_qc="1",
+            typ_der_meldung="3",
+        )
+
+        stats = ProcessingStatistics()
+        result = apply_correction_update(mock_client, candidate, stats)
+
+        assert result is None
+        assert stats.gepado_errors == 1
+
+    @patch("mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado")
+    def test_identical_values_no_update(self, mock_correction):
+        """Test that identical existing values result in no update."""
+        mock_client = Mock()
+        mock_correction.return_value = "12345"
+
+        mock_record = GepadoRecord(
+            hl7_case_id="12345",
+            vng="VN",
+            ibe_g="IBE",
+        )
+        mock_client.query_record.return_value = mock_record
+
+        candidate = CorrectionCandidate(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="x",
+            vorgangsnummer="VN",
+            meldebestaetigung="IBE",
+            art_der_daten="G",
+            ergebnis_qc="1",
+            typ_der_meldung="3",
+        )
+
+        stats = ProcessingStatistics()
+        result = apply_correction_update(mock_client, candidate, stats)
+
+        assert result is None
+        assert stats.gepado_no_updates_needed == 1
+        assert stats.gepado_correction_overwrites == 0
+        mock_client.update_record.assert_not_called()
+
+    @patch("mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado")
+    def test_qc_filter_failure_counts_error(self, mock_correction):
+        """Test that QC != '1' returns None and increments gepado_errors."""
+        mock_client = Mock()
+        mock_correction.return_value = "12345"
+
+        candidate = CorrectionCandidate(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="x",
+            vorgangsnummer="VN",
+            meldebestaetigung="IBE",
+            art_der_daten="G",
+            ergebnis_qc="0",
+            typ_der_meldung="3",
+        )
+
+        stats = ProcessingStatistics()
+        result = apply_correction_update(mock_client, candidate, stats)
+
+        assert result is None
+        assert stats.gepado_errors == 1
+        mock_client.query_record.assert_not_called()
+        mock_client.update_record.assert_not_called()
+
+    @patch("mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado")
+    def test_blacklist_filter_failure_counts_error(self, mock_correction):
+        """Test that blacklisted typ_der_meldung returns None and increments gepado_errors."""
+        mock_client = Mock()
+        mock_correction.return_value = "12345"
+
+        candidate = CorrectionCandidate(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="x",
+            vorgangsnummer="VN",
+            meldebestaetigung="IBE",
+            art_der_daten="G",
+            ergebnis_qc="1",
+            typ_der_meldung="test",
+        )
+
+        stats = ProcessingStatistics()
+        result = apply_correction_update(mock_client, candidate, stats)
+
+        assert result is None
+        assert stats.gepado_errors == 1
+        mock_client.query_record.assert_not_called()
+        mock_client.update_record.assert_not_called()
+
+    @patch("mvh_copy_mb.hl7_case_id_correction.correct_hl7_case_id_for_gepado")
+    def test_invalid_art_der_daten_counts_error(self, mock_correction):
+        """Test that non-G/C art_der_daten returns None and increments gepado_errors."""
+        mock_client = Mock()
+        mock_correction.return_value = "12345"
+
+        candidate = CorrectionCandidate(
+            base_hl7_case_id="12345",
+            suffix=2,
+            mvh_id="x",
+            vorgangsnummer="VN",
+            meldebestaetigung="IBE",
+            art_der_daten="X",
+            ergebnis_qc="1",
+            typ_der_meldung="3",
+        )
+
+        stats = ProcessingStatistics()
+        result = apply_correction_update(mock_client, candidate, stats)
+
+        assert result is None
+        assert stats.gepado_errors == 1
+        mock_client.query_record.assert_not_called()
+        mock_client.update_record.assert_not_called()
+
+
+class TestSelectLatestCorrections:
+    """Test cases for select_latest_corrections."""
+
+    def make_candidate(self, base_id, suffix, art):
+        return CorrectionCandidate(
+            base_hl7_case_id=base_id,
+            suffix=suffix,
+            mvh_id=f"{base_id}_{suffix}",
+            vorgangsnummer=f"VN_{suffix}",
+            meldebestaetigung=f"IBE_{suffix}",
+            art_der_daten=art,
+            ergebnis_qc="1",
+            typ_der_meldung="3",
+        )
+
+    def test_higher_suffix_wins_same_case_type(self):
+        """Test that _3 beats _2 for same base case and data type."""
+        candidates = [
+            self.make_candidate("12345", 2, "G"),
+            self.make_candidate("12345", 3, "G"),
+        ]
+        result = select_latest_corrections(candidates)
+        assert len(result) == 1
+        assert result[0].suffix == 3
+
+    def test_g_and_c_kept_separate(self):
+        """Test that G and C of same case are kept as separate entries."""
+        candidates = [
+            self.make_candidate("12345", 2, "G"),
+            self.make_candidate("12345", 2, "C"),
+        ]
+        result = select_latest_corrections(candidates)
+        assert len(result) == 2
+        types = {c.art_der_daten for c in result}
+        assert types == {"G", "C"}

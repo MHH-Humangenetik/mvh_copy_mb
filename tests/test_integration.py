@@ -375,3 +375,103 @@ def test_process_row_with_legacy_format_leistungsdatum():
             assert record.indikationsbereich == "INDICATION"
             assert record.art_der_daten == "DATATYPE"
             assert record.ergebnis_qc == "1"
+
+
+def test_process_row_with_correction_suffix():
+    import tempfile
+    from pathlib import Path
+    from unittest.mock import Mock, MagicMock, patch
+    from mvh_copy_mb.cli import process_row, GpasClient
+    from mvh_copy_mb.database import MeldebestaetigungDatabase
+    from mvh_copy_mb.gepado import CorrectionCandidate
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_dir = Path(tmpdir)
+        db_path = root_dir / "test.duckdb"
+        source_file = root_dir / "test.csv"
+        source_file.touch()
+
+        mock_gpas = Mock(spec=GpasClient)
+        mock_gpas.get_original_value.return_value = "CASE001_HUMGEN_SE_12345_2"
+        mock_gpas.domains = ["domain1", "domain2"]
+        mock_client = MagicMock()
+        mock_client.service.getValueFor.return_value = "CASE001_HUMGEN_SE_12345_2"
+        mock_gpas.client = mock_client
+
+        row = {
+            "Vorgangsnummer": "VORG_CORR",
+            "Meldebestaetigung": "IBE+ID+CODE&DATE&LE&KDK&0&IND&PROD&COST&G&SEQ&1",
+        }
+
+        corrections: list = []
+
+        with MeldebestaetigungDatabase(db_path) as db:
+            with patch("mvh_copy_mb.cli.validate_and_update_record") as mock_validate:
+                process_row(
+                    row,
+                    source_file,
+                    root_dir,
+                    mock_gpas,
+                    db,
+                    update_gepado=True,
+                    gepado_client=Mock(),
+                    corrections=corrections,
+                )
+
+                mock_validate.assert_not_called()
+
+        assert len(corrections) == 1
+        c = corrections[0]
+        assert isinstance(c, CorrectionCandidate)
+        assert c.base_hl7_case_id == "12345"
+        assert c.suffix == 2
+        assert c.mvh_id == "CASE001_HUMGEN_SE_12345_2"
+        assert c.vorgangsnummer == "VORG_CORR"
+        assert c.art_der_daten == "G"
+
+
+def test_process_row_without_correction_still_validates():
+    import tempfile
+    from pathlib import Path
+    from unittest.mock import Mock, MagicMock, patch
+    from mvh_copy_mb.cli import process_row, GpasClient
+    from mvh_copy_mb.database import MeldebestaetigungDatabase
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root_dir = Path(tmpdir)
+        db_path = root_dir / "test.duckdb"
+        source_file = root_dir / "test.csv"
+        source_file.touch()
+
+        mock_gpas = Mock(spec=GpasClient)
+        mock_gpas.get_original_value.return_value = "CASE001_HUMGEN_SE_12345"
+        mock_gpas.domains = ["domain1", "domain2"]
+        mock_client = MagicMock()
+        mock_client.service.getValueFor.return_value = "CASE001_HUMGEN_SE_12345"
+        mock_gpas.client = mock_client
+
+        row = {
+            "Vorgangsnummer": "VORG_NORMAL",
+            "Meldebestaetigung": "IBE+ID+CODE&DATE&LE&KDK&0&IND&PROD&COST&G&SEQ&1",
+        }
+
+        corrections: list = []
+        mock_gepado = Mock()
+
+        with MeldebestaetigungDatabase(db_path) as db:
+            with patch("mvh_copy_mb.cli.validate_and_update_record") as mock_validate:
+                mock_validate.return_value = True
+                process_row(
+                    row,
+                    source_file,
+                    root_dir,
+                    mock_gpas,
+                    db,
+                    update_gepado=True,
+                    gepado_client=mock_gepado,
+                    corrections=corrections,
+                )
+
+                mock_validate.assert_called_once()
+
+        assert len(corrections) == 0

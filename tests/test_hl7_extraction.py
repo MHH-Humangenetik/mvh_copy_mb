@@ -4,7 +4,7 @@ Tests for HL7 case ID extraction functionality.
 
 from hypothesis import given, strategies as st
 
-from mvh_copy_mb.hl7_extraction import extract_hl7_case_id
+from mvh_copy_mb.hl7_extraction import extract_hl7_case_id, parse_mvh_id
 
 
 class TestHL7Extraction:
@@ -124,6 +124,12 @@ class TestHL7ExtractionProperties:
         result = extract_hl7_case_id(meldebestaetigung)
         assert result == case_id1
 
+    def test_extract_hl7_case_id_with_suffix(self):
+        """Test that suffixed case IDs still extract the base HL7 id (bug fix)."""
+        assert extract_hl7_case_id("CASE001_HUMGEN_SE_12345_2") == "12345"
+        assert extract_hl7_case_id("CASE001_HUMGEN_SE_12345_10") == "12345"
+        assert extract_hl7_case_id("HUMGEN_A_999_1") == "999"
+
     @given(text_without_pattern=st.text().filter(lambda x: "HUMGEN_" not in x))
     def test_no_pattern_returns_none(self, text_without_pattern):
         """
@@ -204,3 +210,32 @@ class TestHL7ExtractionProperties:
         result1 = extract_hl7_case_id(meldebestaetigung_multiple)
         result2 = extract_hl7_case_id(meldebestaetigung_multiple)
         assert result1 == result2, "Multiple calls should return consistent results"
+
+
+class TestParseMvhId:
+    """Test cases for parse_mvh_id function."""
+
+    def test_parse_mvh_id_normal(self):
+        """Test parsing a normal (non-correction) mvh_id."""
+        result = parse_mvh_id("CASE001_HUMGEN_SE_12345")
+        assert result == ("12345", None)
+
+    def test_parse_mvh_id_correction(self):
+        """Test parsing a correction mvh_id with _N suffix."""
+        result = parse_mvh_id("CASE001_HUMGEN_SE_12345_2")
+        assert result == ("12345", 2)
+
+    def test_parse_mvh_id_correction_higher_suffix(self):
+        """Test parsing a correction mvh_id with higher suffix."""
+        result = parse_mvh_id("CASE001_HUMGEN_SE_12345_10")
+        assert result == ("12345", 10)
+
+    def test_parse_mvh_id_no_pattern(self):
+        """Test parsing a string without HUMGEN pattern."""
+        assert parse_mvh_id("no pattern") is None
+        assert parse_mvh_id("") is None
+
+    def test_parse_mvh_id_missing_digits(self):
+        """Test parsing with missing numeric part."""
+        assert parse_mvh_id("HUMGEN_A_") is None
+        assert parse_mvh_id("HUMGEN_SE_") is None

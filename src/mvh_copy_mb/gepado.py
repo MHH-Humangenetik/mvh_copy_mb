@@ -105,12 +105,10 @@ class GepadoClient:
         Raises:
             pymssql.Error: If query execution fails
         """
-        if not self._connection:
-            self.connect()
+        conn = self._connection or self.connect()
+        cursor = conn.cursor()
 
         try:
-            cursor = self._connection.cursor()
-
             # Use the actual gepado database query structure
             query = """
                 SELECT C.hl7fallid AS CaseID_HL7,
@@ -182,8 +180,7 @@ class GepadoClient:
             )
             raise
         finally:
-            if cursor:
-                cursor.close()
+            cursor.close()
 
     def update_record(self, hl7_case_id: str, updates: Dict[str, str]) -> bool:
         """
@@ -199,16 +196,14 @@ class GepadoClient:
         Raises:
             pymssql.Error: If update execution fails
         """
-        if not self._connection:
-            self.connect()
-
         if not updates:
             logger.info(f"No updates provided for HL7 case ID: {hl7_case_id}")
             return True
 
-        try:
-            cursor = self._connection.cursor()
+        conn = self._connection or self.connect()
+        cursor = conn.cursor()
 
+        try:
             # First, get the guid_ordermanagement for this HL7 case ID
             guid_query = """
                 SELECT guid_ordermanagement 
@@ -277,7 +272,7 @@ class GepadoClient:
                 )
 
             if rows_affected > 0:
-                self._connection.commit()
+                conn.commit()
                 logger.info(
                     f"Successfully updated gepado record for HL7 case ID {hl7_case_id}: {updates}"
                 )
@@ -290,12 +285,10 @@ class GepadoClient:
             logger.error(
                 f"Failed to update gepado record for HL7 case ID {hl7_case_id}: {e}"
             )
-            if self._connection:
-                self._connection.rollback()
+            conn.rollback()
             return False
         finally:
-            if cursor:
-                cursor.close()
+            cursor.close()
 
     def close(self):
         """Close the database connection if it exists."""
@@ -340,7 +333,7 @@ def compare_record_data(
     ibe_string: str,
     art_der_daten: str,
     output_date: Optional[date] = None,
-) -> tuple[Dict[str, str], Dict[str, tuple[str, str]]]:
+) -> tuple[Dict[str, str], Dict[str, tuple[str, str] | tuple[date, date]]]:
     """
     Compare existing gepado data with Meldebestätigung data and determine updates needed.
 
@@ -421,29 +414,46 @@ def compare_record_data(
     return updates_needed, mismatches_found
 
 
-def should_process_record_for_gepado(ergebnis_qc: str, typ_der_meldung: str) -> bool:
+def should_process_record_for_gepado(
+    ergebnis_qc: str, typ_der_meldung: str, is_correction: bool = False
+) -> bool:
     """
     Check if a record should be processed for gepado updates based on QC and message type.
 
     Args:
         ergebnis_qc: QC result value from Meldebestätigung
         typ_der_meldung: Type of report value from Meldebestätigung
+        is_correction: If True, uses blacklist filtering (allow all types except empty/test)
 
     Returns:
-        True if record should be processed (QC=1 and Typ=0), False otherwise
+        True if record should be processed, False otherwise
     """
-    should_process = ergebnis_qc == "1" and typ_der_meldung == "0"
+    if ergebnis_qc != "1":
+        logger.warning(f"Skipping gepado processing: QC={ergebnis_qc} (requires QC=1)")
+        return False
 
-    if not should_process:
-        logger.warning(
-            f"Skipping gepado processing: QC={ergebnis_qc}, Typ={typ_der_meldung} (requires QC=1, Typ=0)"
-        )
-    else:
+    if is_correction:
+        stripped = typ_der_meldung.strip().lower()
+        if stripped in ("", "test"):
+            logger.warning(
+                f"Skipping correction: Typ der Meldung '{typ_der_meldung}' is blacklisted"
+            )
+            return False
         logger.info(
-            f"Record passes gepado processing filter: QC={ergebnis_qc}, Typ={typ_der_meldung}"
+            f"Correction passes gepado processing filter: QC={ergebnis_qc}, Typ={typ_der_meldung}"
         )
+        return True
 
-    return should_process
+    if typ_der_meldung != "0":
+        logger.warning(
+            f"Skipping gepado processing: Typ={typ_der_meldung} (requires Typ=0)"
+        )
+        return False
+
+    logger.info(
+        f"Record passes gepado processing filter: QC={ergebnis_qc}, Typ={typ_der_meldung}"
+    )
+    return True
 
 
 def validate_and_update_record(
@@ -625,6 +635,141 @@ def create_gepado_client_from_env() -> Optional[GepadoClient]:
         )
         return None
 
+    assert host and database and username and password  # guarded above
     return GepadoClient(
         host=host, database=database, username=username, password=password
     )
+
+
+@dataclass
+class CorrectionCandidate:
+    base_hl7_case_id: str
+    suffix: int
+    mvh_id: str
+    vorgangsnummer: str
+    meldebestaetigung: str
+    art_der_daten: str
+    ergebnis_qc: str
+    typ_der_meldung: str
+
+
+@dataclass
+class CorrectionOverwrite:
+    base_hl7_case_id: str
+    suffix: int
+    mvh_id: str
+    art_der_daten: str
+    vn_field: str
+    old_vn: Optional[str]
+    new_vn: str
+    ibe_field: str
+
+
+def select_latest_corrections(
+    candidates: list[CorrectionCandidate],
+) -> list[CorrectionCandidate]:
+    grouped: dict[tuple[str, str], CorrectionCandidate] = {}
+    for c in candidates:
+        key = (c.base_hl7_case_id, c.art_der_daten.upper().strip())
+        existing = grouped.get(key)
+        if existing is None or c.suffix > existing.suffix:
+            if existing is not None:
+                logger.info(
+                    f"Dropping superseded correction: {existing.mvh_id} (suffix {existing.suffix}) "
+                    f"in favor of {c.mvh_id} (suffix {c.suffix})"
+                )
+            grouped[key] = c
+    return list(grouped.values())
+
+
+def apply_correction_update(
+    client: GepadoClient,
+    candidate: CorrectionCandidate,
+    stats: Optional["ProcessingStatistics"] = None,
+) -> Optional[CorrectionOverwrite]:
+    from .hl7_case_id_correction import correct_hl7_case_id_for_gepado
+
+    if not should_process_record_for_gepado(
+        candidate.ergebnis_qc, candidate.typ_der_meldung, is_correction=True
+    ):
+        if stats:
+            stats.gepado_errors += 1
+        return None
+
+    try:
+        vn_field, ibe_field, _ = map_data_type_to_fields(candidate.art_der_daten)
+    except ValueError:
+        logger.error(
+            f"Invalid Art der Daten '{candidate.art_der_daten}' for correction {candidate.mvh_id}"
+        )
+        if stats:
+            stats.gepado_errors += 1
+        return None
+
+    try:
+        corrected_base_id = correct_hl7_case_id_for_gepado(
+            client, candidate.base_hl7_case_id
+        )
+
+        existing_record = client.query_record(corrected_base_id)
+        if not existing_record:
+            logger.error(
+                f"No gepado record found for corrected base case {corrected_base_id} "
+                f"(correction: {candidate.mvh_id})"
+            )
+            if stats:
+                stats.gepado_errors += 1
+            return None
+
+        current_vn = getattr(existing_record, vn_field)
+        current_ibe = getattr(existing_record, ibe_field)
+
+        existing_vn_clean = (current_vn or "").strip()
+        existing_ibe_clean = (current_ibe or "").strip()
+        new_vn_clean = (candidate.vorgangsnummer or "").strip()
+        new_ibe_clean = (candidate.meldebestaetigung or "").strip()
+
+        if existing_vn_clean == new_vn_clean and existing_ibe_clean == new_ibe_clean:
+            logger.info(
+                f"Correction {candidate.mvh_id}: values already identical in gepado, no update needed"
+            )
+            if stats:
+                stats.gepado_no_updates_needed += 1
+            return None
+
+        # Corrections intentionally overwrite only VN/IBE; the Leistungsdatum
+        # of the base case is left untouched.
+        success = client.update_record(
+            corrected_base_id,
+            {vn_field: new_vn_clean, ibe_field: new_ibe_clean},
+        )
+
+        if success:
+            if stats:
+                stats.gepado_correction_overwrites += 1
+
+            logger.info(
+                f"Correction overwrite applied for {candidate.mvh_id}: "
+                f"{vn_field} '{current_vn}' -> '{new_vn_clean}', {ibe_field} updated"
+            )
+
+            return CorrectionOverwrite(
+                base_hl7_case_id=candidate.base_hl7_case_id,
+                suffix=candidate.suffix,
+                mvh_id=candidate.mvh_id,
+                art_der_daten=candidate.art_der_daten,
+                vn_field=vn_field,
+                old_vn=current_vn,
+                new_vn=new_vn_clean,
+                ibe_field=ibe_field,
+            )
+        else:
+            if stats:
+                stats.gepado_errors += 1
+            return None
+
+    except Exception as e:
+        logger.error(f"Error applying correction {candidate.mvh_id}: {e}")
+        if stats:
+            stats.gepado_errors += 1
+        return None

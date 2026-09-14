@@ -13,18 +13,46 @@ import os
 from typing import Optional
 
 log_file = os.environ.get("MVH_LOG_FILE", "mvh_web.log")
-file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=10, encoding="utf-8")
-file_handler.setFormatter(logging.Formatter(
-    fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S"
-))
-logging.basicConfig(
-    level="INFO",
-    handlers=[file_handler]
+file_handler = RotatingFileHandler(
+    log_file, maxBytes=5 * 1024 * 1024, backupCount=10, encoding="utf-8"
 )
+file_handler.setFormatter(
+    logging.Formatter(
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+)
+logging.basicConfig(level="INFO", handlers=[file_handler])
 logger = logging.getLogger(__name__)
 
-HUMGEN_PATTERN = re.compile(r"HUMGEN_\w+_(\d+).*")
+HUMGEN_PATTERN = re.compile(r"HUMGEN_\w+?_(\d+)(?:_(\d+))?(?!\d)")
+
+
+def parse_mvh_id(mvh_id: str) -> Optional[tuple[str, Optional[int]]]:
+    """Parse a gPAS-resolved mvh_id.
+
+    Returns (base_hl7_case_id, correction_suffix) where correction_suffix
+    is an int for correction ids (e.g. '...HUMGEN_SE_12345_2' -> ('12345', 2))
+    or None for normal ids. Returns None if no HUMGEN pattern is found.
+    """
+    if not mvh_id:
+        return None
+
+    try:
+        match = HUMGEN_PATTERN.search(mvh_id)
+        if match:
+            base_id = match.group(1)
+            suffix_str = match.group(2)
+            suffix = int(suffix_str) if suffix_str is not None else None
+            logger.debug(f"Parsed mvh_id: base={base_id}, suffix={suffix}")
+            return (base_id, suffix)
+        else:
+            logger.debug("No HUMGEN pattern found in mvh_id")
+            return None
+
+    except Exception as e:
+        logger.warning(f"Error parsing mvh_id: {e}")
+        return None
 
 
 def extract_hl7_case_id(meldebestaetigung: str) -> Optional[str]:
@@ -48,19 +76,7 @@ def extract_hl7_case_id(meldebestaetigung: str) -> Optional[str]:
         >>> extract_hl7_case_id("No pattern here")
         None
     """
-    if not meldebestaetigung:
-        return None
-
-    try:
-        match = HUMGEN_PATTERN.search(meldebestaetigung)
-        if match:
-            case_id = match.group(1)
-            logger.debug(f"Extracted HL7 case ID: {case_id}")
-            return case_id
-        else:
-            logger.debug("No HUMGEN pattern found in Meldebestätigung")
-            return None
-
-    except Exception as e:
-        logger.warning(f"Error extracting HL7 case ID: {e}")
-        return None
+    parsed = parse_mvh_id(meldebestaetigung)
+    if parsed is not None:
+        return parsed[0]
+    return None
