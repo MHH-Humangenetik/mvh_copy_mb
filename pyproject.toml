@@ -18,11 +18,13 @@ dependencies = [
     "zeep>=4.3.2",
     "rich>=14.2.0",
     "loguru>=0.7.3",
+    "openpyxl>=3.1.5",
 ]
 
 [project.scripts]
 mvh_copy_mb = "mvh_copy_mb.cli:main"
 web = "mvh_copy_mb.web:run_server"
+mvh_seq_stats = "mvh_copy_mb.seq_stats:main"
 
 [dependency-groups]
 dev = [
